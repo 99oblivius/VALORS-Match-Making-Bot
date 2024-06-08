@@ -1,0 +1,5 @@
+python-dotenv
+nextcord
+asyncpg
+plotly
+pytz
