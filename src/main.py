@@ -2,9 +2,13 @@ from datetime import datetime, timezone
 import atexit
 import asyncio
 import logging as log
+yellow = "\x1b[33;20m"
+red = "\x1b[31;20m"
+reset = "\x1b[0m"
 log.basicConfig(
     level=log.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset}%(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[log.StreamHandler()]
 )
 
@@ -19,7 +23,6 @@ def exit_cleanup(a: list):
         del b
 
 class Bot(commands.Bot):
-
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
         self.store = Database(asyncio.get_event_loop())
@@ -39,7 +42,9 @@ def main():
     
     @bot.event
     async def on_ready():
-        print(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
+        await bot.store.start(POSTGRESQL_URL)
+        await bot.store.setup_database(DATABASE_TABLES)
+        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
 
     atexit.register(exit_cleanup, a=[bot])
     bot.run(DISCORD_TOKEN)

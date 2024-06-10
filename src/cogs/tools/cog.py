@@ -4,7 +4,7 @@ import nextcord
 from nextcord.ext import commands
 
 
-class ModCommands(commands.Cog, name="ModCommands"):
+class ModCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
