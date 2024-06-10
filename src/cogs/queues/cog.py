@@ -39,7 +39,6 @@ class Queues(commands.Cog):
 
     @queue_settings.subcommand(name="set_buttons", description="Set queue buttons")
     async def set_queue_buttons(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
 
         if settings.mm_buttons_channel and settings.mm_queue_message:
             channel = interaction.guild.get_channel(settings.mm_buttons_channel)

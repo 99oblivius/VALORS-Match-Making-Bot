@@ -44,7 +44,7 @@ def main():
     async def on_ready():
         await bot.store.start(POSTGRESQL_URL)
         await bot.store.setup_database(DATABASE_TABLES)
-        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
+        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC') # type: ignore
 
     atexit.register(exit_cleanup, a=[bot])
     bot.run(DISCORD_TOKEN)

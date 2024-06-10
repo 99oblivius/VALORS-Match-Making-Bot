@@ -3,3 +3,5 @@ nextcord
 asyncpg
 plotly
 pytz
+sqlalchemy[asyncio]
+alembic
