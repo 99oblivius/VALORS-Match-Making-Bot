@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-DATABASE_URL = os.getenv("POSTGRESQL_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "")
 
 BOT_PREFIX = ">"

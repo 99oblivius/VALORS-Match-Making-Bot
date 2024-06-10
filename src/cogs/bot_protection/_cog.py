@@ -50,14 +50,6 @@ class BotProtection(commands.Cog, name="Bot Protection"):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        global guild
-        guild = self.bot.get_guild(GUILD_ID)
-        global ch_mod
-        ch_mod = guild.get_channel(CH_MOD_ID)
-        global ro_muted
-        ro_muted = guild.get_role(RO_MUTED_ID)
-        global ch_log
-        ch_log = guild.get_channel(CH_LOGGING_ID)
         self.decay_timer.start()
 
 

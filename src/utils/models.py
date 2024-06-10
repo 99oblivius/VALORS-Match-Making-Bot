@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, Integer, String, SmallInteger, Text, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, BigInteger, Integer, String, SmallInteger, Text, TIMESTAMP, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -54,24 +54,39 @@ class MMBotMatches(Base):
 class MMBotMatchBans(Base):
     __tablename__ = 'mm_bot_match_bans'
 
-    match_id  = Column(Integer, ForeignKey('mm_bot_matches.id'))
-    user_id   = Column(BigInteger, ForeignKey('mm_bot_users.user_id'), nullable=False, primary_key=True)
-    map       = Column(String(32), nullable=False, primary_key=True)
+    guild_id  = Column(BigInteger, primary_key=True, nullable=False)
+    match_id  = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
+    user_id   = Column(BigInteger, primary_key=True, nullable=False)
+    map       = Column(String(32), primary_key=True, nullable=False)
     phase     = Column(SmallInteger, default=0)
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
 
 class MMBotMatchUsers(Base):
     __tablename__ = 'mm_bot_match_users'
 
-    user_id   = Column(BigInteger, ForeignKey('mm_bot_users.user_id'), nullable=False, primary_key=True)
-    match_id  = Column(BigInteger, ForeignKey('mm_bot_matches.id'), nullable=False, primary_key=True)
-    team      = Column(String(1), nullable=False)
+    guild_id = Column(BigInteger, primary_key=True, nullable=False)
+    user_id  = Column(BigInteger, primary_key=True, nullable=False)
+    match_id = Column(Integer, primary_key=True, nullable=False)
+    team     = Column(String(1), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+        ForeignKeyConstraint(['match_id'], ['mm_bot_matches.id']),
+    )
 
 class MMBotMMRHistory(Base):
     __tablename__ = 'mm_bot_mmr_history'
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     guild_id   = Column(BigInteger, nullable=False)
-    user_id    = Column(BigInteger, ForeignKey('mm_bot_users.user_id'), nullable=False)
+    user_id    = Column(BigInteger, nullable=False)
     mmr        = Column(Integer, nullable=False)
     mmr_delta  = Column(Integer, nullable=False)
     timestamp  = Column(TIMESTAMP(timezone=True), default='now()')
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )

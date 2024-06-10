@@ -33,7 +33,7 @@ def main():
     intents = nextcord.Intents.default()
     intents.guilds = True
     intents.message_content = True
-    bot = Bot(command_prefix=BOT_PREFIX, intents=intents, activity=activity)
+    bot: commands.Bot = Bot(command_prefix=BOT_PREFIX, intents=intents, activity=activity)
 
     for folder in os.listdir("src/cogs"):
         if os.path.exists(os.path.join("src/cogs", folder, "cog.py")):
@@ -42,9 +42,7 @@ def main():
     
     @bot.event
     async def on_ready():
-        await bot.store.start(POSTGRESQL_URL)
-        await bot.store.setup_database(DATABASE_TABLES)
-        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC') # type: ignore
+        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
 
     atexit.register(exit_cleanup, a=[bot])
     bot.run(DISCORD_TOKEN)

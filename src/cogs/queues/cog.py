@@ -55,7 +55,7 @@ class Queues(commands.Cog):
         await interaction.response.send_message(f"Queue channel set!", ephemeral=True)
 
     @queue_settings.subcommand(name="periods", description="Set queue ready periods")
-    async def set_mm_queue_periods(self, interaction: nextcord.Interaction, 
+    async def set_queue_periods(self, interaction: nextcord.Interaction, 
                                 periods: str = nextcord.SlashOption(
                                     name="label-period", 
                                     description="Json format of name and period",

@@ -1,7 +1,7 @@
 python-dotenv
 nextcord
-asyncpg
 plotly
 pytz
-sqlalchemy[asyncio]
+SQLAlchemy[asyncio]
+asyncpg
 alembic
