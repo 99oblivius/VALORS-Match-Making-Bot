@@ -8,10 +8,11 @@ class BotSettings(Base):
 
     guild_id            = Column(BigInteger, primary_key=True, nullable=False)
     mm_buttons_channel  = Column(BigInteger)
+    mm_buttons_message  = Column(BigInteger)
+    mm_buttons_periods  = Column(Text)
     mm_queue_channel    = Column(BigInteger)
-    mm_queue_message    = Column(BigInteger)
-    mm_queue_periods    = Column(Text)
     mm_log_channel      = Column(BigInteger)
+    mm_lfg_role         = Column(BigInteger)
     staff_channel       = Column(BigInteger)
     log_channel         = Column(BigInteger)
 
@@ -35,6 +36,10 @@ class MMBotUsers(Base):
     team_a            = Column(Text)
     joined_timestamp  = Column(TIMESTAMP(timezone=True), default='now()')
 
+
+##############
+# MM Matches #
+##############
 class MMBotMatches(Base):
     __tablename__ = 'mm_bot_matches'
 
@@ -57,7 +62,7 @@ class MMBotMatchBans(Base):
     guild_id  = Column(BigInteger, primary_key=True, nullable=False)
     match_id  = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
-    map       = Column(String(32), primary_key=True, nullable=False)
+    map       = Column(String(32), nullable=False)
     phase     = Column(SmallInteger, default=0)
 
     __table_args__ = (
@@ -77,6 +82,10 @@ class MMBotMatchUsers(Base):
         ForeignKeyConstraint(['match_id'], ['mm_bot_matches.id']),
     )
 
+
+##############
+# MM HISTORY #
+##############
 class MMBotMMRHistory(Base):
     __tablename__ = 'mm_bot_mmr_history'
 
