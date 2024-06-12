@@ -17,8 +17,7 @@ class QueueButtonsView(nextcord.ui.View):
     def __init__(self, bot: commands.Bot, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
-        self.queue_count = 0
-        self.critical_queue_lock = asyncio.Lock()
+        self.ready_lock: dict = {}
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
@@ -97,6 +96,9 @@ class QueueButtonsView(nextcord.ui.View):
         return instance
 
     async def ready_callback(self, interaction: nextcord.Interaction):
+        lock_id = f'{interaction.channel.id}'
+        if lock_id not in self.ready_lock:
+            self.ready_lock[lock_id] = asyncio.Lock()
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not settings:
             await interaction.response.send_message("Settings not found.", ephemeral=True)
@@ -106,14 +108,14 @@ class QueueButtonsView(nextcord.ui.View):
         periods = list(json.loads(settings.mm_buttons_periods).items())
         expiry = int(datetime.now(timezone.utc).timestamp()) + 60 * int(periods[slot_id][1])
         
-        async with self.critical_queue_lock:
+        async with self.ready_lock[f'{interaction.channel.id}']:
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
             if len(queue_users) > 9:
-                return await interaction.response.send_message("Someone else just got in.\nBest luck next time", ephemeral=True)
-            # await self.bot.store.push(MMBotQueueUsers, user_id=interaction.user.id, queue_channel=interaction.channel.id, queue_expiry=expiry)
-            # if len(queue_users) > 9:
-            #     await self.bot.store.push(MMBotMatchUsers, user_id=)
-            #     Match(interaction.channel.id)
+                return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
+            await self.bot.store.insert(MMBotQueueUsers, user_id=interaction.user.id, guild_id=interaction.guild.id, queue_channel=interaction.channel.id, queue_expiry=expiry)
+            
+            if len(queue_users) > 9:
+                await self.bot.store.unqueue_add_match(interaction.channel.id)
         
         embed = nextcord.Embed(title="You joined the queue!", color=VALOR_YELLOW)
         embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{periods[slot_id][1]}` minutes until <t:{expiry}:t>")
@@ -122,7 +124,7 @@ class QueueButtonsView(nextcord.ui.View):
         await msg.delete()
     
     async def unready_callback(self, interaction: nextcord.Interaction):
-        await self.bot.store.remove(MMBotQueueUsers, user_id=interaction.user.id, queue_channel=interaction.channel.id)
+        await self.bot.store.remove(MMBotQueueUsers, user_id=interaction.user.id, guild_id=interaction.guild.id, queue_channel=interaction.channel.id)
         embed = nextcord.Embed(title="You have left queue", color=VALOR_RED3)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)

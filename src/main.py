@@ -6,8 +6,8 @@ yellow = "\x1b[33;20m"
 red = "\x1b[31;20m"
 reset = "\x1b[0m"
 log.basicConfig(
-    level=log.INFO,
-    format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset}%(levelname)s - %(message)s',
+    level=log.WARNING,
+    format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset} %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[log.StreamHandler()]
 )
@@ -42,7 +42,7 @@ def main():
     
     @bot.event
     async def on_ready():
-        log.info(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
+        log.critical(f'==={bot.user.name} connected===\n\tat {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}UTC')
 
     atexit.register(exit_cleanup, a=[bot])
     bot.run(DISCORD_TOKEN)
