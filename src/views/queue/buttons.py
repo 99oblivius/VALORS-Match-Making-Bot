@@ -102,6 +102,7 @@ class QueueButtonsView(nextcord.ui.View):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
+        in_queue = False
         if not settings: return await interaction.response.send_message(
             "Settings not found.", ephemeral=True)
         if not user: return await interaction.response.send_message(
@@ -117,18 +118,26 @@ class QueueButtonsView(nextcord.ui.View):
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
             if len(queue_users) > 9:
                 return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
-            await self.bot.store.insert(MMBotQueueUsers, user_id=interaction.user.id, guild_id=interaction.guild.id, queue_channel=interaction.channel.id, queue_expiry=expiry)
+            in_queue = await self.bot.store.upsert_queue_user(
+                user_id=interaction.user.id, 
+                guild_id=interaction.guild.id, 
+                queue_channel=interaction.channel.id, 
+                queue_expiry=expiry)
             
             if len(queue_users) > 9:
                 await self.bot.store.unqueue_add_match(interaction.channel.id)
         
-        embed = nextcord.Embed(title="You joined the queue!", color=VALOR_YELLOW)
+        if in_queue: title = "You updated your queue time!"
+        else: title = "You joined the queue!"
+        embed = nextcord.Embed(title=title, color=VALOR_YELLOW)
         embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{periods[slot_id][1]}` minutes until <t:{expiry}:t>")
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()
     
     async def unready_callback(self, interaction: nextcord.Interaction):
+        if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
+            return await interaction.response.send_message("You are not queued up",ephemeral=True)
         await self.bot.store.remove(MMBotQueueUsers, user_id=interaction.user.id, guild_id=interaction.guild.id, queue_channel=interaction.channel.id)
         embed = nextcord.Embed(title="You have left queue", color=VALOR_RED3)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)

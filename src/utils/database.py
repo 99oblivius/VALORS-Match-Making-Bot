@@ -81,6 +81,22 @@ class Database:
                     MMBotUsers.user_id == user_id))
             return result.scalars().first()
     
+    async def upsert_queue_user(self, user_id: int, guild_id: int, queue_channel: int, queue_expiry: int):
+        if await self.in_queue(guild_id, user_id):
+            async with self._session_maker() as session:
+                await session.execute(
+                    update(MMBotQueueUsers)
+                    .where(
+                        MMBotQueueUsers.user_id == user_id,
+                        MMBotQueueUsers.guild_id == guild_id,
+                        MMBotQueueUsers.queue_channel == queue_channel, 
+                        MMBotQueueUsers.in_queue == True)
+                    .values(queue_expiry=queue_expiry))
+                await session.commit()
+            return True
+        await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
+        return False
+    
     async def unqueue_add_match_users(self, channel_id: int):
         async with self._session_maker() as session:
             async with session.begin():
@@ -116,6 +132,16 @@ class Database:
                 insert_stmt = insert(MMBotMatchUsers).values(match_users)
                 await session.execute(insert_stmt)
                 await session.commit()
+    
+    async def in_queue(self, guild_id: int, user_id: int) -> bool:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotQueueUsers)
+                .where(
+                    MMBotQueueUsers.guild_id == guild_id, 
+                    MMBotQueueUsers.user_id == user_id,
+                    MMBotQueueUsers.in_queue == True))
+            return result.scalars().first() is not None
     
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
         async with self._session_maker() as session:
