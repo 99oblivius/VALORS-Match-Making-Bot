@@ -28,6 +28,7 @@ class BotSettings(Base):
     mm_buttons_periods  = Column(Text)
 
     mm_queue_channel    = Column(BigInteger)
+    mm_queue_reminder   = Column(Integer, nullable=False, default=180)
     mm_log_channel      = Column(BigInteger)
     mm_lfg_role         = Column(BigInteger)
 
@@ -51,6 +52,7 @@ class MMBotQueueUsers(Base):
     queue_channel  = Column(BigInteger, nullable=False)
     queue_expiry   = Column(Integer)
     in_queue       = Column(Boolean, nullable=False, default=True)
+    timestamp      = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

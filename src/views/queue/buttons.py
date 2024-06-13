@@ -5,7 +5,8 @@ import asyncio
 import nextcord
 from nextcord.ext import commands
 
-from config import GUILD_ID, VALOR_YELLOW, VALOR_RED3
+from config import GUILD_ID, VALOR_YELLOW, VALOR_RED1
+from utils.utils import format_duration
 
 from utils.models import (
     MMBotQueueUsers,
@@ -118,6 +119,7 @@ class QueueButtonsView(nextcord.ui.View):
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
             if len(queue_users) > 9:
                 return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
+            self.bot.queue_manager.add_user(interaction.user.id, expiry)
             in_queue = await self.bot.store.upsert_queue_user(
                 user_id=interaction.user.id, 
                 guild_id=interaction.guild.id, 
@@ -129,8 +131,8 @@ class QueueButtonsView(nextcord.ui.View):
         
         if in_queue: title = "You updated your queue time!"
         else: title = "You joined the queue!"
-        embed = nextcord.Embed(title=title, color=VALOR_YELLOW)
-        embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{periods[slot_id][1]}` minutes until <t:{expiry}:t>")
+        embed = nextcord.Embed(title=title, color=VALOR_RED1)
+        embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{format_duration(60 * periods[slot_id][1])}` until <t:{expiry}:t>")
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()
@@ -138,15 +140,16 @@ class QueueButtonsView(nextcord.ui.View):
     async def unready_callback(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You are not queued up",ephemeral=True)
-        await self.bot.store.remove(MMBotQueueUsers, user_id=interaction.user.id, guild_id=interaction.guild.id, queue_channel=interaction.channel.id)
-        embed = nextcord.Embed(title="You have left queue", color=VALOR_RED3)
+        self.bot.queue_manager.remove_user(interaction.user.id)
+        await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
+        embed = nextcord.Embed(title="You have left queue", color=VALOR_RED1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()
     
     async def queue_callback(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-        embed = nextcord.Embed(title="Queue", color=VALOR_YELLOW)
+        embed = nextcord.Embed(title="Queue", color=VALOR_RED1)
         message_lines = []
         for n, item in enumerate(queue_users, 1):
             message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
@@ -166,7 +169,7 @@ class QueueButtonsView(nextcord.ui.View):
             return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1249109243114557461>", ephemeral=True)
         
         await channel.send(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
-        embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALOR_YELLOW)
+        embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALOR_RED1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()

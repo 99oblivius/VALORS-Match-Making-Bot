@@ -17,6 +17,7 @@ from nextcord.ext import commands
 
 from config import *
 from utils.database import Database
+from utils.queuemanager import QueueManager
 
 def exit_cleanup(a: list):
     for b in a:
@@ -26,12 +27,13 @@ class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
         self.store = Database(asyncio.get_event_loop())
+        self.queue_manager = QueueManager(self)
 
 
 def main():
     activity = nextcord.Activity(type=nextcord.ActivityType.custom, name=f"WIP")
     intents = nextcord.Intents.default()
-    intents.guilds = True
+    intents.members = True
     intents.message_content = True
     bot: commands.Bot = Bot(command_prefix=BOT_PREFIX, intents=intents, activity=activity)
 

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
+from utils.utils import format_duration
 
 class Queues(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -16,6 +17,7 @@ class Queues(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
+        await self.bot.queue_manager.fetch_and_initialize_users()
         log.critical("[Queues] Cog started")
 
     ########################
@@ -65,6 +67,15 @@ class Queues(commands.Cog):
         msg = await self.send_queue_buttons(interaction)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_buttons_message=msg.id, mm_buttons_channel=interaction.channel.id)
         await interaction.response.send_message(f"Queue channel set!", ephemeral=True)
+    
+    @queue_settings.subcommand(name="set_reminder", description="Set queue reminder time in seconds")
+    async def set_queue_reminder(self, interaction: nextcord.Interaction, 
+            reminder_time: int=nextcord.SlashOption(
+                min_value=5, 
+                max_value=3600, 
+                required=True)):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_reminder=reminder_time)
+        await interaction.response.send_message(f"Queue reminder set to {format_duration(reminder_time)}", ephemeral=True)
     
     @queue_settings.subcommand(name="periods", description="Set queue ready periods")
     async def set_queue_periods(self, interaction: nextcord.Interaction, 

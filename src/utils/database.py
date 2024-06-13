@@ -1,3 +1,4 @@
+import logging
 from logging import getLogger
 from typing import List
 from asyncio import AbstractEventLoop
@@ -18,6 +19,8 @@ from .models import (
     MMBotMatches,
     MMBotUsers,
 )
+
+logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
 
 log = getLogger(__name__)
 
@@ -56,14 +59,14 @@ class Database:
                 .limit(1))
             return result.scalars().first()
     
-    async def get_regions(self, guild_id: int) -> BotRegions | None:
+    async def get_regions(self, guild_id: int) -> List[BotRegions] | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(BotRegions)
                 .where(BotRegions.guild_id == guild_id))
             return result.scalars().all()
     
-    async def get_queue_users(self, channel_id: int) -> MMBotQueueUsers:
+    async def get_queue_users(self, channel_id: int) -> List[MMBotQueueUsers]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotQueueUsers)
@@ -132,6 +135,17 @@ class Database:
                 insert_stmt = insert(MMBotMatchUsers).values(match_users)
                 await session.execute(insert_stmt)
                 await session.commit()
+    
+    async def unqueue_user(self, channel_id: int, user_id: int):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotQueueUsers)
+                .where(
+                    MMBotQueueUsers.queue_channel == channel_id, 
+                    MMBotQueueUsers.user_id == user_id,
+                    MMBotQueueUsers.in_queue == True)
+                .values(in_queue=False))
+            await session.commit()
     
     async def in_queue(self, guild_id: int, user_id: int) -> bool:
         async with self._session_maker() as session:
