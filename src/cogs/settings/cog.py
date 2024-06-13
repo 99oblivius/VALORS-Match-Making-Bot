@@ -11,7 +11,7 @@ from utils.models import BotSettings
 from config import *
 from views.regions.select import RegionSelectView
 
-from utils.models import BotRegions, BotSettings
+from utils.models import BotRegions, BotSettings, MMBotUsers
 
 
 class Settings(commands.Cog):
@@ -38,7 +38,7 @@ class Settings(commands.Cog):
         await interaction.response.send_message("Staff channel set", ephemeral=True)
     
     async def send_region_select(self, interaction: nextcord.Interaction, regions: List[BotRegions]) -> nextcord.Message:
-        embed = nextcord.Embed(title="Where do you play from", color=VALOR_YELLOW)
+        embed = nextcord.Embed(title="Register", description="Where do you play from?", color=VALOR_YELLOW)
         view = RegionSelectView(self.bot, regions)
         return await interaction.channel.send(embed=embed, view=view)
     
@@ -55,9 +55,11 @@ class Settings(commands.Cog):
         if not regions or len(regions) < 1:
             return await interaction.response.send_message(
                 "No regions\nSet regions with </settings regions:1249942181180084235>", ephemeral=True)
-
-        msg = await self.send_region_select(interaction, regions)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, region_channel=interaction.channel.id, region_message=msg.id)
+        try:
+            msg = await self.send_region_select(interaction, regions)
+            await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, region_channel=interaction.channel.id, region_message=msg.id)
+        except Exception:
+            return await interaction.response.send_message("Something went wrong with the region select.\nVerify your input for </settings regions:1249942181180084235>", ephemeral=True)
         await interaction.response.send_message("Region channel set", ephemeral=True)
     
     @settings.subcommand(name="regions", description="Set regions")
@@ -68,20 +70,29 @@ class Settings(commands.Cog):
             required=True)
     ):
         if regions.find('{') != -1 or regions.find('}') != -1:
-            try: regions = json.loads(regions)
+            try:
+                regions = json.loads(regions)
             except Exception: 
                 return await interaction.response.send_message("Failed.\nIncorrect formatting. Read command description.", ephemeral=True)
-            if len(regions) > 25: # Discord limits 25 options
+            if len(regions) > 25:
                 return await interaction.response.send_message("Failed.\nToo many regions", ephemeral=True)
         else:
             regions = regions.replace(' ', '')
             regions = regions.split(',')
-            regions = { region: None for region in regions }
+            regions = {region: None for region in regions}
 
         guild_id = interaction.guild_id
-        for label, emoji in regions.items():
-            emoji = emoji.strip()
-            await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji)
+        existing_regions = await self.bot.store.get_regions(guild_id)
+
+        existing_labels = {region.label for region in existing_regions}
+        new_labels = set(regions.keys())
+        removed_labels = existing_labels - new_labels
+        for label in removed_labels:
+            await self.bot.store.null_user_region(guild_id, label)
+            await self.bot.store.remove(BotRegions, guild_id=guild_id, label=label)
+        for n, (label, emoji) in enumerate(regions.items()):
+            await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji.strip(), index=n)
+            
         await interaction.response.send_message(
             f"Regions set\nUse </settings set_region:1249942181180084235> to update", ephemeral=True)
 
@@ -92,11 +103,15 @@ class Settings(commands.Cog):
         existing_regions = await self.bot.store.get_regions(interaction.guild.id)
         dict_regions = {}
         if existing_regions:
-            dict_regions = { r.label: r.emoji for r in existing_regions }
-        else:
-            dict_regions = { "NA": "🌎", "EUW": "🌍" }
+            dict_regions = { r.label: "" for r in existing_regions }
+        else: dict_regions = { "NA": "🌎", "EU": "🌍" }
+
         existing_regions = json.dumps(dict_regions, separators=[',', ':'])
+        if len(existing_regions) > 100:
+            existing_regions = "Autofill response too long sorry."
+        log.warning(f"regions: {regions} \nexisting_regiosn: {existing_regions}")
         await interaction.response.send_autocomplete(choices=[regions, existing_regions])
+
 
 
 def setup(bot):

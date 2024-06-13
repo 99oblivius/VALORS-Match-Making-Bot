@@ -72,6 +72,15 @@ class Database:
                     MMBotQueueUsers.in_queue == True))
             return result.scalars().all()
     
+    async def get_user(self, guild_id: int, user_id: int) -> MMBotUsers:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUsers)
+                .where(
+                    MMBotUsers.guild_id == guild_id, 
+                    MMBotUsers.user_id == user_id))
+            return result.scalars().first()
+    
     async def unqueue_add_match_users(self, channel_id: int):
         async with self._session_maker() as session:
             async with session.begin():
@@ -133,7 +142,14 @@ class Database:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(BotRegions)
-                .where(BotRegions.guild_id == guild_id))
+                .where(BotRegions.guild_id == guild_id)
+                .order_by(BotRegions.index))
             return result.scalars().all()
-
-            
+    
+    async def null_user_region(self, guild_id: int, label: str):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotUsers)
+                .where(MMBotUsers.guild_id == guild_id, MMBotUsers.region == label)
+                .values(region=None))
+            await session.commit()

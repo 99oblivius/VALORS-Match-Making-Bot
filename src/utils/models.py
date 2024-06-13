@@ -40,6 +40,7 @@ class BotRegions(Base):
     guild_id  = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
     label     = Column(String(32), primary_key=True, nullable=False)
     emoji     = Column(String(32))
+    index     = Column(SmallInteger, default=0)
 
 class MMBotQueueUsers(Base):
     __tablename__ = 'mm_bot_queue_users'

@@ -99,10 +99,15 @@ class QueueButtonsView(nextcord.ui.View):
         lock_id = f'{interaction.channel.id}'
         if lock_id not in self.ready_lock:
             self.ready_lock[lock_id] = asyncio.Lock()
+        
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        if not settings:
-            await interaction.response.send_message("Settings not found.", ephemeral=True)
-            return
+        user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
+        if not settings: return await interaction.response.send_message(
+            "Settings not found.", ephemeral=True)
+        if not user: return await interaction.response.send_message(
+            "You are not registered.", ephemeral=True)
+        if not user.region: return await interaction.response.send_message(
+            "You must select your region.", ephemeral=True)
         
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_buttons_periods).items())
