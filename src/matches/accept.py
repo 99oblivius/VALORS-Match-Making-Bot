@@ -24,6 +24,6 @@ class AcceptView(nextcord.ui.View):
         
         await self.bot.store.upsert(MMBotMatchUsers, match_id=match.id, user_id=interaction.user.id, accepted=True)
         interaction.message.embeds[0].fields[0].value = format_mm_attendence([p.id for p in players], accepted_users)
-        await interaction.message.edit(embed=interaction.message.embeds[0])
+        await interaction.edit(embed=interaction.message.embeds[0])
         await interaction.response.send_message(
             "You accepted the match!", ephemeral=True)

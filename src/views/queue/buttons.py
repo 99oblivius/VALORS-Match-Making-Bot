@@ -7,7 +7,7 @@ from nextcord.ext import commands
 
 from matches import make_match
 from config import GUILD_ID, VALORS_THEME1
-from utils.utils import format_duration
+from utils.formatters import format_duration
 
 
 class QueueButtonsView(nextcord.ui.View):

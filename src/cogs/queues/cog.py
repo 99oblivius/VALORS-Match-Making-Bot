@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
-from utils.utils import format_duration
+from utils.formatters import format_duration
 from matches import load_ongoing_matches
 from matches.accept import AcceptView
 
@@ -46,12 +46,32 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_log_channel=interaction.channel.id)
         await interaction.response.send_message("Queue log channel set", ephemeral=True)
 
-    @queue_settings.subcommand(name="mm_lfg_role", description="Set lfg role")
-    async def set_lfg(self, interaction: nextcord.Interaction, lfg: nextcord.Role):
+    @queue_settings.subcommand(name="accept_period", description="Set match accept period")
+    async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
+        seconds: int=nextcord.SlashOption(min_value=0, max_value=1800)):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_accept_period=seconds)
+        await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
+    
+    @set_mm_accept_period.on_autocomplete("seconds")
+    async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        if not seconds or not settings.mm_buttons_periods:
+            return await interaction.response.send_autocomplete(choices=[180])
+        await interaction.response.send_autocomplete(choices=[seconds, settings.mm_accept_period])
+
+    @queue_settings.subcommand(name="lfg_role", description="Set lfg role")
+    async def set_mm_lfg(self, interaction: nextcord.Interaction, lfg: nextcord.Role):
         if not isinstance(lfg, nextcord.Role):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_lfg_role=lfg.id)
         await interaction.response.send_message(f"LookingForGame role set to {lfg.mention}", ephemeral=True)
+
+    @queue_settings.subcommand(name="staff_role", description="Set match making staff role")
+    async def set_mm_staff(self, interaction: nextcord.Interaction, staff: nextcord.Role):
+        if not isinstance(staff, nextcord.Role):
+            return await interaction.response.send_message("This is not a role", ephemeral=True)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
+        await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
 
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
         embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
