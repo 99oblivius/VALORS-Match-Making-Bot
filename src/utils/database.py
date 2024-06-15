@@ -2,7 +2,7 @@ import logging
 from logging import getLogger
 from typing import List
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update
+from sqlalchemy import inspect, delete, update, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -100,7 +100,7 @@ class Database:
         await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
         return False
     
-    async def unqueue_add_match_users(self, channel_id: int):
+    async def unqueue_add_match_users(self, channel_id: int) -> int:
         async with self._session_maker() as session:
             async with session.begin():
                 result = await session.execute(
@@ -124,8 +124,8 @@ class Database:
                     .where(
                         MMBotMatches.queue_channel == channel_id,
                         MMBotMatches.complete == False))
-                new_match = result.scalar_one()
-                
+                new_match = result.scalar().first()
+
                 match_users = [
                     { 'guild_id': user.guild_id,
                       'user_id': user.user_id,
@@ -135,6 +135,7 @@ class Database:
                 insert_stmt = insert(MMBotMatchUsers).values(match_users)
                 await session.execute(insert_stmt)
                 await session.commit()
+                return new_match.id
     
     async def unqueue_user(self, channel_id: int, user_id: int):
         async with self._session_maker() as session:
@@ -193,3 +194,47 @@ class Database:
                 .where(MMBotUsers.guild_id == guild_id, MMBotUsers.region == label)
                 .values(region=None))
             await session.commit()
+    
+    async def get_ongoing_matches(self) -> List[MMBotMatches]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches)
+                .where(MMBotMatches.complete == False))
+            return result.scalars().all()
+    
+    async def save_match_state(self, match_id: int, state: int):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotMatches)
+                .where(MMBotMatches.id == match_id)
+                .values(state=state))
+            await session.commit()
+    
+    async def get_match(self, match_id: int) -> MMBotMatches:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches)
+                .where(MMBotMatches.id == match_id))
+            return result.scalars().first()
+    
+    async def get_thread_match(self, thread_id: int) -> MMBotMatches:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches)
+                .where(MMBotMatches.match_thread == thread_id))
+            return result.scalars().first()
+    
+    async def get_players(self, match_id: int) -> List[MMBotMatchUsers]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchUsers)
+                .where(MMBotMatchUsers.match_id == match_id))
+            return result.scalars().all()
+    
+    async def get_accepted_players(self, match_id: int) -> int:
+        async with self._session_maker() as session:
+            stmt = select(func.count(MMBotMatchUsers.user_id)).where(
+                MMBotMatchUsers.match_id == match_id,
+                MMBotMatchUsers.accepted == True)
+            result = await session.execute(stmt)
+            return result.scalar()

@@ -9,6 +9,8 @@ from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.utils import format_duration
+from matches import load_ongoing_matches
+from matches.accept import AcceptView
 
 class Queues(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -17,8 +19,13 @@ class Queues(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
+        self.bot.add_view(AcceptView(self.bot))
+
         await self.bot.queue_manager.fetch_and_initialize_users()
         log.critical("[Queues] Cog started")
+
+        matches = await self.bot.store.get_ongoing_matches()
+        await load_ongoing_matches(self.bot, matches)
 
     ########################
     # QUEUE SLASH COMMANDS #
@@ -47,7 +54,7 @@ class Queues(commands.Cog):
         await interaction.response.send_message(f"LookingForGame role set to {lfg.mention}", ephemeral=True)
 
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
-        embed = nextcord.Embed(title="Ready up!", color=VALOR_YELLOW)
+        embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
         view = await QueueButtonsView.create_showable(self.bot)
         return await interaction.channel.send(embed=embed, view=view)
 

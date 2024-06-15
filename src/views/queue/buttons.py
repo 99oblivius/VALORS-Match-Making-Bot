@@ -5,13 +5,9 @@ import asyncio
 import nextcord
 from nextcord.ext import commands
 
-from config import GUILD_ID, VALOR_YELLOW, VALOR_RED1
+from matches import make_match
+from config import GUILD_ID, VALORS_THEME1
 from utils.utils import format_duration
-
-from utils.models import (
-    MMBotQueueUsers,
-    MMBotMatchUsers
-)
 
 
 class QueueButtonsView(nextcord.ui.View):
@@ -126,12 +122,14 @@ class QueueButtonsView(nextcord.ui.View):
                 queue_channel=interaction.channel.id, 
                 queue_expiry=expiry)
             
-            if len(queue_users) > 9:
-                await self.bot.store.unqueue_add_match(interaction.channel.id)
+            if len(queue_users) + 1 == 10:
+                match_id = await self.bot.store.unqueue_add_match(interaction.channel.id)
+                make_match(self.bot, interaction.guild.id, match_id)
+
         
         if in_queue: title = "You updated your queue time!"
         else: title = "You joined the queue!"
-        embed = nextcord.Embed(title=title, color=VALOR_RED1)
+        embed = nextcord.Embed(title=title, color=VALORS_THEME1)
         embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{format_duration(60 * periods[slot_id][1])}` until <t:{expiry}:t>")
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
@@ -142,14 +140,14 @@ class QueueButtonsView(nextcord.ui.View):
             return await interaction.response.send_message("You are not queued up",ephemeral=True)
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
-        embed = nextcord.Embed(title="You have left queue", color=VALOR_RED1)
+        embed = nextcord.Embed(title="You have left queue", color=VALORS_THEME1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()
     
     async def queue_callback(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-        embed = nextcord.Embed(title="Queue", color=VALOR_RED1)
+        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
         message_lines = []
         for n, item in enumerate(queue_users, 1):
             message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
@@ -169,7 +167,7 @@ class QueueButtonsView(nextcord.ui.View):
             return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1249109243114557461>", ephemeral=True)
         
         await channel.send(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
-        embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALOR_RED1)
+        embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALORS_THEME1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()

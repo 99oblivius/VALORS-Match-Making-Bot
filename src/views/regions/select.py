@@ -6,7 +6,7 @@ import asyncio
 import nextcord
 from nextcord.ext import commands
 
-from config import GUILD_ID, VALOR_YELLOW, VALOR_RED3
+from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_2
 
 from utils.models import (
     BotRegions,
@@ -37,7 +37,7 @@ class RegionSelect(nextcord.ui.Select):
         embed = nextcord.Embed(
             title="Regions", 
             description=f"You have successfully selected `{self.values[0]}`", 
-            color=VALOR_YELLOW)
+            color=VALORS_THEME2)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

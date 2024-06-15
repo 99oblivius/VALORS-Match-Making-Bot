@@ -96,6 +96,7 @@ class MMBotMatches(Base):
     start_timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
     end_timestamp    = Column(TIMESTAMP(timezone=True))
     complete         = Column(Boolean, nullable=False, default=False)
+    state            = Column(SmallInteger, nullable=False, default=0)
 
 class MMBotMatchBans(Base):
     __tablename__ = 'mm_bot_match_bans'
@@ -113,10 +114,11 @@ class MMBotMatchBans(Base):
 class MMBotMatchUsers(Base):
     __tablename__ = 'mm_bot_match_users'
 
-    guild_id = Column(BigInteger, primary_key=True, nullable=False)
-    user_id  = Column(BigInteger, primary_key=True, nullable=False)
-    match_id = Column(Integer, primary_key=True, nullable=False)
-    team     = Column(String(1), nullable=True)
+    guild_id  = Column(BigInteger, primary_key=True, nullable=False)
+    user_id   = Column(BigInteger, primary_key=True, nullable=False)
+    match_id  = Column(Integer, primary_key=True, nullable=False)
+    accepted  = Column(Boolean, nullable=False, default=False)
+    team      = Column(String(1), nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

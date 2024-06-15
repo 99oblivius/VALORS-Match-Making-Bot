@@ -4,7 +4,7 @@ import logging as log
 
 import nextcord
 
-from config import GUILD_ID, VALOR_YELLOW, VALOR_RED2
+from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1
 from utils.utils import format_duration
 
 class QueueManager:
@@ -25,7 +25,7 @@ class QueueManager:
                     embed = nextcord.Embed(
                         title="Queue", 
                         description=f"`{format_duration(settings.mm_queue_reminder)}` left in \n<#{settings.mm_buttons_channel}>!", 
-                        color=VALOR_YELLOW)
+                        color=VALORS_THEME2)
                     reminder_msg = await user.send(embed=embed)
             
             await asyncio.sleep(max(0, expiry - int(datetime.now(timezone.utc).timestamp())))
@@ -37,7 +37,7 @@ class QueueManager:
                 embed = nextcord.Embed(
                     title="Queue", 
                     description=f"You were removed from the queue in \n<#{settings.mm_buttons_channel}>.", 
-                    color=VALOR_RED2)
+                    color=VALORS_THEME1_1)
                 await user.send(embed=embed)
             self.active_users.pop(user_id, None)
             self.tasks.pop(user_id, None)

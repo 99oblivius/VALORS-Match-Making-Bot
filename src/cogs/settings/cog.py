@@ -38,7 +38,7 @@ class Settings(commands.Cog):
         await interaction.response.send_message("Staff channel set", ephemeral=True)
     
     async def send_region_select(self, interaction: nextcord.Interaction, regions: List[BotRegions]) -> nextcord.Message:
-        embed = nextcord.Embed(title="Register", description="Where do you play from?", color=VALOR_YELLOW)
+        embed = nextcord.Embed(title="Register", description="Where do you play from?", color=VALORS_THEME2)
         view = RegionSelectView(self.bot, regions)
         return await interaction.channel.send(embed=embed, view=view)
     
@@ -111,7 +111,6 @@ class Settings(commands.Cog):
             existing_regions = "Autofill response too long sorry."
         log.warning(f"regions: {regions} \nexisting_regiosn: {existing_regions}")
         await interaction.response.send_autocomplete(choices=[regions, existing_regions])
-
 
 
 def setup(bot):
