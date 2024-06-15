@@ -47,10 +47,10 @@ class QueueButtonsView(nextcord.ui.View):
         instance = cls(bot, timeout=None)
         instance.stop()
         settings = await bot.store.get_settings(GUILD_ID)
-        periods = json.loads(settings.mm_buttons_periods)
+        periods = json.loads(settings.mm_queue_periods)
         
         # row may never be above 4
-        # set_mm_buttons_periods() in queues/cog.py must not allow more than 25 minus non-period buttons
+        # set_mm_queue_periods() in queues/cog.py must not allow more than 25 minus non-period buttons
         row = 0
         for n, label in enumerate(periods.keys()):
             button = nextcord.ui.Button(
@@ -108,7 +108,7 @@ class QueueButtonsView(nextcord.ui.View):
             "You must select your region.", ephemeral=True)
         
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
-        periods = list(json.loads(settings.mm_buttons_periods).items())
+        periods = list(json.loads(settings.mm_queue_periods).items())
         expiry = int(datetime.now(timezone.utc).timestamp()) + 60 * int(periods[slot_id][1])
         
         async with self.ready_lock[f'{interaction.channel.id}']:
@@ -162,7 +162,7 @@ class QueueButtonsView(nextcord.ui.View):
         if not settings.mm_lfg_role:
             return await interaction.response.send_message("mm_lfg_role not set. Set it with </queue settings mm_lfg_role:1249109243114557461>", ephemeral=True)
         
-        channel = interaction.guild.get_channel(settings.mm_queue_channel)
+        channel = interaction.guild.get_channel(settings.mm_text_channel)
         if not channel:
             return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1249109243114557461>", ephemeral=True)
         

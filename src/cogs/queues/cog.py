@@ -55,7 +55,7 @@ class Queues(commands.Cog):
     @set_mm_accept_period.on_autocomplete("seconds")
     async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        if not seconds or not settings.mm_buttons_periods:
+        if not seconds or not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[180])
         await interaction.response.send_autocomplete(choices=[seconds, settings.mm_accept_period])
 
@@ -78,21 +78,21 @@ class Queues(commands.Cog):
         view = await QueueButtonsView.create_showable(self.bot)
         return await interaction.channel.send(embed=embed, view=view)
 
-    @queue_settings.subcommand(name="set_buttons", description="Set queue buttons")
+    @queue_settings.subcommand(name="set_queue", description="Set queue buttons")
     async def set_queue_buttons(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        if settings and settings.mm_buttons_channel and settings.mm_buttons_message:
-            channel = interaction.guild.get_channel(settings.mm_buttons_channel)
-            try: msg = await channel.fetch_message(settings.mm_buttons_message)
+        if settings and settings.mm_queue_channel and settings.mm_queue_message:
+            channel = interaction.guild.get_channel(settings.mm_queue_channel)
+            try: msg = await channel.fetch_message(settings.mm_queue_message)
             except nextcord.errors.NotFound: pass
             else: await msg.delete()
         
-        if not settings or not settings.mm_buttons_periods:
+        if not settings or not settings.mm_queue_periods:
             return await interaction.response.send_message(
                 "Failed...\nSet queue periods with </queue settings periods:1249109243114557461>", ephemeral=True)
 
         msg = await self.send_queue_buttons(interaction)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_buttons_message=msg.id, mm_buttons_channel=interaction.channel.id)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
         await interaction.response.send_message(f"Queue channel set!", ephemeral=True)
     
     @queue_settings.subcommand(name="set_reminder", description="Set queue reminder time in seconds")
@@ -118,7 +118,7 @@ class Queues(commands.Cog):
         if len(periods) > 15: # Discord limits 5 buttons on 5 rows (last 2 for other menu)
             return await interaction.response.send_message("Failed.\nToo many periods", ephemeral=True)
         periods = json.dumps(periods, separators=[',', ':'])
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_buttons_periods=periods)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods)
         await interaction.response.send_message(
             f"Queue periods set to `{periods}`\nUse </queue settings set_buttons:1249109243114557461> to update", ephemeral=True)
 
@@ -127,14 +127,21 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not periods:
             periods = "Start typing..."
-        if not settings.mm_buttons_periods:
+        if not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[periods, '{"Short":5,"Default":15}'])
-        await interaction.response.send_autocomplete(choices=[periods, settings.mm_buttons_periods])
+        await interaction.response.send_autocomplete(choices=[periods, settings.mm_queue_periods])
     
-    @queue_settings.subcommand(name="set_queue", description="Set queueing channel")
-    async def set_queue_channel(self, interaction: nextcord.Interaction):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_channel=interaction.channel.id)
-        await interaction.response.send_message("New queue channel set successfully", ephemeral=True)
+    @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
+    async def set_text_channel(self, interaction: nextcord.Interaction):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_text_channel=interaction.channel.id)
+        await interaction.response.send_message("Text channel set successfully", ephemeral=True)
+    
+    @queue_settings.subcommand(name="set_voice", description="Set queueing voice channel")
+    async def set_voice_channel(self, interaction: nextcord.Interaction, voice_channel: nextcord.VoiceChannel):
+        if not isinstance(voice_channel, nextcord.VoiceChannel):
+            return await interaction.response.send_message("The channel you selected is not a Voice Channel", ephemeral=True)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel)
+        await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
 
 
 def setup(bot):

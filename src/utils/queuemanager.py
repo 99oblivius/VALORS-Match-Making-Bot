@@ -5,7 +5,7 @@ import logging as log
 import nextcord
 
 from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1
-from utils.utils import format_duration
+from utils.formatters import format_duration
 
 class QueueManager:
     def __init__(self, bot):
@@ -24,19 +24,19 @@ class QueueManager:
                 if user:
                     embed = nextcord.Embed(
                         title="Queue", 
-                        description=f"`{format_duration(settings.mm_queue_reminder)}` left in \n<#{settings.mm_buttons_channel}>!", 
+                        description=f"`{format_duration(settings.mm_queue_reminder)}` left in \n<#{settings.mm_queue_channel}>!", 
                         color=VALORS_THEME2)
                     reminder_msg = await user.send(embed=embed)
             
             await asyncio.sleep(max(0, expiry - int(datetime.now(timezone.utc).timestamp())))
-            await self.bot.store.unqueue_user(settings.mm_buttons_channel, user_id)
+            await self.bot.store.unqueue_user(settings.mm_queue_channel, user_id)
 
             if reminder_msg: await reminder_msg.delete()
             user = self.bot.get_user(user_id)
             if user:
                 embed = nextcord.Embed(
                     title="Queue", 
-                    description=f"You were removed from the queue in \n<#{settings.mm_buttons_channel}>.", 
+                    description=f"You were removed from the queue in \n<#{settings.mm_queue_channel}>.", 
                     color=VALORS_THEME1_1)
                 await user.send(embed=embed)
             self.active_users.pop(user_id, None)
@@ -59,9 +59,9 @@ class QueueManager:
 
     async def fetch_and_initialize_users(self):
         settings = await self.bot.store.get_settings(GUILD_ID)
-        queue_users = await self.bot.store.get_queue_users(settings.mm_buttons_channel)
+        queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
         for user in queue_users:
             if user.queue_expiry > int(datetime.now(timezone.utc).timestamp()):
                 self.add_user(user.user_id, user.queue_expiry)
             else:
-                await self.bot.store.unqueue_user(settings.mm_buttons_channel, user.user_id)
+                await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)

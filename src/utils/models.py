@@ -19,23 +19,24 @@ Base = declarative_base()
 class BotSettings(Base):
     __tablename__ = 'bot_settings'
 
-    guild_id            = Column(BigInteger, primary_key=True, nullable=False)
-    staff_channel       = Column(BigInteger)
-    log_channel         = Column(BigInteger)
+    guild_id           = Column(BigInteger, primary_key=True, nullable=False)
+    staff_channel      = Column(BigInteger)
+    log_channel        = Column(BigInteger)
     
-    mm_buttons_channel  = Column(BigInteger)
-    mm_buttons_message  = Column(BigInteger)
-    mm_buttons_periods  = Column(Text)
-    mm_accept_period    = Column(SmallInteger, nullable=False, default=180)
+    mm_queue_channel   = Column(BigInteger)
+    mm_queue_message   = Column(BigInteger)
+    mm_queue_periods   = Column(Text)
+    mm_accept_period   = Column(SmallInteger, nullable=False, default=180)
 
-    mm_queue_channel    = Column(BigInteger)
-    mm_queue_reminder   = Column(Integer, nullable=False, default=180)
-    mm_log_channel      = Column(BigInteger)
-    mm_lfg_role         = Column(BigInteger)
-    mm_staff_role       = Column(BigInteger)
+    mm_text_channel    = Column(BigInteger)
+    mm_queue_reminder  = Column(Integer, nullable=False, default=180)
+    mm_voice_channel   = Column(BigInteger)
+    mm_log_channel     = Column(BigInteger)
+    mm_lfg_role        = Column(BigInteger)
+    mm_staff_role      = Column(BigInteger)
 
-    region_channel      = Column(BigInteger)
-    region_message      = Column(BigInteger)
+    region_channel     = Column(BigInteger)
+    region_message     = Column(BigInteger)
 
 class BotRegions(Base):
     __tablename__ = 'bot_regions'
