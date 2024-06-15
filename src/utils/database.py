@@ -2,7 +2,7 @@ import logging
 from logging import getLogger
 from typing import List
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func
+from sqlalchemy import inspect, delete, update, func, joinedload
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -238,3 +238,14 @@ class Database:
                 MMBotMatchUsers.accepted == True)
             result = await session.execute(stmt)
             return result.scalar()
+    
+    async def is_user_in_match(self, user_id: int) -> bool:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchUsers)
+                .join(MMBotMatches, MMBotMatchUsers.match_id == MMBotMatches.id)
+                .filter(
+                    MMBotMatchUsers.user_id == user_id,
+                    MMBotMatches.complete == False))
+            match_user = result.scalars().first()
+            return match_user is not None

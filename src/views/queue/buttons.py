@@ -99,6 +99,7 @@ class QueueButtonsView(nextcord.ui.View):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
+        in_match = await self.bot.store.is_user_in_match(interaction.user.id)
         in_queue = False
         if not settings: return await interaction.response.send_message(
             "Settings not found.", ephemeral=True)
@@ -106,6 +107,8 @@ class QueueButtonsView(nextcord.ui.View):
             "You are not registered.", ephemeral=True)
         if not user.region: return await interaction.response.send_message(
             "You must select your region.", ephemeral=True)
+        if in_match: return await interaction.response.send_message(
+            "Your current match has not ended yet.", ephemeral=True)
         
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_queue_periods).items())

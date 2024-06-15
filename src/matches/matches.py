@@ -146,6 +146,15 @@ class Match:
             try:
                 if b_thread: await b_thread.delete()
             except nextcord.HTTPException: pass
+            # move users back
+            guild = self.bot.get_guild(self.guild_id)
+            voice_channel = guild.get_channel(settings.mm_voice_channel)
+            for player in players:
+                member = guild.get_member(player.user_id)
+                if member and member.voice and member.voice.channel in [a_vc, b_vc]:
+                    await asyncio.sleep(0.1)
+                    try: await member.move_to(voice_channel)
+                    except nextcord.HTTPException: pass
             # a_vc
             try:
                 if a_vc: await a_vc.delete()
