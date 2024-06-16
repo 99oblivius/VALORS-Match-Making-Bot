@@ -15,3 +15,6 @@ def format_duration(seconds):
 from typing import List
 def format_mm_attendence(user_ids: List[int], accepted: List[int]=[]):
     return "\n".join([f"{'🟢' if user_id in accepted else '🔴'} <@{user_id}>" for user_id in user_ids])
+
+def format_team(team: bool) -> str:
+    return 'B' if team else 'A'

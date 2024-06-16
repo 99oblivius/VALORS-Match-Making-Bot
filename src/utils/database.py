@@ -11,14 +11,16 @@ from sqlalchemy.future import select
 from config import DATABASE_URL
 
 from .models import (
-    Base, 
     BotSettings, 
     BotRegions,
     MMBotQueueUsers,
     MMBotMatchUsers,
     MMBotMatches,
     MMBotUsers,
+    MMBotMatchBans,
+    MMBotMaps,
 )
+from matches.matches import Team
 
 logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
 
@@ -249,3 +251,53 @@ class Database:
                     MMBotMatches.complete == False))
             match_user = result.scalars().first()
             return match_user is not None
+    
+    async def set_players_team(self, match_id: int, a_user_ids: list, b_user_ids: list, a_team: str, b_team: str):
+        async with self._session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    update(MMBotMatchUsers)
+                    .where(
+                        MMBotMatchUsers.match_id == match_id,
+                        MMBotMatchUsers.user_id.in_(a_user_ids))
+                    .values(team=a_team))
+                await session.execute(
+                    update(MMBotMatchUsers)
+                    .where(
+                        MMBotMatchUsers.match_id == match_id,
+                        MMBotMatchUsers.user_id.in_(b_user_ids))
+                    .values(team=b_team))
+    
+    async def set_map_bans(self, match_id: int, bans: list, team: bool) -> None:
+        async with self._session_maker() as session:
+            if team == Team.A:
+                await session.execute(
+                    update(MMBotMatches)
+                    .where(MMBotMatches.id == match_id)
+                    .values(a_bans=bans))
+                await session.commit()
+            elif team == Team.B:
+                await session.execute(
+                    update(MMBotMatches)
+                    .where(MMBotMatches.id == match_id)
+                    .values(b_bans=bans))
+                await session.commit()
+    
+    async def get_bans(self, match_id: int, phase: int=0) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchBans)
+                .where(
+                    MMBotMatchBans.match_id == match_id,
+                    MMBotMatchBans.phase == phase))
+            return [ban.map for ban in result.scalars().all()]
+    
+    async def get_maps(self, guild_id: int) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMaps.map)
+                .where(
+                    MMBotMaps.guild_id == guild_id,
+                    MMBotMaps.active == True)
+                .order_by(MMBotMaps.order))
+            return result.scalars().all()

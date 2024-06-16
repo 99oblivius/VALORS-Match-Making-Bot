@@ -7,6 +7,7 @@ from sqlalchemy import (
     SmallInteger, 
     Text, 
     TIMESTAMP, 
+    ARRAY, 
     ForeignKey, 
     ForeignKeyConstraint,
     func
@@ -79,6 +80,14 @@ class MMBotUsers(Base):
         ForeignKeyConstraint(['guild_id', 'region'], ['bot_regions.guild_id', 'bot_regions.label']),
     )
 
+class MMBotMaps(Base):
+    __tablename__ = 'mm_bot_maps'
+
+    guild_id  = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
+    map       = Column(String(32), primary_key=True, nullable=False)
+    active    = Column(Boolean, nullable=False, default=True)
+    order     = Column(SmallInteger)
+
 
 ##############
 # MM Matches #
@@ -89,10 +98,15 @@ class MMBotMatches(Base):
     id               = Column(Integer, primary_key=True)
     queue_channel    = Column(BigInteger, nullable=False)
     match_thread     = Column(BigInteger)
+    match_message    = Column(BigInteger)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)
     a_vc             = Column(BigInteger)
     b_vc             = Column(BigInteger)
+    a_message        = Column(BigInteger)
+    b_message        = Column(BigInteger)
+    a_bans           = Column(ARRAY(String(32)))
+    b_bans           = Column(ARRAY(String(32)))
     map              = Column(String(32))
     a_score          = Column(SmallInteger)
     b_score          = Column(SmallInteger)
@@ -121,7 +135,7 @@ class MMBotMatchUsers(Base):
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
     match_id  = Column(Integer, primary_key=True, nullable=False)
     accepted  = Column(Boolean, nullable=False, default=False)
-    team      = Column(String(1), nullable=True)
+    team      = Column(Boolean, nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

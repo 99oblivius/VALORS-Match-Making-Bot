@@ -4,10 +4,11 @@ from utils.models import *
 from utils.formatters import format_mm_attendence
 
 class AcceptView(nextcord.ui.View):
-    def __init__(self, bot, *args, **kwargs):
+    def __init__(self, bot, done, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.timeout = None
+        self.done = done
     
     @nextcord.ui.Button(
         label="Accept", 
@@ -27,3 +28,7 @@ class AcceptView(nextcord.ui.View):
         await interaction.edit(embed=interaction.message.embeds[0])
         await interaction.response.send_message(
             "You accepted the match!", ephemeral=True)
+        
+        accepted_players = await self.bot.store.get_accepted_players(self.match_id)
+        if accepted_players and len(accepted_players) == 10:
+            self.done.is_done = True
