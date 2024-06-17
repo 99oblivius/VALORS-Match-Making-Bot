@@ -85,6 +85,7 @@ class MMBotMaps(Base):
 
     guild_id  = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
     map       = Column(String(32), primary_key=True, nullable=False)
+    media     = Column(Text, nullable=True)
     active    = Column(Boolean, nullable=False, default=True)
     order     = Column(SmallInteger)
 
@@ -115,14 +116,15 @@ class MMBotMatches(Base):
     complete         = Column(Boolean, nullable=False, default=False)
     state            = Column(SmallInteger, nullable=False, default=0)
 
-class MMBotMatchBans(Base):
-    __tablename__ = 'mm_bot_match_bans'
+class MMBotUserBans(Base):
+    __tablename__ = 'mm_bot_user_bans'
 
     guild_id  = Column(BigInteger, primary_key=True, nullable=False)
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
     match_id  = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
     map       = Column(String(32), nullable=False)
     phase     = Column(SmallInteger, default=0)
+    timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

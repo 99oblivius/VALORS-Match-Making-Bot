@@ -8,12 +8,12 @@ from collections import Counter
 import nextcord
 from utils.models import *
 from .match_states import MatchState
-from .accept import AcceptView
-from .banning import BanView
+from views.match.accept import AcceptView
+from views.match.banning import BanView
 from utils.formatters import format_mm_attendence
 
 from config import VALORS_THEME2, VALORS_THEME1_2, HOME_THEME, AWAY_THEME
-from .functions import get_prefered_bans
+from .functions import get_preferred_bans
 
 class Done:
     def __init__(self):
@@ -77,38 +77,17 @@ class Match:
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, match_thread=match_thread.id)
             await self.increment_state()
         
-        done = Done()
         if check_state(MatchState.ACCEPT_PLAYERS):
+            done = Done()
             add_mention = []
             for player in players:
                 add_mention.append(f"<@{player.user_id}>")
-            add_mention = " ".join(add_mention)
+            add_mention = "".join(add_mention)
 
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name="Attendence", value=format_mm_attendence([p.id for p in player]))
             await match_thread.send(add_mention, embed=embed, view=AcceptView(self.bot, done))
-            await self.increment_state()
-        
-        # if check_state(MatchState.ACCEPT_WAIT):
-        #     accepted_players = 0
-        #     patience = settings.mm_accept_period
-        #     t_start = time.time()
-        #     while accepted_players < 10:
-        #         sleep_time = 1 - (time.time() - t_start)
-        #         t_start = time.time()
-        #         if sleep_time > 0:
-        #             await asyncio.sleep(sleep_time)
-        #         print(f"Slept {sleep_time}")
-                
-        #         accepted_players = await self.bot.store.get_accepted_players(self.match_id)
-        #         patience -= 1
-        #         if patience < 0:
-        #             self.state = MatchState.CLEANUP - 1
-        #             embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
-        #             await match_thread.send(embed=embed)
-        #             break
-        #     await self.increment_state()
-        if check_state(MatchState.ACCEPT_WAIT):
+
             patience = settings.mm_accept_period
             start_time = time.time()
             while not done.is_done:
@@ -162,7 +141,7 @@ class Match:
                 description=f"Things are still happening in <#{match.match_thread}>", 
                 color=AWAY_THEME)
             b_message = await b_thread.send(embed=embed)
-                
+        
         if check_state(MatchState.MAKE_TEAM_VC_A):
             guild = self.bot.get_guild(self.guild_id)
             player_overwrites = { self.bot.get_user(player): nextcord.PermissionOverwrite(connect=True) for player in players }
@@ -195,60 +174,44 @@ class Match:
         
         if check_state(MatchState.BANNING_START):
             await match_thread.purge(bulk=True)
-            embed = nextcord.Embed(title="Home ban first", description=f"<#{match.a_thread}>", color=HOME_THEME)
+            embed = nextcord.Embed(title="Team A ban first", description=f"<#{match.a_thread}>", color=HOME_THEME)
             match_message = await match_thread.send(embed=embed)
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, match_message=match_message.id)
         
         if check_state(MatchState.ADD_TEAM_A):
-            msg = await a_thread.send(" ".join(f"<@{player}>" for player in a_players))
+            msg = await a_thread.send(''.join(f"<@{player}>" for player in a_players))
             await msg.delete()
             await self.increment_state()
         
-        done = Done()
         if check_state(MatchState.A_BANS):
-            view = BanView(self.bot, done)
-            embed = nextcord.Embed()
-            await a_message.edit(embed=embed, view=view)
+            embed = nextcord.Embed(title="Pick your bans", color=VALORS_THEME2)
+            await a_message.edit(embed=embed, view=BanView(self.bot))
+            await asyncio.sleep(30)
 
-            patience = 60
-            start_time = time.time()
-            while not done.is_done:
-                await asyncio.sleep(0)
-                if time.time() - start_time > patience:
-                    break
-            
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.A)
-            bans = get_prefered_bans(maps, bans)
+            bans = get_preferred_bans(maps, bans)
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
         if check_state(MatchState.BAN_SWAP):
-            embed = nextcord.Embed(title="Away bans second", description=f"<#{match.b_thread}>", color=AWAY_THEME)
+            embed = nextcord.Embed(title="Team B ban second", description=f"<#{match.b_thread}>", color=AWAY_THEME)
             await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.ADD_TEAM_B):
-            await b_thread.send(" ".join(f"<@{player}>" for player in b_players))
+            await b_thread.send(''.join(f"<@{player}>" for player in b_players))
             await self.increment_state()
         
-        done = Done()
         if check_state(MatchState.B_BANS):
-            view = BanView(self.bot, done)
-            embed = nextcord.Embed()
-            await b_message.edit(embed=embed, view=view)
-
-            patience = 60
-            start_time = time.time()
-            while not done.is_done:
-                await asyncio.sleep(0)
-                if time.time() - start_time > patience:
-                    break
+            embed = nextcord.Embed(title="Pick your bans", color=VALORS_THEME2)
+            await b_message.edit(embed=embed, view=BanView(self.bot))
+            await asyncio.sleep(30)
             
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.B)
-            bans = get_prefered_bans(maps, bans)
-            await self.bot.store.upsert(MMBotMatches, id=self.match_id, b_bans=bans)
+            bans = get_preferred_bans(maps, bans)
+            await self.bot.store.upsert(MMBotMatches, match_id=self.match_id, b_bans=bans)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):

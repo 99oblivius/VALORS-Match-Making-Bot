@@ -1,6 +1,6 @@
 import logging
 from logging import getLogger
-from typing import List
+from typing import List, Tuple
 from asyncio import AbstractEventLoop
 from sqlalchemy import inspect, delete, update, func, joinedload
 from sqlalchemy.dialects.postgresql import insert
@@ -17,7 +17,7 @@ from .models import (
     MMBotMatchUsers,
     MMBotMatches,
     MMBotUsers,
-    MMBotMatchBans,
+    MMBotUserBans,
     MMBotMaps,
 )
 from matches.matches import Team
@@ -268,7 +268,7 @@ class Database:
                         MMBotMatchUsers.user_id.in_(b_user_ids))
                     .values(team=b_team))
     
-    async def set_map_bans(self, match_id: int, bans: list, team: bool) -> None:
+    async def set_map_bans(self, match_id: int, bans: list, team: bool):
         async with self._session_maker() as session:
             if team == Team.A:
                 await session.execute(
@@ -286,10 +286,10 @@ class Database:
     async def get_bans(self, match_id: int, phase: int=0) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMatchBans)
+                select(MMBotUserBans)
                 .where(
-                    MMBotMatchBans.match_id == match_id,
-                    MMBotMatchBans.phase == phase))
+                    MMBotUserBans.match_id == match_id,
+                    MMBotUserBans.phase == phase))
             return [ban.map for ban in result.scalars().all()]
     
     async def get_maps(self, guild_id: int) -> List[str]:
@@ -301,3 +301,32 @@ class Database:
                     MMBotMaps.active == True)
                 .order_by(MMBotMaps.order))
             return result.scalars().all()
+
+    async def get_map_bans(self, match_id: int) -> List[Tuple[str, int]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserBans.map, func.count(MMBotUserBans.map))
+                .join(MMBotMaps, MMBotUserBans.map == MMBotMaps.map)
+                .where(MMBotUserBans.match_id == match_id)
+                .group_by(MMBotUserBans.map, MMBotMaps.order)
+                .order_by(MMBotMaps.order))
+            return result.all()
+    
+    async def set_maps(self, guild_id: int, maps: List[Tuple[str, str]]):
+        data = [{"guild_id": guild_id, "map": m[0], "media": m[1], "active": True, "order": n} for n, m in enumerate(maps)]
+        
+        async with self._session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    update(MMBotMaps)
+                    .where(MMBotMaps.guild_id == guild_id)
+                    .where(MMBotMaps.map.not_in([m[0] for m in maps]))
+                    .values(active=False))
+                insert_stmt = insert(MMBotMaps).values(data)
+                update_stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=[key.name for key in inspect(MMBotMaps).primary_key],
+                    set_={
+                        "active": insert_stmt.excluded.active,
+                        "order": insert_stmt.excluded.order,
+                        "media": insert_stmt.excluded.media})
+                await session.execute(update_stmt)

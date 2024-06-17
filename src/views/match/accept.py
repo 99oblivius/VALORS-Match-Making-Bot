@@ -15,7 +15,7 @@ class AcceptView(nextcord.ui.View):
         emoji="✅", 
         style=nextcord.ButtonStyle.green, 
         custom_id="mm_thread_accept_button")
-    async def AcceptButton(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def accept_button(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         match = await self.bot.store.get_thread_match(interaction.channel.id)
         players = await self.bot.store.get_players(match.id)
         accepted_users = [p.user_id for p in players if p.accepted]

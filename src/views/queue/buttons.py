@@ -20,23 +20,23 @@ class QueueButtonsView(nextcord.ui.View):
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
         for slot_id in range(15):
-            button = nextcord.ui.Button(label="dummy button", custom_id=f"{GUILD_ID}:mm_queue_button:ready:{slot_id}")
+            button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_queue_button:ready:{slot_id}")
             button.callback = instance.ready_callback
             instance.add_item(button)
         
-        button = nextcord.ui.Button(label="Unready", custom_id=f"{GUILD_ID}:mm_queue_button:unready")
+        button = nextcord.ui.Button(label="Unready", custom_id=f"mm_queue_button:unready")
         button.callback = instance.unready_callback
         instance.add_item(button)
 
-        button = nextcord.ui.Button(label="Queue", custom_id=f"{GUILD_ID}:mm_queue_button:queue")
+        button = nextcord.ui.Button(label="Queue", custom_id=f"mm_queue_button:queue")
         button.callback = instance.queue_callback
         instance.add_item(button)
     
-        button = nextcord.ui.Button(label="Stats", custom_id=f"{GUILD_ID}:mm_queue_button:stats")
+        button = nextcord.ui.Button(label="Stats", custom_id=f"mm_queue_button:stats")
         button.callback = instance.stats_callback
         instance.add_item(button)
     
-        button = nextcord.ui.Button(label="lfg", custom_id=f"{GUILD_ID}:mm_queue_button:lfg")
+        button = nextcord.ui.Button(label="lfg", custom_id=f"mm_queue_button:lfg")
         button.callback = instance.lfg_callback
         instance.add_item(button)
 
@@ -57,7 +57,7 @@ class QueueButtonsView(nextcord.ui.View):
                 label=f"{label}", 
                 row=row,
                 style=nextcord.ButtonStyle.green, 
-                custom_id=f"{GUILD_ID}:mm_queue_button:ready:{n}")
+                custom_id=f"mm_queue_button:ready:{n}")
             if (n+1) % 5 == 0:
                 row += 1
             instance.add_item(button)
@@ -65,7 +65,7 @@ class QueueButtonsView(nextcord.ui.View):
         button = nextcord.ui.Button(
             label="Unready", 
             style=nextcord.ButtonStyle.red, 
-            custom_id=f"{GUILD_ID}:mm_queue_button:unready")
+            custom_id=f"mm_queue_button:unready")
         instance.add_item(button)
 
         row += 1
@@ -73,21 +73,21 @@ class QueueButtonsView(nextcord.ui.View):
             label="Queue", 
             row=row,
             style=nextcord.ButtonStyle.blurple, 
-            custom_id=f"{GUILD_ID}:mm_queue_button:queue")
+            custom_id=f"mm_queue_button:queue")
         instance.add_item(button)
     
         button = nextcord.ui.Button(
             label="Stats", 
             row=row,
             style=nextcord.ButtonStyle.blurple, 
-            custom_id=f"{GUILD_ID}:mm_queue_button:stats")
+            custom_id=f"mm_queue_button:stats")
         instance.add_item(button)
     
         button = nextcord.ui.Button(
             label="lfg", 
             row=row,
             style=nextcord.ButtonStyle.blurple, 
-            custom_id=f"{GUILD_ID}:mm_queue_button:lfg")
+            custom_id=f"mm_queue_button:lfg")
         instance.add_item(button)
 
         return instance

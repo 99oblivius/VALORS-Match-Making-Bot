@@ -1,7 +1,7 @@
 import random
 from typing import List
 
-def get_prefered_bans(maps: List[str], bans: List[str]) -> List[str]:
+def get_preferred_bans(maps: List[str], bans: List[str]) -> List[str]:
     map_options = { m.map: 0 for m in maps }
     for ban in bans: map_options[ban] += 1
 

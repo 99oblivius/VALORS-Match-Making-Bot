@@ -7,7 +7,6 @@ class MatchState(IntEnum):
     NOT_STARTED             = auto()
     CREATE_MATCH_THREAD     = auto()
     ACCEPT_PLAYERS          = auto()
-    ACCEPT_WAIT             = auto()
 
     MAKE_TEAMS              = auto()
 

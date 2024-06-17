@@ -1,5 +1,6 @@
 import json
 import logging as log
+from io import BytesIO
 
 import nextcord
 from nextcord.ext import commands
@@ -10,7 +11,9 @@ from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.formatters import format_duration
 from matches import load_ongoing_matches
-from matches.accept import AcceptView
+
+from views.match.accept import AcceptView
+from views.match.banning import BanView
 
 class Queues(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -20,6 +23,7 @@ class Queues(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
         self.bot.add_view(AcceptView(self.bot))
+        self.bot.add_view(BanView(self.bot))
 
         await self.bot.queue_manager.fetch_and_initialize_users()
         log.critical("[Queues] Cog started")
@@ -104,32 +108,38 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_reminder=reminder_time)
         await interaction.response.send_message(f"Queue reminder set to {format_duration(reminder_time)}", ephemeral=True)
     
-    @queue_settings.subcommand(name="periods", description="Set queue ready periods")
+    @queue_settings.subcommand(name="set_queue_periods", description="Set queue ready periods")
     async def set_queue_periods(self, interaction: nextcord.Interaction, 
-        periods: str = nextcord.SlashOption(
-            name="json", 
-            description="name:period Json",
-            required=True,
-            min_length=2)
-    ):
-        try: periods = json.loads(periods)
+        periods: nextcord.File = nextcord.SlashOption(description="JSON file for queue periods")):
+        try: periods_json = json.loads(periods.fp.read())
         except Exception:
-            return await interaction.response.send_message("Failed.\nIncorrect formatting. Read command description.", ephemeral=True)
-        if len(periods) > 15: # Discord limits 5 buttons on 5 rows (last 2 for other menu)
-            return await interaction.response.send_message("Failed.\nToo many periods", ephemeral=True)
-        periods = json.dumps(periods, separators=[',', ':'])
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods)
-        await interaction.response.send_message(
-            f"Queue periods set to `{periods}`\nUse </queue settings set_buttons:1249109243114557461> to update", ephemeral=True)
+            return await interaction.response.send_message(
+                "The file you provided did not contain a valid JSON string\ne.g. `{\"Short\":5,\"Default\":15}`", ephemeral=True)
 
-    @set_queue_periods.on_autocomplete("periods")
-    async def autocomplete_queue_periods(self, interaction: nextcord.Interaction, periods: str):
+        if len(periods_json) > 15:  # Discord limits to 5 buttons on 5 rows (last 2 for other menu)
+            return await interaction.response.send_message("Failed.\nToo many periods", ephemeral=True)
+        
+        periods_str = json.dumps(periods_json, separators=[',', ':'])
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
+        await interaction.response.send_message(
+            f"Queue periods set to `{periods_str}`\nUse </queue settings set_buttons:1249109243114557461> to update", ephemeral=True)
+
+    @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
+    async def get_queue_periods(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        if not periods:
-            periods = "Start typing..."
         if not settings.mm_queue_periods:
-            return await interaction.response.send_autocomplete(choices=[periods, '{"Short":5,"Default":15}'])
-        await interaction.response.send_autocomplete(choices=[periods, settings.mm_queue_periods])
+            return await interaction.response.send_message("No queue periods set.", ephemeral=True)
+        
+        periods_json = settings.mm_queue_periods
+        periods_dict = json.loads(periods_json)
+        
+        json_str = json.dumps(periods_dict, indent=4)
+        json_bytes = json_str.encode('utf-8')
+        json_file = BytesIO(json_bytes)
+        json_file.seek(0)
+        file = nextcord.File(json_file, filename="queue_periods.json")
+        
+        await interaction.response.send_message("Here are the current queue periods:", file=file, ephemeral=True)
     
     @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
     async def set_text_channel(self, interaction: nextcord.Interaction):
@@ -142,6 +152,33 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("The channel you selected is not a Voice Channel", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
+    
+    @queue_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")
+    async def set_map_pool(self, interaction: nextcord.Interaction, 
+        maps: nextcord.File=nextcord.SlashOption(description="Json string for map name and image url (ordered)")):
+        try:
+            m = json.loads(maps.fp.read())
+        except Exception:
+            return await interaction.response.send_message(
+                "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
+
+        await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
+        await interaction.response.send_message(
+            f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
+    
+    @queue_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
+    async def get_map_pool(self, interaction: nextcord.Interaction):
+        maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
+        map_dict = {m.map: m.media for m in maps}
+        
+        json_str = json.dumps(map_dict, indent=4)
+        json_bytes = json_str.encode('utf-8')
+        json_file = BytesIO(json_bytes)
+        json_file.seek(0)
+        file = nextcord.File(json_file, filename="map_pool.json")
+        
+        await interaction.response.send_message(
+            "Here is the current map pool:", file=file, ephemeral=True)
 
 
 def setup(bot):
