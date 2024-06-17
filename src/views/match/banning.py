@@ -23,7 +23,6 @@ class BanView(nextcord.ui.View):
     async def create_showable(cls, bot: commands.Bot, match_id: int):
         instance = cls(bot, timeout=None)
         instance.stop()
-
         map_bans = await instance.bot.store.get_map_bans(match_id)
         for n, (m, count) in enumerate(map_bans):
             button = nextcord.ui.Button(

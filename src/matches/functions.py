@@ -1,14 +1,14 @@
 import random
 from typing import List
 
-def get_preferred_bans(maps: List[str], bans: List[str]) -> List[str]:
+def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> List[str]:
     map_options = { m.map: 0 for m in maps }
     for ban in bans: map_options[ban] += 1
 
     ban_votes = [(k, v) for k, v in sorted(map_options.items(), key=lambda item: item[1], reverse=True)]
 
     bans = []
-    while len(bans) < 2 and ban_votes:
+    while len(bans) < total_bans and ban_votes:
         votes = ban_votes[0][1]
         i = 0
         while i < len(ban_votes) and ban_votes[i][1] == votes:

@@ -1,10 +1,11 @@
 import json
 import logging as log
 from io import BytesIO
+from datetime import datetime
+import pytz
 
 import nextcord
-from nextcord.ext import commands
-from sqlalchemy.ext.asyncio import AsyncSession
+from nextcord.ext import commands, tasks
 
 from config import *
 from views.queue.buttons import QueueButtonsView
@@ -16,6 +17,17 @@ from views.match.accept import AcceptView
 from views.match.banning import BanView
 
 class Queues(commands.Cog):
+
+    @tasks.loop(minutes=30)
+    async def rotate_map_pool(self):
+        now = datetime.now(pytz.timezone('US/Eastern'))
+        if now.minute == 00 and now.hour == 00:
+            await self.bot.store.rotate_maps(GUILD_ID)
+
+    @rotate_map_pool.before_loop
+    async def wait_rotate_map_pool(self):
+        await self.wait_until_read()
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
@@ -24,6 +36,7 @@ class Queues(commands.Cog):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
         self.bot.add_view(AcceptView(self.bot))
         self.bot.add_view(BanView(self.bot))
+        self.rotate_map_pool.start()
 
         await self.bot.queue_manager.fetch_and_initialize_users()
         log.critical("[Queues] Cog started")

@@ -319,8 +319,9 @@ class Database:
             async with session.begin():
                 await session.execute(
                     update(MMBotMaps)
-                    .where(MMBotMaps.guild_id == guild_id)
-                    .where(MMBotMaps.map.not_in([m[0] for m in maps]))
+                    .where(
+                        MMBotMaps.guild_id == guild_id, 
+                        MMBotMaps.map.not_in([m[0] for m in maps]))
                     .values(active=False))
                 insert_stmt = insert(MMBotMaps).values(data)
                 update_stmt = insert_stmt.on_conflict_do_update(
@@ -330,3 +331,24 @@ class Database:
                         "order": insert_stmt.excluded.order,
                         "media": insert_stmt.excluded.media})
                 await session.execute(update_stmt)
+    
+    async def rotate_maps(self, guild_id: int):
+        async with self._session_maker() as session:
+            async with session.begin():
+                result = await session.execute(
+                    select(MMBotMaps)
+                    .where(
+                        MMBotMaps.guild_id == guild_id, 
+                        MMBotMaps.active == True)
+                    .order_by(MMBotMaps.order))
+                maps = result.scalars().all()
+
+                if not maps: return
+                for i, map_obj in enumerate(maps):
+                    new_order = i + 1 if i < len(maps) - 1 else 0
+                    await session.execute(
+                        update(MMBotMaps)
+                        .where(
+                            MMBotMaps.guild_id == guild_id, 
+                            MMBotMaps.map == map_obj.map)
+                        .values(order=new_order))

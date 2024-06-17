@@ -184,13 +184,13 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_BANS):
-            embed = nextcord.Embed(title="Pick your bans", color=VALORS_THEME2)
+            embed = nextcord.Embed(title="Pick your 3 bans", color=VALORS_THEME2)
             await a_message.edit(embed=embed, view=BanView(self.bot))
             await asyncio.sleep(30)
 
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.A)
-            bans = get_preferred_bans(maps, bans)
+            bans = get_preferred_bans(maps, bans, total_bans=2)
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
@@ -204,13 +204,13 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_BANS):
-            embed = nextcord.Embed(title="Pick your bans", color=VALORS_THEME2)
+            embed = nextcord.Embed(title="Pick your 3 bans", color=VALORS_THEME2)
             await b_message.edit(embed=embed, view=BanView(self.bot))
             await asyncio.sleep(30)
             
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.B)
-            bans = get_preferred_bans(maps, bans)
+            bans = get_preferred_bans(maps, bans, total_bans=2)
             await self.bot.store.upsert(MMBotMatches, match_id=self.match_id, b_bans=bans)
             await self.increment_state()
         
