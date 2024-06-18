@@ -1,3 +1,5 @@
+from typing import List
+
 def format_duration(seconds):
     intervals = (
         ('days', 86400),
@@ -12,9 +14,12 @@ def format_duration(seconds):
         result.append(f"{value} {name}")
     return ' '.join(result) if result else "0 seconds"
 
-from typing import List
 def format_mm_attendence(user_ids: List[int], accepted: List[int]=[]):
     return "\n".join([f"{'🟢' if user_id in accepted else '🔴'} <@{user_id}>" for user_id in user_ids])
 
 def format_team(team: bool) -> str:
     return 'B' if team else 'A'
+
+def shifted_window(l: List, phase: int=0, range: int=1) -> List:
+    l = l + l[:range - 1]
+    return l[phase:phase + range]

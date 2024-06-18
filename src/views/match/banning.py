@@ -1,7 +1,10 @@
 from config import GUILD_ID
+from typing import List
 
 import nextcord
 from nextcord.ext import commands
+
+from utils.utils import shifted_window
 
 class BanView(nextcord.ui.View):
     def __init__(self, bot, done, *args, **kwargs):
@@ -23,7 +26,10 @@ class BanView(nextcord.ui.View):
     async def create_showable(cls, bot: commands.Bot, match_id: int):
         instance = cls(bot, timeout=None)
         instance.stop()
+
         map_bans = await instance.bot.store.get_map_bans(match_id)
+        settings = await instance.bot.store.get_settings(GUILD_ID)
+        map_bans = shifted_window(map_bans, settings.maps_phase, settings.maps_range)
         for n, (m, count) in enumerate(map_bans):
             button = nextcord.ui.Button(
                 label=f"{m}: {count}", 
@@ -39,3 +45,14 @@ class BanView(nextcord.ui.View):
         # already voted max times
         # vote this one
         ...
+
+class PicksView(nextcord.ui.View):
+    def __init__(self, bans: List[str]):
+        super().__init__(timeout=0)
+
+        for ban in bans:
+            self.add_item(
+                nextcord.ui.Button(
+                    label=f"{ban}", 
+                    style=nextcord.ButtonStyle.red,
+                    disabled=True))

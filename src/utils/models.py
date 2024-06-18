@@ -28,6 +28,8 @@ class BotSettings(Base):
     mm_queue_message   = Column(BigInteger)
     mm_queue_periods   = Column(Text)
     mm_accept_period   = Column(SmallInteger, nullable=False, default=180)
+    mm_maps_range      = Column(SmallInteger, nullable=False, default=10)
+    mm_maps_phase      = Column(SmallInteger, nullable=False, default=0)
 
     mm_text_channel    = Column(BigInteger)
     mm_queue_reminder  = Column(Integer, nullable=False, default=180)
@@ -100,6 +102,8 @@ class MMBotMatches(Base):
     queue_channel    = Column(BigInteger, nullable=False)
     match_thread     = Column(BigInteger)
     match_message    = Column(BigInteger)
+    maps_range       = Column(BigInteger, nullable=False, default=10)
+    maps_phase       = Column(BigInteger, nullable=False, default=0)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)
     a_vc             = Column(BigInteger)
@@ -119,11 +123,11 @@ class MMBotMatches(Base):
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'
 
-    guild_id  = Column(BigInteger, primary_key=True, nullable=False)
-    user_id   = Column(BigInteger, primary_key=True, nullable=False)
-    match_id  = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
-    map       = Column(String(32), nullable=False)
-    phase     = Column(SmallInteger, default=0)
+    guild_id   = Column(BigInteger, primary_key=True, nullable=False)
+    user_id    = Column(BigInteger, primary_key=True, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
+    map        = Column(String(32), nullable=False)
+    phase      = Column(SmallInteger, default=0)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (

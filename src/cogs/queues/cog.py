@@ -10,7 +10,7 @@ from nextcord.ext import commands, tasks
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
-from utils.formatters import format_duration
+from utils.utils import format_duration
 from matches import load_ongoing_matches
 
 from views.match.accept import AcceptView
@@ -18,11 +18,14 @@ from views.match.banning import BanView
 
 class Queues(commands.Cog):
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(seconds=30)
     async def rotate_map_pool(self):
         now = datetime.now(pytz.timezone('US/Eastern'))
         if now.minute == 00 and now.hour == 00:
-            await self.bot.store.rotate_maps(GUILD_ID)
+            settings = await self.bot.store.get_settings(GUILD_ID)
+            maps = await self.bot.store.get_maps(GUILD_ID)
+            new_phase = (settings.mm_maps_phase - 1) % len(maps)
+            await self.bot.store.upsert(BotSettings, mm_maps_phase=new_phase)
 
     @rotate_map_pool.before_loop
     async def wait_rotate_map_pool(self):
@@ -35,7 +38,7 @@ class Queues(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
         self.bot.add_view(AcceptView(self.bot))
-        self.bot.add_view(BanView(self.bot))
+        self.bot.add_view(BanView.create_dummy_persistent(self.bot))
         self.rotate_map_pool.start()
 
         await self.bot.queue_manager.fetch_and_initialize_users()
@@ -90,6 +93,11 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
         await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
 
+    @queue_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
+    async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=size)
+        await interaction.response.send_message(f"Match making set to {size} maps range", ephemeral=True)
+
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
         embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
         view = await QueueButtonsView.create_showable(self.bot)
@@ -106,7 +114,7 @@ class Queues(commands.Cog):
         
         if not settings or not settings.mm_queue_periods:
             return await interaction.response.send_message(
-                "Failed...\nSet queue periods with </queue settings periods:1249109243114557461>", ephemeral=True)
+                "Failed...\nSet queue periods with </queue settings set_queue_periods:1249109243114557461>", ephemeral=True)
 
         msg = await self.send_queue_buttons(interaction)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
@@ -150,9 +158,8 @@ class Queues(commands.Cog):
         json_bytes = json_str.encode('utf-8')
         json_file = BytesIO(json_bytes)
         json_file.seek(0)
-        file = nextcord.File(json_file, filename="queue_periods.json")
-        
-        await interaction.response.send_message("Here are the current queue periods:", file=file, ephemeral=True)
+        await interaction.response.send_message(
+            "Here are the current queue periods:\n_edit and upload with_ </queue settings set_queue_periods:1249109243114557461>", file=nextcord.File(json_file, filename="queue_periods.json"), ephemeral=True)
     
     @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
     async def set_text_channel(self, interaction: nextcord.Interaction):
@@ -163,6 +170,7 @@ class Queues(commands.Cog):
     async def set_voice_channel(self, interaction: nextcord.Interaction, voice_channel: nextcord.VoiceChannel):
         if not isinstance(voice_channel, nextcord.VoiceChannel):
             return await interaction.response.send_message("The channel you selected is not a Voice Channel", ephemeral=True)
+        
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
     
@@ -174,7 +182,9 @@ class Queues(commands.Cog):
         except Exception:
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
-
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await self.bot.store.upsert(BotSettings, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
@@ -191,7 +201,7 @@ class Queues(commands.Cog):
         file = nextcord.File(json_file, filename="map_pool.json")
         
         await interaction.response.send_message(
-            "Here is the current map pool:", file=file, ephemeral=True)
+            "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:0>", file=file, ephemeral=True)
 
 
 def setup(bot):

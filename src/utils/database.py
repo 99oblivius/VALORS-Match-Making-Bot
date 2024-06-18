@@ -57,8 +57,7 @@ class Database:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(BotSettings)
-                .where(BotSettings.guild_id == guild_id)
-                .limit(1))
+                .where(BotSettings.guild_id == guild_id))
             return result.scalars().first()
     
     async def get_regions(self, guild_id: int) -> List[BotRegions] | None:
@@ -302,12 +301,14 @@ class Database:
                 .order_by(MMBotMaps.order))
             return result.scalars().all()
 
-    async def get_map_bans(self, match_id: int) -> List[Tuple[str, int]]:
+    async def get_map_bans(self, match_id: int, phase: int) -> List[Tuple[str, int]]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserBans.map, func.count(MMBotUserBans.map))
                 .join(MMBotMaps, MMBotUserBans.map == MMBotMaps.map)
-                .where(MMBotUserBans.match_id == match_id)
+                .where(
+                    MMBotUserBans.match_id == match_id,
+                    MMBotUserBans.phase == phase)
                 .group_by(MMBotUserBans.map, MMBotMaps.order)
                 .order_by(MMBotMaps.order))
             return result.all()
@@ -331,24 +332,3 @@ class Database:
                         "order": insert_stmt.excluded.order,
                         "media": insert_stmt.excluded.media})
                 await session.execute(update_stmt)
-    
-    async def rotate_maps(self, guild_id: int):
-        async with self._session_maker() as session:
-            async with session.begin():
-                result = await session.execute(
-                    select(MMBotMaps)
-                    .where(
-                        MMBotMaps.guild_id == guild_id, 
-                        MMBotMaps.active == True)
-                    .order_by(MMBotMaps.order))
-                maps = result.scalars().all()
-
-                if not maps: return
-                for i, map_obj in enumerate(maps):
-                    new_order = i + 1 if i < len(maps) - 1 else 0
-                    await session.execute(
-                        update(MMBotMaps)
-                        .where(
-                            MMBotMaps.guild_id == guild_id, 
-                            MMBotMaps.map == map_obj.map)
-                        .values(order=new_order))

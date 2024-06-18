@@ -9,10 +9,10 @@ import nextcord
 from utils.models import *
 from .match_states import MatchState
 from views.match.accept import AcceptView
-from views.match.banning import BanView
-from utils.formatters import format_mm_attendence
+from views.match.banning import BanView, PicksView
+from utils.utils import format_mm_attendence
 
-from config import VALORS_THEME2, VALORS_THEME1_2, HOME_THEME, AWAY_THEME
+from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME
 from .functions import get_preferred_bans
 
 class Done:
@@ -184,13 +184,15 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_BANS):
-            embed = nextcord.Embed(title="Pick your 3 bans", color=VALORS_THEME2)
-            await a_message.edit(embed=embed, view=BanView(self.bot))
+            embed = nextcord.Embed(title="Pick your 2 bans", color=HOME_THEME)
+            await a_message.edit(embed=embed, view=BanView.create_showable(self.bot, self.match_id))
             await asyncio.sleep(30)
 
-            maps = self.bot.store.get_maps(self.guild_id)
+            maps = self.bot.store.get_maps(self.guild_id, )
             bans = self.bot.store.get_bans(self.match_id, Team.A)
             bans = get_preferred_bans(maps, bans, total_bans=2)
+            embed = nextcord.Embed(title="You banned", color=HOME_THEME)
+            await a_message.edit(embed=embed, view=PicksView(bans))
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
@@ -204,17 +206,22 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_BANS):
-            embed = nextcord.Embed(title="Pick your 3 bans", color=VALORS_THEME2)
-            await b_message.edit(embed=embed, view=BanView(self.bot))
+            embed = nextcord.Embed(title="Pick your 2 bans", color=AWAY_THEME)
+            await b_message.edit(embed=embed, view=BanView.create_showable(self.bot, self.match_id))
             await asyncio.sleep(30)
             
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.B)
             bans = get_preferred_bans(maps, bans, total_bans=2)
+            embed = nextcord.Embed(title="You banned", color=AWAY_THEME)
+            await b_message.edit(embed=embed, view=PicksView(bans))
             await self.bot.store.upsert(MMBotMatches, match_id=self.match_id, b_bans=bans)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
+            embed = nextcord.Embed(title="The match will end in 10 seconds", color=VALORS_THEME1)
+            await asyncio.sleep(10)
+            await match_thread.send(embed=embed)
             # match_thread
             try:
                 if match_thread: await match_thread.delete()
