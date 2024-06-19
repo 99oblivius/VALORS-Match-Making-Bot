@@ -1,8 +1,15 @@
 import random
 from typing import List
 
+import numpy as np
+from itertools import combinations, compress
+import collections
+import copy
+
+from utils.models import MMBotUsers
+
 def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> List[str]:
-    map_options = { m.map: 0 for m in maps }
+    map_options = { m: 0 for m in maps }
     for ban in bans: map_options[ban] += 1
 
     ban_votes = [(k, v) for k, v in sorted(map_options.items(), key=lambda item: item[1], reverse=True)]
@@ -18,13 +25,6 @@ def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> L
         ban_votes.remove(chosen_ban)
     
     order_map = {m: n for n, m in enumerate(maps)}
-    n = len(bans)
-    for i in range(n):
-        swapped = False
-        for j in range(0, n - i - 1):
-            if order_map[bans[j]] > order_map[bans[j + 1]]:
-                bans[j], bans[j + 1] = bans[j + 1], bans[j]
-                swapped = True
-        if not swapped: break
+    bans.sort(key=lambda x: order_map[x])
     
     return bans

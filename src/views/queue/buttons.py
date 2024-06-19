@@ -6,8 +6,8 @@ import nextcord
 from nextcord.ext import commands
 
 from matches import make_match
-from config import GUILD_ID, VALORS_THEME1
-from utils.formatters import format_duration
+from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT
+from utils.utils import format_duration
 
 
 class QueueButtonsView(nextcord.ui.View):
@@ -116,7 +116,7 @@ class QueueButtonsView(nextcord.ui.View):
         
         async with self.ready_lock[f'{interaction.channel.id}']:
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-            if len(queue_users) > 9:
+            if len(queue_users) + 1 > MATCH_PLAYER_COUNT:
                 return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
             self.bot.queue_manager.add_user(interaction.user.id, expiry)
             in_queue = await self.bot.store.upsert_queue_user(
@@ -125,7 +125,7 @@ class QueueButtonsView(nextcord.ui.View):
                 queue_channel=interaction.channel.id, 
                 queue_expiry=expiry)
             
-            if len(queue_users) + 1 == 10:
+            if len(queue_users) + 1 == MATCH_PLAYER_COUNT:
                 match_id = await self.bot.store.unqueue_add_match(interaction.channel.id)
                 make_match(self.bot, interaction.guild.id, match_id)
 

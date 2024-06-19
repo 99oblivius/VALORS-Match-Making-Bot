@@ -5,7 +5,7 @@ import logging as log
 import nextcord
 
 from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1
-from utils.formatters import format_duration
+from utils.utils import format_duration
 
 class QueueManager:
     def __init__(self, bot):

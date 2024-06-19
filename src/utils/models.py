@@ -1,3 +1,4 @@
+from enum import Enum
 from sqlalchemy import (
     Column, 
     BigInteger, 
@@ -8,6 +9,7 @@ from sqlalchemy import (
     Text, 
     TIMESTAMP, 
     ARRAY, 
+    Enum,
     ForeignKey, 
     ForeignKeyConstraint,
     func
@@ -16,6 +18,20 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
 Base = declarative_base()
+
+
+class Phase(Enum):
+    NONE = 0
+    A_BAN = 1
+    B_BAN = 2
+    A_PICK = 3
+    B_SIDE = 4
+
+
+class Team(Enum):
+    A = 0
+    B = 1
+
 
 class BotSettings(Base):
     __tablename__ = 'bot_settings'
@@ -104,6 +120,7 @@ class MMBotMatches(Base):
     match_message    = Column(BigInteger)
     maps_range       = Column(BigInteger, nullable=False, default=10)
     maps_phase       = Column(BigInteger, nullable=False, default=0)
+    phase            = Column(Enum(Phase), nullable=False, default=0)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)
     a_vc             = Column(BigInteger)
@@ -112,6 +129,8 @@ class MMBotMatches(Base):
     b_message        = Column(BigInteger)
     a_bans           = Column(ARRAY(String(32)))
     b_bans           = Column(ARRAY(String(32)))
+    a_mmr            = Column(SmallInteger)
+    b_mmr            = Column(SmallInteger)
     map              = Column(String(32))
     a_score          = Column(SmallInteger)
     b_score          = Column(SmallInteger)
@@ -122,12 +141,11 @@ class MMBotMatches(Base):
 
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'
-
-    guild_id   = Column(BigInteger, primary_key=True, nullable=False)
+    
     user_id    = Column(BigInteger, primary_key=True, nullable=False)
     match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
     map        = Column(String(32), nullable=False)
-    phase      = Column(SmallInteger, default=0)
+    phase      = Column(Enum(Phase), default=0)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -141,7 +159,7 @@ class MMBotMatchUsers(Base):
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
     match_id  = Column(Integer, primary_key=True, nullable=False)
     accepted  = Column(Boolean, nullable=False, default=False)
-    team      = Column(Boolean, nullable=True)
+    team      = Column(Enum(Team), nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

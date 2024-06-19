@@ -14,15 +14,7 @@ from utils.utils import format_mm_attendence
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME
 from .functions import get_preferred_bans
-
-class Done:
-    def __init__(self):
-        self.is_done = False
-
-
-class Team(Enum):
-    A = 0
-    B = 1
+from .ranked_teams import get_teams
 
 
 class Match:
@@ -67,6 +59,9 @@ class Match:
         except nextcord.NotFound: pass
         try: b_message = await match_thread.fetch_message(match.b_message)
         except nextcord.NotFound: pass
+
+        if check_state(MatchState.NOT_STARTED):
+            await self.increment_state()
         
         if check_state(MatchState.CREATE_MATCH_THREAD):
             match_thread = await settings.queue_channel.create_thread(
@@ -78,7 +73,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.ACCEPT_PLAYERS):
-            done = Done()
+            done_event = asyncio.Event()
             add_mention = []
             for player in players:
                 add_mention.append(f"<@{player.user_id}>")
@@ -86,28 +81,22 @@ class Match:
 
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name="Attendence", value=format_mm_attendence([p.id for p in player]))
-            await match_thread.send(add_mention, embed=embed, view=AcceptView(self.bot, done))
+            await match_thread.send(add_mention, embed=embed, view=AcceptView(self.bot, done_event))
 
             patience = settings.mm_accept_period
-            start_time = time.time()
-            while not done.is_done:
-                await asyncio.sleep(0)
-                if time.time() - start_time > patience:
-                    self.state = MatchState.CLEANUP - 1
-                    embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
-                    await match_thread.send(embed=embed)
-                    break
+            try: await asyncio.wait_for(done_event.wait(), timeout=patience)
+            except asyncio.TimeoutError:
+                self.state = MatchState.CLEANUP - 1
+                embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
+                await match_thread.send(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAMS):
-            a_players = ...
-            b_players = ...
+            a_players, b_players, a_mmr, b_mmr = get_teams(players)
             await self.bot.store.set_players_team(
                 match_id=self.match_id, 
-                a_player_ids=a_players, 
-                b_player_ids=b_players, 
-                a_team='A',
-                b_team='B')
+                user_teams={Team.A: a_players, Team.B: b_players})
+            await self.bot.store.upsert(MMBotMatches, a_mmr=a_mmr, b_mmr=b_mmr)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_THREAD_A):
@@ -164,7 +153,6 @@ class Match:
                 guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
                 guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
             })
-            
             b_thread = await settings.queue_channel.category.create_voice_channel(
                 name=f"[{self.match_id}] ] Team B",
                 overwrites=player_overwrites,
@@ -174,7 +162,12 @@ class Match:
         
         if check_state(MatchState.BANNING_START):
             await match_thread.purge(bulk=True)
+            players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Team A ban first", description=f"<#{match.a_thread}>", color=HOME_THEME)
+            embed.add_field(name="Team A", 
+                value='\n'.join([f"<@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name="Team B", 
+                value='\n'.join([f"<@{player.user_id}>" for player in players if player.team == Team.B]))
             match_message = await match_thread.send(embed=embed)
             await self.bot.store.upsert(MMBotMatches, id=self.match_id, match_message=match_message.id)
         
@@ -186,9 +179,11 @@ class Match:
         if check_state(MatchState.A_BANS):
             embed = nextcord.Embed(title="Pick your 2 bans", color=HOME_THEME)
             await a_message.edit(embed=embed, view=BanView.create_showable(self.bot, self.match_id))
+            await self.bot.store.upsert(MMBotMatches, phase=Phase.A_BAN)
             await asyncio.sleep(30)
+            await self.bot.store.upsert(MMBotMatches, phase=Phase.NONE)
 
-            maps = self.bot.store.get_maps(self.guild_id, )
+            maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.A)
             bans = get_preferred_bans(maps, bans, total_bans=2)
             embed = nextcord.Embed(title="You banned", color=HOME_THEME)
@@ -208,7 +203,9 @@ class Match:
         if check_state(MatchState.B_BANS):
             embed = nextcord.Embed(title="Pick your 2 bans", color=AWAY_THEME)
             await b_message.edit(embed=embed, view=BanView.create_showable(self.bot, self.match_id))
+            await self.bot.store.upsert(MMBotMatches, phase=Phase.B_BAN)
             await asyncio.sleep(30)
+            await self.bot.store.upsert(MMBotMatches, phase=Phase.NONE)
             
             maps = self.bot.store.get_maps(self.guild_id)
             bans = self.bot.store.get_bans(self.match_id, Team.B)

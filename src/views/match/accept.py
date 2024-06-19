@@ -1,14 +1,16 @@
 import nextcord
 
 from utils.models import *
-from utils.formatters import format_mm_attendence
+from utils.utils import format_mm_attendence
+
+from config import MATCH_PLAYER_COUNT
 
 class AcceptView(nextcord.ui.View):
-    def __init__(self, bot, done, *args, **kwargs):
+    def __init__(self, bot, done_event, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.timeout = None
-        self.done = done
+        self.done_event = done_event
     
     @nextcord.ui.Button(
         label="Accept", 
@@ -30,5 +32,5 @@ class AcceptView(nextcord.ui.View):
             "You accepted the match!", ephemeral=True)
         
         accepted_players = await self.bot.store.get_accepted_players(self.match_id)
-        if accepted_players and len(accepted_players) == 10:
-            self.done.is_done = True
+        if accepted_players and len(accepted_players) == MATCH_PLAYER_COUNT:
+            self.done_event.set()

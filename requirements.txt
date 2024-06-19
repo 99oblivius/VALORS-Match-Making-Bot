@@ -5,3 +5,4 @@ pytz
 SQLAlchemy[asyncio]
 asyncpg
 alembic
+numpy
