@@ -59,7 +59,10 @@ class QueueManager:
 
     async def fetch_and_initialize_users(self):
         settings = await self.bot.store.get_settings(GUILD_ID)
-        queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
+        try:
+            queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
+        except AttributeError:
+            return log.warning("[QueueManager] No GUILDS")
         for user in queue_users:
             if user.queue_expiry > int(datetime.now(timezone.utc).timestamp()):
                 self.add_user(user.user_id, user.queue_expiry)

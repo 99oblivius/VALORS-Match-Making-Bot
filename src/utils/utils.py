@@ -1,5 +1,7 @@
 from typing import List
 
+from utils.models import MMBotMatchUsers
+
 def format_duration(seconds):
     intervals = (
         ('days', 86400),
@@ -11,11 +13,11 @@ def format_duration(seconds):
         value = seconds // count
         seconds -= value * count
         if value == 1: name = name.rstrip('s')
-        result.append(f"{value} {name}")
+        if value != 0: result.append(f"{value} {name}")
     return ' '.join(result) if result else "0 seconds"
 
-def format_mm_attendence(user_ids: List[int], accepted: List[int]=[]):
-    return "\n".join([f"{'🟢' if user_id in accepted else '🔴'} <@{user_id}>" for user_id in user_ids])
+def format_mm_attendance(users: List[MMBotMatchUsers]):
+    return "\n".join([f"{'🟢' if user.accepted else '🔴'} <@{user.user_id}>" for user in users])
 
 def format_team(team: bool) -> str:
     return 'B' if team else 'A'

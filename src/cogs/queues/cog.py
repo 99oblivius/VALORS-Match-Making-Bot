@@ -1,6 +1,7 @@
 import json
 import logging as log
 from io import BytesIO
+import asyncio
 from datetime import datetime
 import pytz
 
@@ -18,18 +19,18 @@ from views.match.banning import BanView
 
 class Queues(commands.Cog):
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=60)
     async def rotate_map_pool(self):
         now = datetime.now(pytz.timezone('US/Eastern'))
         if now.minute == 00 and now.hour == 00:
             settings = await self.bot.store.get_settings(GUILD_ID)
             maps = await self.bot.store.get_maps(GUILD_ID)
             new_phase = (settings.mm_maps_phase - 1) % len(maps)
-            await self.bot.store.upsert(BotSettings, mm_maps_phase=new_phase)
+            await self.bot.store.upsert(BotSettings, guild_id=GUILD_ID, mm_maps_phase=new_phase)
 
     @rotate_map_pool.before_loop
     async def wait_rotate_map_pool(self):
-        await self.wait_until_read()
+        await self.wait_until_ready()
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -45,7 +46,8 @@ class Queues(commands.Cog):
         log.critical("[Queues] Cog started")
 
         matches = await self.bot.store.get_ongoing_matches()
-        await load_ongoing_matches(self.bot, matches)
+        loop = asyncio.get_event_loop()
+        load_ongoing_matches(loop, self.bot, GUILD_ID, matches)
 
     ########################
     # QUEUE SLASH COMMANDS #
@@ -131,9 +133,12 @@ class Queues(commands.Cog):
     
     @queue_settings.subcommand(name="set_queue_periods", description="Set queue ready periods")
     async def set_queue_periods(self, interaction: nextcord.Interaction, 
-        periods: nextcord.File = nextcord.SlashOption(description="JSON file for queue periods")):
-        try: periods_json = json.loads(periods.fp.read())
-        except Exception:
+        periods: nextcord.Attachment=nextcord.SlashOption(description="JSON file for queue periods")):
+        try:
+            file = await periods.read()
+            periods_json = json.loads(file)
+        except Exception as e:
+            log.error(f"[Queues] Error loading json file: {repr(e)}")
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid JSON string\ne.g. `{\"Short\":5,\"Default\":15}`", ephemeral=True)
 
@@ -143,7 +148,7 @@ class Queues(commands.Cog):
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
         await interaction.response.send_message(
-            f"Queue periods set to `{periods_str}`\nUse </queue settings set_buttons:1249109243114557461> to update", ephemeral=True)
+            f"Queue periods set to `{periods_str}`\nUse </queue settings set_queue:1249109243114557461> to update", ephemeral=True)
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
@@ -176,15 +181,16 @@ class Queues(commands.Cog):
     
     @queue_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")
     async def set_map_pool(self, interaction: nextcord.Interaction, 
-        maps: nextcord.File=nextcord.SlashOption(description="Json string for map name and image url (ordered)")):
+        maps: nextcord.Attachment=nextcord.SlashOption(description="Json string for map name and image url (ordered)")):
         try:
-            m = json.loads(maps.fp.read())
+            file = await maps.read()
+            m = json.loads(file)
         except Exception:
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await self.bot.store.upsert(BotSettings, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)

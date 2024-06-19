@@ -9,13 +9,12 @@ from sqlalchemy import (
     Text, 
     TIMESTAMP, 
     ARRAY, 
-    Enum,
+    Enum as sq_Enum,
     ForeignKey, 
     ForeignKeyConstraint,
     func
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -120,7 +119,7 @@ class MMBotMatches(Base):
     match_message    = Column(BigInteger)
     maps_range       = Column(BigInteger, nullable=False, default=10)
     maps_phase       = Column(BigInteger, nullable=False, default=0)
-    phase            = Column(Enum(Phase), nullable=False, default=0)
+    phase            = Column(sq_Enum(Phase), nullable=False, default=Phase.NONE)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)
     a_vc             = Column(BigInteger)
@@ -137,15 +136,16 @@ class MMBotMatches(Base):
     start_timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
     end_timestamp    = Column(TIMESTAMP(timezone=True))
     complete         = Column(Boolean, nullable=False, default=False)
-    state            = Column(SmallInteger, nullable=False, default=0)
+    state            = Column(SmallInteger, nullable=False, default=1)
 
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'
-    
+
+    guild_id   = Column(BigInteger, primary_key=True, nullable=False)
     user_id    = Column(BigInteger, primary_key=True, nullable=False)
     match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
     map        = Column(String(32), nullable=False)
-    phase      = Column(Enum(Phase), default=0)
+    phase      = Column(sq_Enum(Phase), default=Phase.NONE)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -159,7 +159,7 @@ class MMBotMatchUsers(Base):
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
     match_id  = Column(Integer, primary_key=True, nullable=False)
     accepted  = Column(Boolean, nullable=False, default=False)
-    team      = Column(Enum(Team), nullable=True)
+    team      = Column(sq_Enum(Team), nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),

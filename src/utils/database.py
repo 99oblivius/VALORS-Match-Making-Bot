@@ -2,7 +2,7 @@ import logging
 from logging import getLogger
 from typing import List, Tuple, Dict
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func, joinedload, or_
+from sqlalchemy import inspect, delete, update, func, or_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -23,13 +23,14 @@ from .models import (
     Team,
 )
 
+from matches.match_states import MatchState
+
 logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
 
 log = getLogger(__name__)
 
 class Database:
-    def __init__(self, loop: AbstractEventLoop) -> None:
-        self._loop = loop
+    def __init__(self) -> None:
         self._engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=True)
         self._session_maker: sessionmaker = sessionmaker(bind=self._engine, class_=AsyncSession, expire_on_commit=False)
     
@@ -42,6 +43,11 @@ class Database:
                 insert(table)
                 .values(**data)
                 .on_conflict_do_update(index_elements=[key.name for key in inspect(table).primary_key], set_=data))
+            await session.commit()
+    
+    async def update(self, table: DeclarativeMeta, **data) -> None:
+        async with self._session_maker() as session:
+            await session.execute(update(table), [data])
             await session.commit()
 
     async def insert(self, table: DeclarativeMeta, **data) -> None:
@@ -176,7 +182,7 @@ class Database:
                     .where(
                         MMBotMatches.queue_channel == channel_id,
                         MMBotMatches.complete == False))
-                new_match = result.scalar().first()
+                new_match = result.scalars().first()
 
                 match_users = [
                     { 'guild_id': user.guild_id,
@@ -220,13 +226,20 @@ class Database:
                 .where(MMBotMatches.complete == False))
             return result.scalars().all()
     
-    async def save_match_state(self, match_id: int, state: int):
+    async def save_match_state(self, match_id: int, state: MatchState):
         async with self._session_maker() as session:
             await session.execute(
                 update(MMBotMatches)
                 .where(MMBotMatches.id == match_id)
                 .values(state=state))
             await session.commit()
+    
+    async def load_match_state(self, match_id: int) -> MatchState:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches.state)
+                .where(MMBotMatches.id == match_id))
+            return MatchState(result.scalars().first())
     
     async def get_match(self, match_id: int) -> MMBotMatches:
         async with self._session_maker() as session:
@@ -258,7 +271,7 @@ class Database:
                 MMBotMatchUsers.match_id == match_id,
                 MMBotMatchUsers.accepted == True)
             result = await session.execute(stmt)
-            return result.scalar()
+            return result.scalars().first()
     
     async def is_user_in_match(self, user_id: int) -> bool:
         async with self._session_maker() as session:

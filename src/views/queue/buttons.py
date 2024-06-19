@@ -126,8 +126,9 @@ class QueueButtonsView(nextcord.ui.View):
                 queue_expiry=expiry)
             
             if len(queue_users) + 1 == MATCH_PLAYER_COUNT:
-                match_id = await self.bot.store.unqueue_add_match(interaction.channel.id)
-                make_match(self.bot, interaction.guild.id, match_id)
+                match_id = await self.bot.store.unqueue_add_match_users(interaction.channel.id)
+                loop = asyncio.get_event_loop()
+                make_match(loop, self.bot, interaction.guild.id, match_id)
 
         
         if in_queue: title = "You updated your queue time!"

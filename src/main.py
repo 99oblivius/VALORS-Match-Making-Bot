@@ -26,7 +26,7 @@ def exit_cleanup(a: list):
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
-        self.store = Database(asyncio.get_event_loop())
+        self.store = Database()
         self.queue_manager = QueueManager(self)
 
 
