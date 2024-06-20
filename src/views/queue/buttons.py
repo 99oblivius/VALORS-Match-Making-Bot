@@ -116,7 +116,8 @@ class QueueButtonsView(nextcord.ui.View):
         
         async with self.ready_lock[f'{interaction.channel.id}']:
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-            if len(queue_users) + 1 > MATCH_PLAYER_COUNT:
+            total_in_queue = len(queue_users)
+            if total_in_queue + 1 > MATCH_PLAYER_COUNT:
                 return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
             self.bot.queue_manager.add_user(interaction.user.id, expiry)
             in_queue = await self.bot.store.upsert_queue_user(
@@ -124,17 +125,21 @@ class QueueButtonsView(nextcord.ui.View):
                 guild_id=interaction.guild.id, 
                 queue_channel=interaction.channel.id, 
                 queue_expiry=expiry)
+            if not in_queue: total_in_queue += 1
             
-            if len(queue_users) + 1 == MATCH_PLAYER_COUNT:
+            if total_in_queue == MATCH_PLAYER_COUNT:
+                self.bot.queue_manager.remove_user(interaction.user.id)
+                for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
+                
                 match_id = await self.bot.store.unqueue_add_match_users(interaction.channel.id)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
-
+        
         
         if in_queue: title = "You updated your queue time!"
         else: title = "You joined the queue!"
         embed = nextcord.Embed(title=title, color=VALORS_THEME1)
-        embed.add_field(name=f"{len(queue_users)+1} in queue", value=f"for `{format_duration(60 * periods[slot_id][1])}` until <t:{expiry}:t>")
+        embed.add_field(name=f"{total_in_queue} in queue", value=f"for `{format_duration(60 * periods[slot_id][1])}` until <t:{expiry}:t>")
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()

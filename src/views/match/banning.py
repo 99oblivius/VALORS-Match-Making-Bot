@@ -6,7 +6,7 @@ from nextcord.ext import commands
 
 from utils.utils import shifted_window
 
-from utils.models import Phase, MMBotUserBans
+from utils.models import Phase, MMBotUserBans, MMBotMatches
 
 
 class BanView(nextcord.ui.View):
@@ -25,13 +25,12 @@ class BanView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, match_id: int):
+    async def create_showable(cls, bot: commands.Bot, match: MMBotMatches):
         instance = cls(bot, timeout=None)
         instance.stop()
 
-        ban_counts = await instance.bot.store.get_ban_counts(match_id)
-        settings = await instance.bot.store.get_settings(GUILD_ID)
-        bans = shifted_window(ban_counts, settings.maps_phase, settings.maps_range)
+        ban_counts = await instance.bot.store.get_ban_counts(match.id, match.phase)
+        bans = shifted_window(ban_counts, match.maps_phase, match.maps_range)
         for n, (m, count) in enumerate(bans):
             button = nextcord.ui.Button(
                 label=f"{m}: {count}", 

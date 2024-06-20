@@ -5,14 +5,20 @@ import random
 
 from utils.models import MMBotUsers
 
-def preparing_user_data(users: List[MMBotUsers]) -> Tuple[int, int, List[int], np.ndarray, np.ndarray]:
+
+class MMBotUsers:
+    def __init__(self, user_id: int, mmr: int):
+        self.user_id = user_id
+        self.mmr = mmr
+
+def preparing_user_data(users: List[MMBotUsers]) -> Tuple[int, np.ndarray, np.ndarray]:
     num_players = len(users)
-    mmr_results = np.array([user.mmr for user in users], dtype=np.intc)
+    mmr_results = np.array([user.mmr for user in users], dtype=np.int32)
     rankings = np.argsort(mmr_results)[::-1]
     return num_players, mmr_results, rankings
 
 def calculate_team_combinations(n: int, m: int) -> Tuple[int, np.ndarray]:
-    team_combinations_list = np.array(list(combinations(range(n), m)))
+    team_combinations_list = np.array(list(combinations(range(n), m)), dtype=np.int32)
     return len(team_combinations_list), team_combinations_list
 
 def rank_teams_based_on_mmr(team_combinations_list: np.ndarray, mmr_results: np.ndarray) -> Tuple[np.ndarray, float]:
@@ -21,7 +27,7 @@ def rank_teams_based_on_mmr(team_combinations_list: np.ndarray, mmr_results: np.
     team_mmr_deviations = np.abs(team_mmr_avgs - average_team_mmr)
     team_mmr_rankings = np.argsort(team_mmr_deviations)
     ranked_team_combinations_list = team_combinations_list[team_mmr_rankings]
-    return ranked_team_combinations_list, average_team_mmr
+    return ranked_team_combinations_list, float(average_team_mmr)
 
 def find_single_pair(ranked_team_combinations: np.ndarray, n: int, initial_percent: float=2.0) -> Tuple[np.ndarray, np.ndarray]:
     increment_percent = 2
@@ -37,15 +43,15 @@ def find_single_pair(ranked_team_combinations: np.ndarray, n: int, initial_perce
             if not set(top_team_combinations[i]) & set(top_team_combinations[j])
         ]
 
-        if len(possible_pairs) >= min_options:
+        if len(possible_pairs) >= min_options or initial_percent > 100:
             return random.choice(possible_pairs)
 
         initial_percent += increment_percent
 
 def calculate_average_mmr(team: np.ndarray, mmr_results: np.ndarray) -> float:
-    return np.mean(mmr_results[team])
+    return float(np.mean(mmr_results[team]))
 
-def get_teams(users: List[MMBotUsers]) -> Tuple[list, list, float, float]:
+def get_teams(users: List[MMBotUsers]) -> Tuple[List[int], List[int], float, float]:
     team_size = len(users) // 2
     num_players, mmr_results, _ = preparing_user_data(users)
     num_team_combinations, team_combinations_list = calculate_team_combinations(num_players, team_size)
@@ -53,4 +59,6 @@ def get_teams(users: List[MMBotUsers]) -> Tuple[list, list, float, float]:
     team1, team2 = find_single_pair(ranked_team_combinations, num_team_combinations)
     team1_mmr = calculate_average_mmr(team1, mmr_results)
     team2_mmr = calculate_average_mmr(team2, mmr_results)
-    return list(team1), list(team2), team1_mmr, team2_mmr
+    team1_users = [users[t1].user_id for t1 in team1]
+    team2_users = [users[t2].user_id for t2 in team2]
+    return team1_users, team2_users, team1_mmr, team2_mmr

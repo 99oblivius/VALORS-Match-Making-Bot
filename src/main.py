@@ -5,12 +5,12 @@ import logging as log
 yellow = "\x1b[33;20m"
 red = "\x1b[31;20m"
 reset = "\x1b[0m"
-log.basicConfig(
-    level=log.WARNING,
-    format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset} %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[log.StreamHandler()]
-)
+# log.basicConfig(
+#     level=log.INFO,
+#     format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset} %(levelname)s - %(message)s',
+#     datefmt='%Y-%m-%d %H:%M:%S',
+#     handlers=[log.StreamHandler()]
+# )
 
 import nextcord
 from nextcord.ext import commands

@@ -25,7 +25,7 @@ from .models import (
 
 from matches.match_states import MatchState
 
-logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy').disabled = True
 
 log = getLogger(__name__)
 
@@ -100,6 +100,13 @@ class Database:
                     MMBotUsers.guild_id == guild_id, 
                     MMBotUsers.user_id == user_id))
             return result.scalars().first()
+    
+    async def get_users(self, guild_id: int) -> List[MMBotUsers]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUsers)
+                .where(MMBotUsers.guild_id == guild_id))
+            return result.scalars().all()
     
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
         async with self._session_maker() as session:
@@ -295,6 +302,18 @@ class Database:
                             MMBotMatchUsers.user_id.in_(user_ids))
                         .values(team=team))
 
+    async def remove_match_and_players(self, match_id: int) -> None:
+        async with self._session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    delete(MMBotMatchUsers)
+                    .where(MMBotMatchUsers.match_id == match_id))
+                await session.execute(
+                    delete(MMBotMatches)
+                    .where(MMBotMatches.id == match_id))
+                await session.commit()
+
+
 ##############
 # MATCH BANS #
 ##############
@@ -369,7 +388,7 @@ class Database:
     async def get_maps(self, guild_id: int) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMaps.map)
+                select(MMBotMaps)
                 .where(
                     MMBotMaps.guild_id == guild_id,
                     MMBotMaps.active == True)
