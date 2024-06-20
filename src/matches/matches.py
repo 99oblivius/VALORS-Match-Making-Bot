@@ -32,10 +32,14 @@ class Match:
     async def load_state(self) -> MatchState:
         return await self.bot.store.load_match_state(self.match_id)
 
+    async def change_state(self, new_state: MatchState):
+        self.state = new_state
+        await self.bot.store.save_match_state(self.match_id, self.state)
+
     async def run(self):
         await self.bot.wait_until_ready()
-        if self.state > 0: log.critical(
-            f"[Match] Loaded  ongoing match {self.match_id} state:{self.state}")
+        if self.state > 0: log.info(
+            f"[Match] Loaded ongoing match {self.match_id} state:{self.state}")
         
         def check_state(state: MatchState):
             return True if self.state == state else False
@@ -160,10 +164,10 @@ class Match:
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your 2 bans", color=HOME_THEME)
-            view = await BanView.create_showable(self.bot, match)
+            view = await BanView.create_showable(self.bot, self.guild_id, match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
-            await asyncio.sleep(30)
+            await asyncio.sleep(45)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             maps = await self.bot.store.get_maps(self.guild_id)
@@ -186,11 +190,11 @@ class Match:
         if check_state(MatchState.B_BANS):
             players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", color=AWAY_THEME)
-            view = await BanView.create_showable(self.bot, match)
+            view = await BanView.create_showable(self.bot, self.guild_id, match)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
-            await asyncio.sleep(30)
+            await asyncio.sleep(45)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
             
             maps = await self.bot.store.get_maps(self.guild_id)
@@ -202,7 +206,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
-            embed = nextcord.Embed(title="The match will close in 10 seconds", color=VALORS_THEME1)
+            embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
             await match_thread.send(embed=embed)
             await asyncio.sleep(10)
             # match_thread
@@ -229,11 +233,13 @@ class Match:
             # a_vc
             try:
                 if a_vc: await a_vc.delete()
-            except nextcord.HTTPException: pass
+            except nextcord.HTTPException as e:
+                log.warning(f"[Match] a_vc deleting: {repr(e)}")
             # b_vc
             try:
                 if b_vc: await b_vc.delete()
-            except nextcord.HTTPException: pass
+            except nextcord.HTTPException:
+                log.warning(f"[Match] b_vc deleting: {repr(e)}")
             # complete True
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()

@@ -12,7 +12,8 @@ from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.utils import format_duration
-from matches import load_ongoing_matches
+from matches import load_ongoing_matches, cleanup_match
+from matches import MatchState
 
 from views.match.accept import AcceptView
 from views.match.banning import BanView
@@ -43,11 +44,35 @@ class Queues(commands.Cog):
         self.rotate_map_pool.start()
 
         await self.bot.queue_manager.fetch_and_initialize_users()
-        log.critical("[Queues] Cog started")
+        log.info("[Queues] Cog started")
 
         matches = await self.bot.store.get_ongoing_matches()
         loop = asyncio.get_event_loop()
         load_ongoing_matches(loop, self.bot, GUILD_ID, matches)
+
+    #####################
+    # MM SLASH COMMANDS #
+    #####################
+    @nextcord.slash_command(name="mm", description="Match making commands", guild_ids=[GUILD_ID])
+    async def match_making(self, interaction: nextcord.Interaction):
+        pass    
+
+    @match_making.subcommand(name="cancel", description="Cancel a match")
+    async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        staff_role = interaction.guild.get_role(settings.staff_role)
+        if staff_role and not staff_role in interaction.user.roles:
+            msg = await interaction.response.send_message("Missing permissions", ephemeral=True)
+            await asyncio.sleep(1)
+            await msg.delete()
+        if match_id == -1:
+            match = await self.bot.store.get_thread_match(interaction.channel.id)
+            if match: match_id = match.id
+        
+        loop = asyncio.get_event_loop()
+        if not await cleanup_match(loop, match_id):
+                return await interaction.response.send_message(f"Match id `{match_id}` failed to cleanup", ephemeral=True)
+        await interaction.response.send_message(f"Match id {match_id} cleaned up successfully", ephemeral=True)
 
     ########################
     # QUEUE SLASH COMMANDS #
@@ -176,7 +201,7 @@ class Queues(commands.Cog):
         if not isinstance(voice_channel, nextcord.VoiceChannel):
             return await interaction.response.send_message("The channel you selected is not a Voice Channel", ephemeral=True)
         
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel.id)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
     
     @queue_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")

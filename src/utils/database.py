@@ -23,7 +23,7 @@ from .models import (
     Team,
 )
 
-from matches.match_states import MatchState
+from matches import MatchState
 
 logging.getLogger('sqlalchemy').disabled = True
 
@@ -165,9 +165,14 @@ class Database:
         await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
         return False
     
-    async def unqueue_add_match_users(self, channel_id: int) -> int:
+    async def unqueue_add_match_users(self, guild_id: int, channel_id: int) -> int:
         async with self._session_maker() as session:
             async with session.begin():
+                maps_settings_result = await session.execute(
+                    select(BotSettings.mm_maps_range, BotSettings.mm_maps_phase)
+                    .where(BotSettings.guild_id == guild_id))
+                maps_settings = maps_settings_result.one()
+
                 result = await session.execute(
                     select(MMBotQueueUsers)
                     .where(
@@ -182,8 +187,13 @@ class Database:
                         MMBotQueueUsers.in_queue == True)
                     .values(in_queue=False))
                 
-                session.add(MMBotMatches(queue_channel=channel_id))
+                match = MMBotMatches(
+                    queue_channel=channel_id, 
+                    maps_range=maps_settings.mm_maps_range, 
+                    maps_phase=maps_settings.mm_maps_phase)
+                session.add(match)
                 await session.flush()
+
                 result = await session.execute(
                     select(MMBotMatches)
                     .where(
@@ -332,17 +342,22 @@ class Database:
                     .values(b_bans=bans))
                 await session.commit()
 
-    async def get_ban_counts(self, match_id: int, phase: Phase) -> List[Tuple[str, int]]:
+    async def get_ban_counts(self, guild_id: int, match_id: int, phase: Phase) -> List[Tuple[str, int]]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserBans.map, func.count(MMBotUserBans.map))
-                .join(MMBotMaps, MMBotUserBans.map == MMBotMaps.map)
-                .where(
-                    MMBotUserBans.match_id == match_id,
-                    MMBotUserBans.phase == phase)
-                .group_by(MMBotUserBans.map, MMBotMaps.order)
+                select(
+                    MMBotMaps.map,
+                    func.count(MMBotUserBans.map).label('ban_count'))
+                .outerjoin(MMBotUserBans, 
+                    (MMBotUserBans.map == MMBotMaps.map) & 
+                    (MMBotUserBans.match_id == match_id) & 
+                    (MMBotUserBans.phase == phase))
+                .where(MMBotMaps.guild_id == guild_id)
+                .where(MMBotMaps.active == True)
+                .group_by(MMBotMaps.map, MMBotMaps.order)
                 .order_by(MMBotMaps.order))
-            return [m.map for m in result.scalars().all()]
+            ban_counts = result.all()
+            return [(row.map, row.ban_count) for row in ban_counts]
     
     async def get_bans(self, match_id: int, phase: Phase) -> List[str]:
         async with self._session_maker() as session:
@@ -353,10 +368,10 @@ class Database:
                     MMBotUserBans.phase == phase))
             return [ban.map for ban in result.scalars().all()]
     
-    async def get_user_map_bans(self, match_id: int, user_id) -> List[str]:
+    async def get_user_map_bans(self, match_id: int, user_id: int) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserBans)
+                select(MMBotUserBans.map)
                 .where(
                     MMBotUserBans.match_id == match_id,
                     MMBotUserBans.user_id == user_id))

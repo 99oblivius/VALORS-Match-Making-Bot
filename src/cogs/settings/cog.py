@@ -11,7 +11,7 @@ from utils.models import BotSettings
 from config import *
 from views.regions.select import RegionSelectView
 
-from utils.models import BotRegions, BotSettings, MMBotUsers
+from utils.models import BotRegions, BotSettings
 
 
 class Settings(commands.Cog):
@@ -21,7 +21,7 @@ class Settings(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(RegionSelectView(self.bot))
-        log.critical("[Queues] Cog started")
+        log.info("[Queues] Cog started")
     
     @nextcord.slash_command(name="settings", description="Settings", guild_ids=[GUILD_ID])
     async def settings(self, interaction: nextcord.Interaction):
@@ -109,7 +109,6 @@ class Settings(commands.Cog):
         existing_regions = json.dumps(dict_regions, separators=[',', ':'])
         if len(existing_regions) > 100:
             existing_regions = "Autofill response too long sorry."
-        log.warning(f"regions: {regions} \nexisting_regiosn: {existing_regions}")
         await interaction.response.send_autocomplete(choices=[regions, existing_regions])
 
 

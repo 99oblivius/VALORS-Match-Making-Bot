@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 import asyncio
+from typing import Dict
 
 import nextcord
 from nextcord.ext import commands
@@ -14,7 +15,7 @@ class QueueButtonsView(nextcord.ui.View):
     def __init__(self, bot: commands.Bot, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
-        self.ready_lock: dict = {}
+        self.ready_lock: Dict[asyncio.Lock] = {}
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
@@ -107,8 +108,11 @@ class QueueButtonsView(nextcord.ui.View):
             "You are not registered.", ephemeral=True)
         if not user.region: return await interaction.response.send_message(
             "You must select your region.", ephemeral=True)
-        if in_match: return await interaction.response.send_message(
+        if in_match:
+            msg = await interaction.response.send_message(
             "Your current match has not ended yet.", ephemeral=True)
+            await asyncio.sleep(1.5)
+            await msg.delete()
         
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_queue_periods).items())
@@ -130,8 +134,8 @@ class QueueButtonsView(nextcord.ui.View):
             if total_in_queue == MATCH_PLAYER_COUNT:
                 self.bot.queue_manager.remove_user(interaction.user.id)
                 for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
-                
-                match_id = await self.bot.store.unqueue_add_match_users(interaction.channel.id)
+
+                match_id = await self.bot.store.unqueue_add_match_users(interaction.guild.id, interaction.channel.id)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
         

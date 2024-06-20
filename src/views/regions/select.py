@@ -6,7 +6,7 @@ import asyncio
 import nextcord
 from nextcord.ext import commands
 
-from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_2
+from config import GUILD_ID, VALORS_THEME2
 
 from utils.models import (
     BotRegions,

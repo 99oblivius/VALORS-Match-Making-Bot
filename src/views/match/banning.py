@@ -1,3 +1,4 @@
+from functools import partial
 from config import GUILD_ID
 from typing import List
 
@@ -20,16 +21,16 @@ class BanView(nextcord.ui.View):
         instance = cls(bot, timeout=None)
         for slot_id in range(10):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_match_bans:{slot_id}")
-            button.callback = instance.ban_callback
+            button.callback = partial(instance.ban_callback, button)
             instance.add_item(button)
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, match: MMBotMatches):
+    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches):
         instance = cls(bot, timeout=None)
         instance.stop()
 
-        ban_counts = await instance.bot.store.get_ban_counts(match.id, match.phase)
+        ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
         bans = shifted_window(ban_counts, match.maps_phase, match.maps_range)
         for n, (m, count) in enumerate(bans):
             button = nextcord.ui.Button(
@@ -45,12 +46,15 @@ class BanView(nextcord.ui.View):
         if not match.phase in (Phase.A_BAN, Phase.B_BAN):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
-        maps = await self.bot.store.get_maps(match.id)
+        maps = await self.bot.store.get_maps(match.id, interaction.user.id)
         settings = await self.bot.store.get_settings(GUILD_ID)
-        ban_maps = shifted_window(maps, settings.maps_phase, settings.maps_range)
+        print([m.map for m in maps])
+        ban_maps = shifted_window([m.map for m in maps], settings.mm_maps_phase, settings.mm_maps_range)
+        print(ban_maps)
         slot_id = int(button.custom_id.split(':')[-1])
         # already voted this one
-        user_bans = await self.bot.store.get_user_map_bans(match.id, interaction.user.id)
+        user_bans = await self.bot.store.get_user_map_bans(interaction.guild.id)
+        print(f"AAAAAAAAAAAAAAAAAAA\nuser_id: {interaction.user.id}\nuser_bans: {user_bans}\nban_maps: {ban_maps}\nslot_id: {slot_id}")
         if ban_maps[slot_id] in user_bans:
             await self.bot.store.remove(MMBotUserBans, 
                 match_id=match.id, 
