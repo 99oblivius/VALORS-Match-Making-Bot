@@ -12,10 +12,11 @@ from .match_states import MatchState
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import MapPickView, ChosenMapView
-from utils.utils import format_mm_attendance
+from views.match.side_pick import SidePickView, ChosenSideView
+from utils.utils import format_mm_attendance, format_duration
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME
-from .functions import get_preferred_bans, get_preferred_map
+from .functions import get_preferred_bans, get_preferred_map, get_preferred_side
 from .ranked_teams import get_teams
 
 
@@ -88,7 +89,7 @@ class Match:
         if check_state(MatchState.ACCEPT_PLAYERS):
             add_mention = (f"<@{player.user_id}>" for player in players)
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
-            embed.add_field(name="Attendance", value=format_mm_attendance(players))
+            embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(players))
             done_event = asyncio.Event()
             await match_thread.send(''.join(add_mention), embed=embed, view=AcceptView(self.bot, done_event))
 
@@ -236,6 +237,26 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
+            players = await self.bot.store.get_players(self.match_id)
+            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
+            embed = nextcord.Embed(title="Pick your side", color=AWAY_THEME)
+            view = await SidePickView.create_showable(self.bot, self.guild_id, match)
+            b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
+            await self.bot.store.update(MMBotMatches, id=self.match_id,  b_message=b_message.id, phase=Phase.B_PICK)
+            await asyncio.sleep(30)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
+
+            side_votes = await self.bot.store.get_side_votes(self.match_id)
+            side_pick = get_preferred_side([Side.T, Side.CT], side_votes)
+            embed = nextcord.Embed(title="You picked", color=AWAY_THEME)
+            await b_message.edit(embed=embed, view=ChosenSideView(side_pick))
+            
+            a_side = None
+            if side_pick == Side.T: a_side = Side.CT
+            elif side_pick == Side.CT: a_side = Side.T
+            embed = nextcord.Embed(title="You are", color=AWAY_THEME)
+            await a_thread.send(embed=embed, view=ChosenSideView(a_side))
+            await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):

@@ -17,6 +17,7 @@ from matches import load_ongoing_matches, cleanup_match
 from views.match.accept import AcceptView
 from views.match.banning import BanView
 from views.match.map_pick import MapPickView
+from views.match.side_pick import SidePickView
 
 class Queues(commands.Cog):
 
@@ -42,6 +43,7 @@ class Queues(commands.Cog):
         self.bot.add_view(AcceptView(self.bot))
         self.bot.add_view(BanView.create_dummy_persistent(self.bot))
         self.bot.add_view(MapPickView.create_dummy_persistent(self.bot))
+        self.bot.add_view(SidePickView.create_dummy_persistent(self.bot))
         self.rotate_map_pool.start()
 
         await self.bot.queue_manager.fetch_and_initialize_users()

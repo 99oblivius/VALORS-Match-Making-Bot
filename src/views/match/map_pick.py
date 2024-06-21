@@ -18,7 +18,7 @@ class MapPickView(nextcord.ui.View):
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
         for slot_id in range(10):
-            button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_match_picks:{slot_id}")
+            button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_map_picks:{slot_id}")
             button.callback = partial(instance.pick_callback, button)
             instance.add_item(button)
         return instance
@@ -37,7 +37,7 @@ class MapPickView(nextcord.ui.View):
             button = nextcord.ui.Button(
                 label=f"{m}: {count}", 
                 style=nextcord.ButtonStyle.green, 
-                custom_id=f"mm_match_picks:{n}")
+                custom_id=f"mm_map_picks:{n}")
             button.callback = partial(instance.pick_callback, button)
             instance.add_item(button)
         return instance
@@ -54,19 +54,12 @@ class MapPickView(nextcord.ui.View):
         slot_id = int(button.custom_id.split(':')[-1])
         
         user_picks = await self.bot.store.get_user_map_pick(match.id, interaction.user.id)
-        if pick_maps[slot_id] in user_picks:
-            # already voted this one
-            await self.bot.store.remove(MMBotUserMapPicks, 
-                match_id=match.id, 
-                user_id=interaction.user.id, 
-                map=pick_maps[slot_id])
-            await interaction.response.pong()
-        else:
+        await self.bot.store.remove(MMBotUserMapPicks, 
+            match_id=match.id, 
+            user_id=interaction.user.id)
+        if pick_maps[slot_id] not in user_picks:
             # vote this one
-            await self.bot.store.remove(MMBotUserMapPicks, 
-                match_id=match.id, 
-                user_id=interaction.user.id)
-            await self.bot.store.upsert(MMBotUserMapPicks, 
+            await self.bot.store.insert(MMBotUserMapPicks, 
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 

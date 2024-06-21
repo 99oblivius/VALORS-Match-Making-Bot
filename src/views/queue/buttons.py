@@ -112,7 +112,7 @@ class QueueButtonsView(nextcord.ui.View):
             msg = await interaction.response.send_message(
             "Your current match has not ended yet.", ephemeral=True)
             await asyncio.sleep(1.5)
-            await msg.delete()
+            return await msg.delete()
         
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_queue_periods).items())

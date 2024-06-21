@@ -1,13 +1,6 @@
 import random
 from typing import List
 
-import numpy as np
-from itertools import combinations, compress
-from collections import Counter
-import copy
-
-from utils.models import MMBotUsers
-
 def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> List[str]:
     map_options = { m: 0 for m in maps }
     for ban in bans: map_options[ban] += 1
@@ -33,7 +26,13 @@ def get_preferred_map(maps: List[str], picks: List[str]) -> str:
     random.shuffle(picks)
     pick_options = { m: 0 for m in maps }
     for pick in picks: pick_options[pick] += 1
-    print(pick_options)
     pick = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
-    print(pick)
+    return pick
+
+from utils.models import Side
+def get_preferred_side(sides: List[Side], picks: List[str]) -> str:
+    random.shuffle(picks)
+    pick_options = { s: 0 for s in sides }
+    for pick in picks: pick_options[pick] += 1
+    pick = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
     return pick

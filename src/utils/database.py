@@ -2,7 +2,7 @@ import logging
 from logging import getLogger
 from typing import List, Tuple, Dict
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func, or_
+from sqlalchemy import inspect, delete, update, func, or_, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -21,6 +21,7 @@ from .models import (
     MMBotMaps,
     Phase,
     Team,
+    Side,
     MMBotUserMapPicks,
     MMBotUserSidePicks
 )
@@ -410,14 +411,6 @@ class Database:
 ###############
 # MATCH PICKS #
 ###############
-    async def set_map_pick(self, match_id: int, picked_map: str):
-        async with self._session_maker() as session:
-            await session.execute(
-                update(MMBotMatches)
-                .where(MMBotMatches.id == match_id)
-                .values(a_picked_map=picked_map))
-            await session.commit()
-    
     async def get_map_vote_count(self, guild_id: int, match_id: int) -> List[Tuple[str, int]]:
         async with self._session_maker() as session:
             result = await session.execute(
@@ -427,8 +420,9 @@ class Database:
                 .outerjoin(MMBotUserMapPicks, 
                     (MMBotUserMapPicks.map == MMBotMaps.map) & 
                     (MMBotUserMapPicks.match_id == match_id))
-                .where(MMBotMaps.guild_id == guild_id)
-                .where(MMBotMaps.active == True)
+                .where(
+                    MMBotMaps.guild_id == guild_id, 
+                    MMBotMaps.active == True)
                 .group_by(MMBotMaps.map, MMBotMaps.order)
                 .order_by(MMBotMaps.order))
             pick_counts = result.all()
@@ -474,7 +468,7 @@ class Database:
                         "media": insert_stmt.excluded.media})
                 await session.execute(update_stmt)
 
-    async def get_maps(self, guild_id: int) -> List[str]:
+    async def get_maps(self, guild_id: int) -> List[MMBotMaps]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMaps)
@@ -483,4 +477,35 @@ class Database:
                     MMBotMaps.active == True)
                 .order_by(MMBotMaps.order))
             return result.scalars().all()
+
+##############
+# SIDE PICKS #
+##############
+    async def get_side_vote_count(self, guild_id: int, match_id: int) -> List[Tuple[Side, int]]:
+        async with self._session_maker() as session:
+            sides_subquery = select(func.unnest(text('enum_range(NULL::side)')).label('side')).subquery()
+            result = await session.execute(
+                select(sides_subquery.c.side, func.count(MMBotUserSidePicks.side).label('pick_count'))
+                .outerjoin(MMBotUserSidePicks, 
+                    (MMBotUserSidePicks.side == sides_subquery.c.side) & 
+                    (MMBotUserSidePicks.guild_id == guild_id) & 
+                    (MMBotUserSidePicks.match_id == match_id))
+                .group_by(sides_subquery.c.side))
+            pick_counts = result.fetchall()
+            return [(Side[row.side], row.pick_count) for row in pick_counts]
     
+    async def get_side_votes(self, match_id: int) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserSidePicks.side)
+                .where(MMBotUserSidePicks.match_id == match_id))
+            return result.scalars().all()
+
+    async def get_user_side_pick(self, match_id: int, user_id: int) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserSidePicks.side)
+                .where(
+                    MMBotUserSidePicks.match_id == match_id,
+                    MMBotUserSidePicks.user_id == user_id))
+            return result.scalars().all()
