@@ -368,11 +368,11 @@ class Database:
     async def get_ban_votes(self, match_id: int, phase: Phase) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserBans)
+                select(MMBotUserBans.map)
                 .where(
                     MMBotUserBans.match_id == match_id,
                     MMBotUserBans.phase == phase))
-            return [ban.map for ban in result.scalars().all()]
+            return result.scalars().all()
     
     async def get_bans(self, match_id: int, team: Team | None = None) -> List[str]:
         async with self._session_maker() as session:
@@ -439,7 +439,7 @@ class Database:
             result = await session.execute(
                 select(MMBotUserMapPicks.map)
                 .where(
-                    MMBotUserBans.match_id == match_id))
+                    MMBotUserMapPicks.match_id == match_id))
             return result.scalars().all()
 
     async def get_user_map_pick(self, match_id: int, user_id: int) -> List[str]:

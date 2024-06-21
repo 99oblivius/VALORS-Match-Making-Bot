@@ -33,5 +33,7 @@ def get_preferred_map(maps: List[str], picks: List[str]) -> str:
     random.shuffle(picks)
     pick_options = { m: 0 for m in maps }
     for pick in picks: pick_options[pick] += 1
+    print(pick_options)
     pick = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
+    print(pick)
     return pick
