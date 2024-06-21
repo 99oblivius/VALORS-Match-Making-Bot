@@ -3,7 +3,7 @@ from typing import List
 
 import numpy as np
 from itertools import combinations, compress
-import collections
+from collections import Counter
 import copy
 
 from utils.models import MMBotUsers
@@ -28,3 +28,10 @@ def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> L
     bans.sort(key=lambda x: order_map[x])
     
     return bans
+
+def get_preferred_map(maps: List[str], picks: List[str]) -> str:
+    random.shuffle(picks)
+    pick_options = { m: 0 for m in maps }
+    for pick in picks: pick_options[pick] += 1
+    pick = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
+    return pick

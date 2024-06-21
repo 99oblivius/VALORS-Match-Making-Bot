@@ -12,6 +12,7 @@ from sqlalchemy import (
     Enum as sq_Enum,
     ForeignKey, 
     ForeignKeyConstraint,
+    UniqueConstraint,
     func
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -24,12 +25,17 @@ class Phase(Enum):
     A_BAN = 1
     B_BAN = 2
     A_PICK = 3
-    B_SIDE = 4
+    B_PICK = 4
 
 
 class Team(Enum):
     A = 0
     B = 1
+
+
+class Side(Enum):
+    T = 0
+    CT = 1
 
 
 class BotSettings(Base):
@@ -137,18 +143,50 @@ class MMBotMatches(Base):
     end_timestamp    = Column(TIMESTAMP(timezone=True))
     complete         = Column(Boolean, nullable=False, default=False)
     state            = Column(SmallInteger, nullable=False, default=1)
+    b_side           = Column(sq_Enum(Side))
 
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'
 
-    guild_id   = Column(BigInteger, primary_key=True, nullable=False)
-    user_id    = Column(BigInteger, primary_key=True, nullable=False)
-    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), primary_key=True, nullable=False)
+    id         = Column(Integer, primary_key=True)
+    guild_id   = Column(BigInteger, nullable=False)
+    user_id    = Column(BigInteger, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
     map        = Column(String(32), nullable=False)
     phase      = Column(sq_Enum(Phase), default=Phase.NONE)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
+class MMBotUserMapPicks(Base):
+    __tablename__ = 'mm_bot_user_map_picks'
+
+    id         = Column(Integer, primary_key=True)
+    guild_id   = Column(BigInteger, nullable=False)
+    user_id    = Column(BigInteger, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
+    map        = Column(String(32), nullable=False)
+    timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'match_id', name='unique_user_match_map'),
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
+class MMBotUserSidePicks(Base):
+    __tablename__ = 'mm_bot_user_side_picks'
+
+    id         = Column(Integer, primary_key=True)
+    guild_id   = Column(BigInteger, nullable=False)
+    user_id    = Column(BigInteger, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
+    side       = Column(sq_Enum(Side), nullable=False)
+    timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'match_id', name='unique_user_match_side'),
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 

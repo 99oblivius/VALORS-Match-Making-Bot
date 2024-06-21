@@ -21,5 +21,8 @@ class MatchState(IntEnum):
     BAN_SWAP                = auto()
     B_BANS                  = auto()
 
+    A_PICK                  = auto()
+    B_PICK                  = auto()
+
     CLEANUP                 = auto()
     FINISHED                = auto()

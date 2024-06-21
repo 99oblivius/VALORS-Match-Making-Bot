@@ -135,7 +135,7 @@ class QueueButtonsView(nextcord.ui.View):
                 self.bot.queue_manager.remove_user(interaction.user.id)
                 for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
 
-                match_id = await self.bot.store.unqueue_add_match_users(interaction.guild.id, interaction.channel.id)
+                match_id = await self.bot.store.unqueue_add_match_users(settings, interaction.channel.id)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
         

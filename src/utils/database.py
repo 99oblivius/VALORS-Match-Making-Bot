@@ -21,6 +21,8 @@ from .models import (
     MMBotMaps,
     Phase,
     Team,
+    MMBotUserMapPicks,
+    MMBotUserSidePicks
 )
 
 from matches import MatchState
@@ -137,6 +139,16 @@ class Database:
                 .values(region=None))
             await session.commit()
 
+    async def get_user_team(self, guild_id: int, user_id: int, match_id: int) -> Team:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchUsers.team)
+                .where(
+                    MMBotMatchUsers.guild_id == guild_id,
+                    MMBotMatchUsers.user_id == user_id,
+                    MMBotMatchUsers.match_id == match_id))
+            return result.scalars().first()
+
 #########
 # QUEUE #
 #########
@@ -165,14 +177,9 @@ class Database:
         await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
         return False
     
-    async def unqueue_add_match_users(self, guild_id: int, channel_id: int) -> int:
+    async def unqueue_add_match_users(self, settings: BotSettings, channel_id: int) -> int:
         async with self._session_maker() as session:
             async with session.begin():
-                maps_settings_result = await session.execute(
-                    select(BotSettings.mm_maps_range, BotSettings.mm_maps_phase)
-                    .where(BotSettings.guild_id == guild_id))
-                maps_settings = maps_settings_result.one()
-
                 result = await session.execute(
                     select(MMBotQueueUsers)
                     .where(
@@ -189,8 +196,8 @@ class Database:
                 
                 match = MMBotMatches(
                     queue_channel=channel_id, 
-                    maps_range=maps_settings.mm_maps_range, 
-                    maps_phase=maps_settings.mm_maps_phase)
+                    maps_range=settings.mm_maps_range, 
+                    maps_phase=settings.mm_maps_phase)
                 session.add(match)
                 await session.flush()
 
@@ -201,10 +208,9 @@ class Database:
                         MMBotMatches.complete == False))
                 new_match = result.scalars().first()
 
+
                 match_users = [
-                    { 'guild_id': user.guild_id,
-                      'user_id': user.user_id,
-                      'match_id': new_match.id }
+                    { 'guild_id': user.guild_id, 'user_id': user.user_id, 'match_id': new_match.id }
                     for user in queue_users
                 ]
                 insert_stmt = insert(MMBotMatchUsers).values(match_users)
@@ -359,7 +365,7 @@ class Database:
             ban_counts = result.all()
             return [(row.map, row.ban_count) for row in ban_counts]
     
-    async def get_bans(self, match_id: int, phase: Phase) -> List[str]:
+    async def get_ban_votes(self, match_id: int, phase: Phase) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserBans)
@@ -368,6 +374,30 @@ class Database:
                     MMBotUserBans.phase == phase))
             return [ban.map for ban in result.scalars().all()]
     
+    async def get_bans(self, match_id: int, team: Team | None = None) -> List[str]:
+        async with self._session_maker() as session:
+            if team == Team.A:
+                result = await session.execute(
+                    select(MMBotMatches.a_bans)
+                    .where(MMBotMatches.id == match_id))
+                bans = result.scalars().first()
+                return bans or []
+            elif team == Team.B:
+                result = await session.execute(
+                    select(MMBotMatches.b_bans)
+                    .where(MMBotMatches.id == match_id))
+                bans = result.scalars().first()
+                return bans or []
+            else:
+                result = await session.execute(
+                    select(MMBotMatches.a_bans, MMBotMatches.b_bans)
+                    .where(MMBotMatches.id == match_id))
+                row = result.fetchone()
+                if row:
+                    a_bans, b_bans = row
+                    return (a_bans or []) + (b_bans or [])
+                return []
+    
     async def get_user_map_bans(self, match_id: int, user_id: int) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
@@ -375,7 +405,51 @@ class Database:
                 .where(
                     MMBotUserBans.match_id == match_id,
                     MMBotUserBans.user_id == user_id))
-            return [ban.map for ban in result.scalars().all()]
+            return result.scalars().all()
+
+###############
+# MATCH PICKS #
+###############
+    async def set_map_pick(self, match_id: int, picked_map: str):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotMatches)
+                .where(MMBotMatches.id == match_id)
+                .values(a_picked_map=picked_map))
+            await session.commit()
+    
+    async def get_map_vote_count(self, guild_id: int, match_id: int) -> List[Tuple[str, int]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(
+                    MMBotMaps.map,
+                    func.count(MMBotUserMapPicks.map).label('pick_count'))
+                .outerjoin(MMBotUserMapPicks, 
+                    (MMBotUserMapPicks.map == MMBotMaps.map) & 
+                    (MMBotUserMapPicks.match_id == match_id))
+                .where(MMBotMaps.guild_id == guild_id)
+                .where(MMBotMaps.active == True)
+                .group_by(MMBotMaps.map, MMBotMaps.order)
+                .order_by(MMBotMaps.order))
+            pick_counts = result.all()
+            return [(row.map, row.pick_count) for row in pick_counts]
+
+    async def get_map_votes(self, match_id: int) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMapPicks.map)
+                .where(
+                    MMBotUserBans.match_id == match_id))
+            return result.scalars().all()
+
+    async def get_user_map_pick(self, match_id: int, user_id: int) -> List[str]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMapPicks.map)
+                .where(
+                    MMBotUserMapPicks.match_id == match_id,
+                    MMBotUserMapPicks.user_id == user_id))
+            return result.scalars().all()
 
 ########
 # MAPS #
@@ -409,3 +483,4 @@ class Database:
                     MMBotMaps.active == True)
                 .order_by(MMBotMaps.order))
             return result.scalars().all()
+    

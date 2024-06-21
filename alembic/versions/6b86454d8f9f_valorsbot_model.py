@@ -1,8 +1,8 @@
 """ValorsBot model
 
-Revision ID: 8628a9250e96
-Revises: 3b2a1e29f5bb
-Create Date: 2024-06-19 07:11:05.259300
+Revision ID: 6b86454d8f9f
+Revises: cafa0a300e9b
+Create Date: 2024-06-21 05:59:46.368394
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '8628a9250e96'
-down_revision: Union[str, None] = '3b2a1e29f5bb'
+revision: str = '6b86454d8f9f'
+down_revision: Union[str, None] = 'cafa0a300e9b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

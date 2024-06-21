@@ -10,11 +10,12 @@ from nextcord.ext import commands
 from utils.models import *
 from .match_states import MatchState
 from views.match.accept import AcceptView
-from views.match.banning import BanView, PicksView
+from views.match.banning import BanView, ChosenBansView
+from views.match.map_pick import MapPickView, ChosenMapView
 from utils.utils import format_mm_attendance
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME
-from .functions import get_preferred_bans
+from .functions import get_preferred_bans, get_preferred_map
 from .ranked_teams import get_teams
 
 
@@ -52,11 +53,13 @@ class Match:
         
         guild = self.bot.get_guild(self.guild_id)
         queue_channel = guild.get_channel(settings.mm_queue_channel)
+
         match_thread  = guild.get_thread(match.match_thread)
         a_thread      = guild.get_thread(match.a_thread)
         b_thread      = guild.get_thread(match.b_thread)
-        a_vc          = guild.get_thread(match.a_vc)
-        b_vc          = guild.get_thread(match.b_vc)
+
+        a_vc          = guild.get_channel(match.a_vc)
+        b_vc          = guild.get_channel(match.b_vc)
         
         try:
             if match.match_message: match_message = await match_thread.fetch_message(match.match_message)
@@ -96,7 +99,12 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAMS):
-            a_players, b_players, a_mmr, b_mmr = get_teams(users)
+            print(f"players: {players}")
+            player_ids = { player.user_id for player in players }
+            filtered_users = [user for user in users if user.user_id in player_ids]
+            a_players, b_players, a_mmr, b_mmr = get_teams(filtered_users)
+            print(f"a_playeres: {a_players}")
+            print(f"b_playeres: {b_players}")
             await self.bot.store.set_players_team(
                 match_id=self.match_id, 
                 user_teams={Team.A: a_players, Team.B: b_players})
@@ -167,14 +175,14 @@ class Match:
             view = await BanView.create_showable(self.bot, self.guild_id, match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
-            await asyncio.sleep(45)
+            await asyncio.sleep(10)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             maps = await self.bot.store.get_maps(self.guild_id)
-            bans = await self.bot.store.get_bans(self.match_id, Phase.A_BAN)
+            bans = await self.bot.store.get_ban_votes(self.match_id, Phase.A_BAN)
             bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
             embed = nextcord.Embed(title="You banned", color=HOME_THEME)
-            await a_message.edit(embed=embed, view=PicksView(bans))
+            await a_message.edit(embed=embed, view=ChosenBansView(bans))
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
@@ -194,15 +202,36 @@ class Match:
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
-            await asyncio.sleep(45)
+            await asyncio.sleep(10)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
             
             maps = await self.bot.store.get_maps(self.guild_id)
-            bans = await self.bot.store.get_bans(self.match_id, Phase.B_BAN)
+            bans = await self.bot.store.get_ban_votes(self.match_id, Phase.B_BAN)
             bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
             embed = nextcord.Embed(title="You banned", color=AWAY_THEME)
-            await b_message.edit(embed=embed, view=PicksView(bans))
+            await b_message.edit(embed=embed, view=ChosenBansView(bans))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_bans=bans)
+            await self.increment_state()
+        
+        if check_state(MatchState.A_PICK):
+            players = await self.bot.store.get_players(self.match_id)
+            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
+            embed = nextcord.Embed(title="Pick your map", color=HOME_THEME)
+            view = await MapPickView.create_showable(self.bot, self.guild_id, match)
+            a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
+            await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
+            await asyncio.sleep(10)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
+
+            maps = await self.bot.store.get_maps(self.guild_id)
+            map_votes = await self.bot.store.get_map_votes(self.match_id)
+            map_pick = get_preferred_map([m.map for m in maps], map_votes)
+            embed = nextcord.Embed(title="You picked", color=HOME_THEME)
+            await a_message.edit(embed=embed, view=ChosenMapView(map_pick))
+            await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick)
+            await self.increment_state()
+        
+        if check_state(MatchState.B_PICK):
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
