@@ -99,12 +99,9 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAMS):
-            print(f"players: {players}")
             player_ids = { player.user_id for player in players }
             filtered_users = [user for user in users if user.user_id in player_ids]
             a_players, b_players, a_mmr, b_mmr = get_teams(filtered_users)
-            print(f"a_playeres: {a_players}")
-            print(f"b_playeres: {b_players}")
             await self.bot.store.set_players_team(
                 match_id=self.match_id, 
                 user_teams={Team.A: a_players, Team.B: b_players})
@@ -183,6 +180,8 @@ class Match:
             bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
             embed = nextcord.Embed(title="You banned", color=HOME_THEME)
             await a_message.edit(embed=embed, view=ChosenBansView(bans))
+            embed = nextcord.Embed(title="A banned", color=HOME_THEME)
+            await b_thread.send(embed=embed, view=ChosenBansView(bans))
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
@@ -210,6 +209,8 @@ class Match:
             bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
             embed = nextcord.Embed(title="You banned", color=AWAY_THEME)
             await b_message.edit(embed=embed, view=ChosenBansView(bans))
+            embed = nextcord.Embed(title="B banned", color=AWAY_THEME)
+            await a_thread.send(embed=embed, view=ChosenBansView(bans))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_bans=bans)
             await self.increment_state()
         
@@ -228,6 +229,8 @@ class Match:
             map_pick = get_preferred_map([m.map for m in maps], map_votes)
             embed = nextcord.Embed(title="You picked", color=HOME_THEME)
             await a_message.edit(embed=embed, view=ChosenMapView(map_pick))
+            embed = nextcord.Embed(title="A picked", color=HOME_THEME)
+            await b_thread.send(embed=embed, view=ChosenMapView(map_pick))
             await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick)
             await self.increment_state()
         
