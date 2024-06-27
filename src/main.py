@@ -27,10 +27,9 @@ def exit_cleanup(a: list):
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
-        self.store = Database()
-        self.cache = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        self.store: Database = Database()
+        self.cache: redis.StrictRedis = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.queue_manager = QueueManager(self)
-
 
 
 def main():

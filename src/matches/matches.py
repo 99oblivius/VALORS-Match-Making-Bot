@@ -276,6 +276,13 @@ class Match:
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
             embed.add_field(name=f"{match_map.map}:", value=None, inline=False)
             match_message = await match_thread.send(embed=embed)
+
+            embed = nextcord.Embed(
+                title="Match starting!",
+                description=f"Return to {match_thread.mention}",
+                color=VALORS_THEME1)
+            await a_thread.send(embed=embed)
+            await b_thread.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
             await asyncio.sleep(15)

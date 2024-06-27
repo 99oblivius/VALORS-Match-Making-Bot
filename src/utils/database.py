@@ -24,7 +24,8 @@ from .models import (
     Side,
     MMBotUserMapPicks,
     MMBotUserSidePicks,
-    UserPlatformMappings
+    UserPlatformMappings,
+    RconServers
 )
 
 from matches import MatchState
@@ -67,6 +68,49 @@ class Database:
             await session.execute(stmt)
             await session.commit()
 
+################
+# RCON SERVERS #
+################
+    async def get_servers(self) -> List[RconServers]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(RconServers)
+                .order_by(RconServers.id))
+            return result.scalars().all()
+    
+    async def add_server(self, host: str, port: int, password: str, region: str) -> None:
+        async with self._session_maker() as session:
+            session.add(RconServers(host=host, port=port, password=password, region=region))
+            await session.commit()
+
+    async def remove_server(self, host: str, port: int) -> None:
+        async with self._session_maker() as session:
+            await session.execute(
+                delete(RconServers)
+                .where(
+                    RconServers.host == host,
+                    RconServers.port == port))
+
+    async def use_server(self, serveraddr: str) -> None:
+        async with self._session_maker() as session:
+            host, port = serveraddr.split(':')
+            await session.execute(
+                update(RconServers)
+                .where(
+                    RconServers.host == host,
+                    RconServers.port == port)
+                .values(being_used=True))
+
+    async def free_server(self, serveraddr: str) -> None:
+        async with self._session_maker() as session:
+            host, port = serveraddr.split(':')
+            await session.execute(
+                update(RconServers)
+                .where(
+                    RconServers.host == host,
+                    RconServers.port == port)
+                .values(being_used=False))
+
 ###########
 # GET BOT #
 ###########
@@ -77,13 +121,6 @@ class Database:
                 .where(BotSettings.guild_id == guild_id))
             return result.scalars().first()
     
-    async def get_regions(self, guild_id: int) -> List[BotRegions] | None:
-        async with self._session_maker() as session:
-            result = await session.execute(
-                select(BotRegions)
-                .where(BotRegions.guild_id == guild_id))
-            return result.scalars().all()
-
     async def get_regions(self, guild_id: int) -> List[BotRegions]:
         async with self._session_maker() as session:
             result = await session.execute(

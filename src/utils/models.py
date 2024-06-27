@@ -57,6 +57,21 @@ class UserPlatformMappings(Base):
         UniqueConstraint('guild_id', 'user_id', 'platform', name='unique_guild_user_platform'),
     )
 
+class RconServers(Base):
+    __tablename__ = 'rcon_servers'
+
+    id          = Column(Integer, nullable=False)
+    host        = Column(String(45), nullable=False)
+    port        = Column(Integer, nullable=False)
+    password    = Column(Text, nullable=False)
+    region      = Column(String(32), nullable=False)
+    being_used  = Column(Boolean, nullable=False, default=False)
+    timestamp   = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('host', 'port', name='unique_host_port'),
+    )
+
 class BotSettings(Base):
     __tablename__ = 'bot_settings'
 

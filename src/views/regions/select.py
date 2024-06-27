@@ -151,4 +151,9 @@ class RegistryButtonView(nextcord.ui.View):
             view.hide_msg = msg
             return
         await interaction.user.add_roles(verified_role)
-        await interaction.response.send_message("Welcome to MM!", ephemeral=True)
+        message = f"Join a match in <#{settings.mm_queue_channel}>\nInteract with others in <#{settings.mm_text_channel}>"
+        embed = nextcord.Embed(
+            title="Welcome to Match Making!", 
+            description=message,
+            color=VALORS_THEME2)
+        await interaction.response.send_message(embed=embed, ephemeral=True)

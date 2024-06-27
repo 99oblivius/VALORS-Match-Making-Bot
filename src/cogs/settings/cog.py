@@ -2,6 +2,8 @@ import json
 from typing import List
 import logging as log
 
+from fuzzywuzzy import process
+
 import nextcord
 from nextcord.ext import commands
 
@@ -49,7 +51,10 @@ class Settings(commands.Cog):
         embed = nextcord.Embed(title="Register for Match Making!", color=VALORS_THEME1_2)
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, register_channel=interaction.channel.id, register_message=msg.id)
+        await self.bot.store.upsert(BotSettings, 
+                                    guild_id=interaction.guild.id, 
+                                    register_channel=interaction.channel.id, 
+                                    register_message=msg.id)
         await interaction.response.send_message("Registry channel set", ephemeral=True)
     
     @settings.subcommand(name="regions", description="Set regions")
@@ -63,9 +68,11 @@ class Settings(commands.Cog):
             try:
                 regions = json.loads(regions)
             except Exception: 
-                return await interaction.response.send_message("Failed.\nIncorrect formatting. Read command description.", ephemeral=True)
+                return await interaction.response.send_message(
+                    "Failed.\nIncorrect formatting. Read command description.", ephemeral=True)
             if len(regions) > 25:
-                return await interaction.response.send_message("Failed.\nToo many regions", ephemeral=True)
+                return await interaction.response.send_message(
+                    "Failed.\nToo many regions", ephemeral=True)
         else:
             regions = regions.replace(' ', '')
             regions = regions.split(',')
@@ -100,7 +107,46 @@ class Settings(commands.Cog):
         if len(existing_regions) > 100:
             existing_regions = "Autofill response too long sorry."
         await interaction.response.send_autocomplete(choices=[regions, existing_regions])
+    
+    @settings.subcommand(name="add_server", description="Add a pavlov server")
+    async def add_server(self, interaction: nextcord.Interaction, 
+        host: str=nextcord.SlashOption(required=True, description="Server address"),
+        port: str=nextcord.SlashOption(required=True, description="Server port"),
+        password: str=nextcord.SlashOption(required=True, description="Server rcon password"),
+        region: str=nextcord.SlashOption(required=True)
+    ):
+        self.bot.store.add_server(host, port, password, region)
+        await interaction.response.send_message(
+            f"`{region}` Server `{host}`:`{port}` added successfully.", ephemeral=True)
 
+    @set_regions.on_autocomplete("region")
+    async def autocomplete_regions(self, interaction: nextcord.Interaction, region: str):
+        regions = await self.bot.store.get_regions(interaction.guild.id)
+        region_labels = [r.label for r in regions]
+        if not region:
+            return region_labels
+        matches = process.extract(region, region_labels, limit=25)
+        matched_labels = [match[0] for match in matches]
+        return matched_labels
+    
+    @settings.subcommand(name="remove_server", description="Remove a pavlov server")
+    async def remove_server(self, interaction: nextcord.Interaction, 
+        serveraddr: str=nextcord.SlashOption(description="Server host:port", required=True)
+    ):
+        host, port = serveraddr.split(':')
+        await self.bot.store.remove_server(host, port)
+        await interaction.response.send_message(
+            f"Server `{host}`:`{port}` removed successfully.", ephemeral=True)
+
+    @remove_server.on_autocomplete("serveraddr")
+    async def autocomplete_regions(self, interaction: nextcord.Interaction, serveraddr: str):
+        servers = await self.bot.store.get_servers()
+        if not servers:
+            return servers
+        serveraddrs = [f'{s.host}:{s.port}' for s in servers]
+        matches = process.extract(serveraddr, serveraddrs, limit=25)
+        matched_serveraddrs = [match[0] for match in matches]
+        return matched_serveraddrs
 
 def setup(bot):
     bot.add_cog(Settings(bot))
