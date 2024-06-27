@@ -3,6 +3,7 @@ import logging as log
 import time
 from enum import Enum
 import random
+from typing import List
 from collections import Counter
 
 import nextcord
@@ -46,12 +47,12 @@ class Match:
         def check_state(state: MatchState):
             return True if self.state == state else False
         
-        self.state  = await self.load_state()
-        settings    = await self.bot.store.get_settings(self.guild_id)
-        match       = await self.bot.store.get_match(self.match_id)
-        users       = await self.bot.store.get_users(self.guild_id)
-        players     = await self.bot.store.get_players(self.match_id)
-        maps        = await self.bot.store.get_maps(self.guild_id)
+        self.state                = await self.load_state()
+        settings: BotSettings     = await self.bot.store.get_settings(self.guild_id)
+        match                     = await self.bot.store.get_match(self.match_id)
+        users: MMBotQueueUsers    = await self.bot.store.get_users(self.guild_id)
+        players: MMBotMatchUsers  = await self.bot.store.get_players(self.match_id)
+        maps: MMBotMaps           = await self.bot.store.get_maps(self.guild_id)
         
         guild = self.bot.get_guild(self.guild_id)
         queue_channel = guild.get_channel(settings.mm_queue_channel)
@@ -264,7 +265,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
 
-        if check_state(MatchState.MATCH_SCORES):
+        if check_state(MatchState.MATCH_STARTING):
             await match_thread.purge(bulk=True)
             match_map = await self.bot.store.get_match_map(self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
@@ -285,7 +286,26 @@ class Match:
             await b_thread.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
-            await asyncio.sleep(15)
+        
+        if check_state(MatchState.MATCH_FIND_SERVER):
+            rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
+            if rcon_servers:
+                server = None
+                while server is None or len(rcon_servers) > 0:
+                    region_distribution = Counter([user.region for user in users])
+
+                    def server_score(server_region):
+                        return sum(region_distribution[server_region] for server_region in region_distribution)
+                    
+                    best_server = max(rcon_servers, key=lambda server: server_score(server.region))
+                    reply = await self.bot.rcon_manager.servers[f'{best_server.host}:{best_server.port}'].send("ServerInfo")
+                    if reply and 'ServerInfo' in reply:
+                        server = best_server
+                        break
+                    rcon_servers.remove(best_server)
+            else:
+                pass
+
         
         if check_state(MatchState.CLEANUP):
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)

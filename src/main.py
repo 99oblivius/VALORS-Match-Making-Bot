@@ -19,6 +19,7 @@ from nextcord.ext import commands
 from config import *
 from utils.database import Database
 from utils.queuemanager import QueueManager
+from utils.pavlov import RCONManager
 
 def exit_cleanup(a: list):
     for b in a:
@@ -30,6 +31,7 @@ class Bot(commands.Bot):
         self.store: Database = Database()
         self.cache: redis.StrictRedis = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.queue_manager = QueueManager(self)
+        self.rcon_manager = RCONManager(self)
 
 
 def main():

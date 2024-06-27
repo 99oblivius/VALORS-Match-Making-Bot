@@ -15,6 +15,8 @@ from sqlalchemy import (
     UniqueConstraint,
     func
 )
+from sqlalchemy.orm import sessionmaker, relationship
+
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -34,8 +36,8 @@ class Team(Enum):
 
 
 class Side(Enum):
-    T = 0
-    CT = 1
+    CT = 0
+    T = 1
 
 
 class Platform(Enum):
@@ -56,6 +58,10 @@ class UserPlatformMappings(Base):
     __table_args__ = (
         UniqueConstraint('guild_id', 'user_id', 'platform', name='unique_guild_user_platform'),
     )
+
+    match_users = relationship("MMBotMatchUsers", 
+        back_populates="user_platform_mappings", 
+        primaryjoin="and_(UserPlatformMappings.guild_id == MMBotMatchUsers.guild_id, UserPlatformMappings.user_id == MMBotMatchUsers.user_id)")
 
 class RconServers(Base):
     __tablename__ = 'rcon_servers'
@@ -141,11 +147,12 @@ class MMBotUsers(Base):
 class MMBotMaps(Base):
     __tablename__ = 'mm_bot_maps'
 
-    guild_id  = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
-    map       = Column(String(32), primary_key=True, nullable=False)
-    media     = Column(Text, nullable=True)
-    active    = Column(Boolean, nullable=False, default=True)
-    order     = Column(SmallInteger)
+    guild_id     = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
+    map          = Column(String(32), primary_key=True, nullable=False)
+    resource_id  = Column(String(32))
+    media        = Column(Text, nullable=True)
+    active       = Column(Boolean, nullable=False, default=True)
+    order        = Column(SmallInteger)
 
 
 ##############
@@ -239,6 +246,10 @@ class MMBotMatchUsers(Base):
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
         ForeignKeyConstraint(['match_id'], ['mm_bot_matches.id']),
     )
+
+    user_platform_mappings = relationship("UserPlatformMappings", 
+        back_populates="match_users", 
+        primaryjoin="and_(MMBotMatchUsers.guild_id == UserPlatformMappings.guild_id, MMBotMatchUsers.user_id == UserPlatformMappings.user_id)")
 
 
 ##############

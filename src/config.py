@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+SERVER_DM_MAP = "UGC2814848"
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')

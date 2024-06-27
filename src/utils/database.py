@@ -6,7 +6,7 @@ from sqlalchemy import inspect, delete, update, func, or_, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, joinedload
 from sqlalchemy.future import select
 from config import DATABASE_URL
 
@@ -71,11 +71,17 @@ class Database:
 ################
 # RCON SERVERS #
 ################
-    async def get_servers(self) -> List[RconServers]:
+    async def get_servers(self, free: bool=False) -> List[RconServers]:
         async with self._session_maker() as session:
-            result = await session.execute(
-                select(RconServers)
-                .order_by(RconServers.id))
+            if free:
+                result = await session.execute(
+                    select(RconServers)
+                    .where(RconServers.being_used == False)
+                    .order_by(RconServers.id))
+            else:
+                result = await session.execute(
+                    select(RconServers)
+                    .order_by(RconServers.id))
             return result.scalars().all()
     
     async def add_server(self, host: str, port: int, password: str, region: str) -> None:
@@ -334,8 +340,18 @@ class Database:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatchUsers)
+                .options(joinedload(MMBotMatchUsers.user_platform_mappings))
                 .where(MMBotMatchUsers.match_id == match_id))
             return result.scalars().all()
+        
+    async def get_player(self, match_id: int, user_id: int) -> MMBotMatchUsers:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchUsers)
+                .options(joinedload(MMBotMatchUsers.user_platform_mappings))
+                .where(MMBotMatchUsers.match_id == match_id)
+                .where(MMBotMatchUsers.user_id == user_id))
+            return result.scalars().first()
     
     async def get_accepted_players(self, match_id: int) -> int:
         async with self._session_maker() as session:
@@ -524,7 +540,7 @@ class Database:
 # MAPS #
 ########
     async def set_maps(self, guild_id: int, maps: List[Tuple[str, str]]):
-        data = [{"guild_id": guild_id, "map": m[0], "media": m[1], "active": True, "order": n} for n, m in enumerate(maps)]
+        data = [{"guild_id": guild_id, "map": m[0], "resource_id": m[1], "media": m[2], "active": True, "order": n} for n, m in enumerate(maps)]
         
         async with self._session_maker() as session:
             async with session.begin():
@@ -540,7 +556,8 @@ class Database:
                     set_={
                         "active": insert_stmt.excluded.active,
                         "order": insert_stmt.excluded.order,
-                        "media": insert_stmt.excluded.media})
+                        "media": insert_stmt.excluded.media,
+                        "resource_id": insert_stmt.excluded.resource_id})
                 await session.execute(update_stmt)
 
     async def get_maps(self, guild_id: int) -> List[MMBotMaps]:
