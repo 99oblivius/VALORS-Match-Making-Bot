@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import atexit
+import redis
 import logging as log
 yellow = "\x1b[33;20m"
 red = "\x1b[31;20m"
@@ -14,6 +15,7 @@ log.basicConfig(
 import nextcord
 from nextcord.ext import commands
 
+
 from config import *
 from utils.database import Database
 from utils.queuemanager import QueueManager
@@ -26,7 +28,9 @@ class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
         self.store = Database()
+        self.cache = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.queue_manager = QueueManager(self)
+
 
 
 def main():

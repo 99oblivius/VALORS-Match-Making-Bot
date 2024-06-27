@@ -6,3 +6,5 @@ SQLAlchemy[asyncio]
 asyncpg
 alembic
 numpy
+async-pavlov
+redis

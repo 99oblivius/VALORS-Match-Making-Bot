@@ -22,12 +22,16 @@ def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> L
     
     return bans
 
-def get_preferred_map(maps: List[str], picks: List[str]) -> str:
+from utils.models import MMBotMaps, MMBotUserMapPicks
+def get_preferred_map(maps: List[MMBotMaps], picks: List[MMBotUserMapPicks]) -> MMBotMaps:
     random.shuffle(picks)
-    pick_options = { m: 0 for m in maps }
-    for pick in picks: pick_options[pick] += 1
-    pick = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
-    return pick
+    map_dict = {m.map: m for m in maps}
+    pick_options = {m.map: 0 for m in maps}
+    for pick in picks:
+        if pick.map in pick_options:
+            pick_options[pick.map] += 1
+    most_picked_map_name = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
+    return map_dict[most_picked_map_name]
 
 from utils.models import Side
 def get_preferred_side(sides: List[Side], picks: List[str]) -> str:

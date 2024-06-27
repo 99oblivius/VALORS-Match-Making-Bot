@@ -38,6 +38,25 @@ class Side(Enum):
     CT = 1
 
 
+class Platform(Enum):
+    STEAM = "steam"
+    PLAYSTATION = "playstation"
+
+
+class UserPlatformMappings(Base):
+    __tablename__ = 'user_platform_mappings'
+
+    id           = Column(Integer, primary_key=True)
+    guild_id     = Column(BigInteger, nullable=False)
+    user_id      = Column(BigInteger, nullable=False)
+    platform     = Column(sq_Enum(Platform), nullable=False)
+    platform_id  = Column(String(64), unique=True, nullable=False)
+    created_at   = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('guild_id', 'user_id', 'platform', name='unique_guild_user_platform'),
+    )
+
 class BotSettings(Base):
     __tablename__ = 'bot_settings'
 
@@ -56,11 +75,12 @@ class BotSettings(Base):
     mm_queue_reminder  = Column(Integer, nullable=False, default=180)
     mm_voice_channel   = Column(BigInteger)
     mm_log_channel     = Column(BigInteger)
+    mm_verified_role   = Column(BigInteger)
     mm_lfg_role        = Column(BigInteger)
     mm_staff_role      = Column(BigInteger)
 
-    region_channel     = Column(BigInteger)
-    region_message     = Column(BigInteger)
+    register_channel     = Column(BigInteger)
+    register_message     = Column(BigInteger)
 
 class BotRegions(Base):
     __tablename__ = 'bot_regions'
@@ -161,6 +181,7 @@ class MMBotUserBans(Base):
     )
 
 class MMBotUserMapPicks(Base):
+
     __tablename__ = 'mm_bot_user_map_picks'
 
     id         = Column(Integer, primary_key=True)

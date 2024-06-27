@@ -23,7 +23,8 @@ from .models import (
     Team,
     Side,
     MMBotUserMapPicks,
-    MMBotUserSidePicks
+    MMBotUserSidePicks,
+    UserPlatformMappings
 )
 
 from matches import MatchState
@@ -102,6 +103,16 @@ class Database:
                 .where(
                     MMBotUsers.guild_id == guild_id, 
                     MMBotUsers.user_id == user_id))
+            return result.scalars().first()
+    
+    async def get_user_platforms(self, guild_id: int, user_id: int) -> List[UserPlatformMappings]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(UserPlatformMappings)
+                .where(
+                    MMBotUsers.guild_id == guild_id, 
+                    MMBotUsers.user_id == user_id)
+                .order_by(UserPlatformMappings.platform))
             return result.scalars().first()
     
     async def get_users(self, guild_id: int) -> List[MMBotUsers]:
@@ -428,10 +439,10 @@ class Database:
             pick_counts = result.all()
             return [(row.map, row.pick_count) for row in pick_counts]
 
-    async def get_map_votes(self, match_id: int) -> List[str]:
+    async def get_map_votes(self, match_id: int) -> List[MMBotMaps]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserMapPicks.map)
+                select(MMBotUserMapPicks)
                 .where(
                     MMBotUserMapPicks.match_id == match_id))
             return result.scalars().all()
@@ -444,6 +455,33 @@ class Database:
                     MMBotUserMapPicks.match_id == match_id,
                     MMBotUserMapPicks.user_id == user_id))
             return result.scalars().all()
+
+    async def get_match_map(self, match_id: int) -> MMBotMaps | None:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches.map)
+                .where(MMBotMatches.id == match_id))
+            map_string = result.scalars().first()
+            if not map_string:
+                return None
+            
+            result = await session.execute(
+                select(MMBotMaps)
+                .where(MMBotMaps.map == map_string))
+            map_object = result.scalars().first()
+            return map_object
+
+    async def get_match_sides(self, match_id: int) -> Tuple[Side | None, Side | None]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches.b_side)
+                .where(MMBotMatches.id == match_id))
+            b_side = result.scalars().first()
+            if b_side is None:
+                return (None, None)
+            
+            a_side = Side.CT if b_side == Side.T else Side.T
+            return (a_side, b_side)
 
 ########
 # MAPS #

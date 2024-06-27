@@ -24,5 +24,7 @@ class MatchState(IntEnum):
     A_PICK                  = auto()
     B_PICK                  = auto()
 
+    MATCH_SCORES            = auto()
+
     CLEANUP                 = auto()
     FINISHED                = auto()

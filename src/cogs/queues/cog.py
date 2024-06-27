@@ -32,7 +32,7 @@ class Queues(commands.Cog):
 
     @rotate_map_pool.before_loop
     async def wait_rotate_map_pool(self):
-        await self.wait_until_ready()
+        await self.bot.wait_until_ready()
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -116,6 +116,13 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_lfg_role=lfg.id)
         await interaction.response.send_message(f"LookingForGame role set to {lfg.mention}", ephemeral=True)
 
+    @queue_settings.subcommand(name="verified_role", description="Set verified role")
+    async def set_mm_verified(self, interaction: nextcord.Interaction, verified: nextcord.Role):
+        if not isinstance(verified, nextcord.Role):
+            return await interaction.response.send_message("This is not a role", ephemeral=True)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_verified_role=verified.id)
+        await interaction.response.send_message(f"Verified role set to {verified.mention}", ephemeral=True)
+
     @queue_settings.subcommand(name="staff_role", description="Set match making staff role")
     async def set_mm_staff(self, interaction: nextcord.Interaction, staff: nextcord.Role):
         if not isinstance(staff, nextcord.Role):
@@ -176,7 +183,7 @@ class Queues(commands.Cog):
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
         await interaction.response.send_message(
-            f"Queue periods set to `{periods_str}`\nUse </queue settings set_queue:1249109243114557461> to update", ephemeral=True)
+            f"Queue periods set to `{periods_str}`\nUse </queue settings set_register:1249942181180084235> to update", ephemeral=True)
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):

@@ -168,13 +168,14 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_BANS):
+            time_to_ban = 30
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
-            embed = nextcord.Embed(title="Pick your 2 bans", color=HOME_THEME)
+            embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=HOME_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
-            await asyncio.sleep(30)
+            await asyncio.sleep(time_to_ban)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.A_BAN)
@@ -197,13 +198,14 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_BANS):
+            time_to_ban = 30
             players = await self.bot.store.get_players(self.match_id)
-            embed = nextcord.Embed(title="Pick your 2 bans", color=AWAY_THEME)
+            embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=AWAY_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, match)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
-            await asyncio.sleep(30)
+            await asyncio.sleep(time_to_ban)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
             
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.B_BAN)
@@ -217,33 +219,36 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_PICK):
+            time_to_pick = 30
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
-            embed = nextcord.Embed(title="Pick your map", color=HOME_THEME)
+            embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=HOME_THEME)
             view = await MapPickView.create_showable(self.bot, self.guild_id, match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
-            await asyncio.sleep(30)
+            await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             map_votes = await self.bot.store.get_map_votes(self.match_id)
-            map_pick = get_preferred_map([m.map for m in maps], map_votes)
-            view = ChosenMapView(map_pick)
+            map_pick = get_preferred_map(maps, map_votes)
+            view = ChosenMapView(map_pick.map)
             embed = nextcord.Embed(title="You picked", color=HOME_THEME)
+            embed.set_thumbnail(map_pick.media)
             await a_message.edit(embed=embed, view=view)
-            embed = nextcord.Embed(title="A picked", color=HOME_THEME)
+            embed.title = "A picked"
             await b_thread.send(embed=embed, view=view)
-            await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick.map)
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
+            time_to_pick = 30
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
-            embed = nextcord.Embed(title="Pick your side", color=AWAY_THEME)
+            embed = nextcord.Embed(title="Pick your side", description=format_duration(time_to_pick), color=AWAY_THEME)
             view = await SidePickView.create_showable(self.bot, self.guild_id, match)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  b_message=b_message.id, phase=Phase.B_PICK)
-            await asyncio.sleep(30)
+            await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             side_votes = await self.bot.store.get_side_votes(self.match_id)
@@ -258,6 +263,22 @@ class Match:
             await a_thread.send(embed=embed, view=ChosenSideView(a_side))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
+
+        if check_state(MatchState.MATCH_SCORES):
+            await match_thread.purge(bulk=True)
+            match_map = await self.bot.store.get_match_map(self.match_id)
+            match_sides = await self.bot.store.get_match_sides(self.match_id)
+            embed = nextcord.Embed(title="Match", description="May the best team win!", color=VALORS_THEME1)
+            embed.set_image(match_map.media)
+            embed.add_field(name=f"Team A - {match_sides[0].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name=f"Team B - {match_sides[1].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+            embed.add_field(name=f"{match_map.map}:", value=None, inline=False)
+            match_message = await match_thread.send(embed=embed)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
+            await self.increment_state()
+            await asyncio.sleep(15)
         
         if check_state(MatchState.CLEANUP):
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)

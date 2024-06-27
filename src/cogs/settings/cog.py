@@ -9,7 +9,7 @@ from config import *
 from utils.models import BotSettings
 
 from config import *
-from views.regions.select import RegionSelectView
+from views.regions.select import RegistryButtonView
 
 from utils.models import BotRegions, BotSettings
 
@@ -20,7 +20,7 @@ class Settings(commands.Cog):
     
     @commands.Cog.listener()
     async def on_ready(self):
-        self.bot.add_view(RegionSelectView(self.bot))
+        self.bot.add_view(RegistryButtonView(self.bot))
         log.info("[Queues] Cog started")
     
     @nextcord.slash_command(name="settings", description="Settings", guild_ids=[GUILD_ID])
@@ -37,30 +37,20 @@ class Settings(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, staff_channel=interaction.channel.id)
         await interaction.response.send_message("Staff channel set", ephemeral=True)
     
-    async def send_region_select(self, interaction: nextcord.Interaction, regions: List[BotRegions]) -> nextcord.Message:
-        embed = nextcord.Embed(title="Register", description="Where do you play from?", color=VALORS_THEME2)
-        view = RegionSelectView(self.bot, regions)
-        return await interaction.channel.send(embed=embed, view=view)
-    
-    @settings.subcommand(name="set_region", description="Set which channel is intended for region select")
-    async def settings_set_region_select(self, interaction: nextcord.Interaction):
+    @settings.subcommand(name="set_register", description="Set which channel is intended for registry")
+    async def settings_set_register_select(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        regions = await self.bot.store.get_regions(interaction.guild.id)
-        if settings and settings.region_channel and settings.region_message:
-            channel = interaction.guild.get_channel(settings.region_channel)
-            try: msg = await channel.fetch_message(settings.region_message)
+        if settings and settings.register_channel and settings.register_message:
+            channel = interaction.guild.get_channel(settings.register_channel)
+            try: msg = await channel.fetch_message(settings.register_message)
             except nextcord.errors.NotFound: pass
             else: await msg.delete()
         
-        if not regions or len(regions) < 1:
-            return await interaction.response.send_message(
-                "No regions\nSet regions with </settings regions:1249942181180084235>", ephemeral=True)
-        try:
-            msg = await self.send_region_select(interaction, regions)
-            await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, region_channel=interaction.channel.id, region_message=msg.id)
-        except Exception:
-            return await interaction.response.send_message("Something went wrong with the region select.\nVerify your input for </settings regions:1249942181180084235>", ephemeral=True)
-        await interaction.response.send_message("Region channel set", ephemeral=True)
+        embed = nextcord.Embed(title="Register for Match Making!", color=VALORS_THEME1_2)
+        view = RegistryButtonView(self.bot)
+        msg = await interaction.channel.send(embed=embed, view=view)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, register_channel=interaction.channel.id, register_message=msg.id)
+        await interaction.response.send_message("Registry channel set", ephemeral=True)
     
     @settings.subcommand(name="regions", description="Set regions")
     async def set_regions(self, interaction: nextcord.Interaction, 
@@ -94,7 +84,7 @@ class Settings(commands.Cog):
             await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji.strip(), index=n)
             
         await interaction.response.send_message(
-            f"Regions set\nUse </settings set_region:1249942181180084235> to update", ephemeral=True)
+            f"Regions set\nUse </settings set_register:1249942181180084235> to update", ephemeral=True)
 
     @set_regions.on_autocomplete("regions")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, regions: str):

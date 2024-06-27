@@ -1,4 +1,6 @@
 from typing import List
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from utils.models import MMBotMatchUsers
 
@@ -25,3 +27,10 @@ def format_team(team: bool) -> str:
 def shifted_window(l: List, phase: int=0, range: int=1) -> List:
     l = l + l[:range - 1]
     return l[phase:phase + range]
+
+def generate_auth_url(cache, guild_id: int, user_id: int, platform: str):
+    token = str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cache.hmset(token, {'guild_id': guild_id, 'discord_uuid': user_id, 'expires_at': expires_at.isoformat(), 'platform': platform})
+    cache.expire(token, 300)
+    return f"https://valorsbotapi.oblivius.dev/auth/{platform}/{token}"
