@@ -271,13 +271,13 @@ class Match:
             await match_thread.purge(bulk=True)
             match_map = await self.bot.store.get_match_map(self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
-            embed = nextcord.Embed(title="Match", description="May the best team win!", color=VALORS_THEME1)
+            embed = nextcord.Embed(title="Starting", description="Looking for server", color=VALORS_THEME1)
             embed.set_image(match_map.media)
             embed.add_field(name=f"Team A - {match_sides[0].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
-            embed.add_field(name=f"{match_map.map}:", value=None, inline=False)
+            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             match_message = await match_thread.send(embed=embed)
 
             embed = nextcord.Embed(
@@ -309,7 +309,15 @@ class Match:
                 await self.bot.store.set_serveraddr(self.match_id, serveraddr)
                 await self.bot.store.use_server(serveraddr)
             else:
-                pass
+                embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
+                embed.set_image(match_map.media)
+                embed.add_field(name=f"Team A - {match_sides[0].name}", 
+                    value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                embed.add_field(name=f"Team B - {match_sides[1].name}", 
+                    value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
+                await match_thread.edit(embed=embed)
+                self.state = MatchState.CLEANUP - 1
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
@@ -317,6 +325,22 @@ class Match:
             await self.bot.rcon_manager.unban_all_players(serveraddr)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
             await self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT)
+
+            pin = lambda: ''.join(random.choices('0123456789', k=4))
+            await self.bot.rcon_manager.set_pin(serveraddr, pin)
+            server_name = f"VALORS MM - {self.match_id}"
+            await self.bot.rcon_maanger.set_name(serveraddr, server_name)
+
+            embed = nextcord.Embed(title="Match", description=f"Server ready!", color=VALORS_THEME1)
+            embed.set_image(match_map.media)
+            embed.add_field(name=f"Team A - {match_sides[0].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name=f"Team B - {match_sides[1].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+            embed.add_field(name="Server", value=f"`{server_name}`")
+            embed.add_field(name="Pin", value=f"`{pin}`")
+            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
+            await match_thread.edit(embed=embed)
 
             server_players = {}
             while len(server_players) < 10:
@@ -344,6 +368,15 @@ class Match:
         if check_state(MatchState.MATCH_START_SND):
             m = next((m for m in maps if m.map == match.map), maps[0])
             await self.bot.rcon_manager.set_snd(serveraddr, m.resource_id if m.resource_id else m.map)
+
+            embed = nextcord.Embed(title="Match", description="Match started!\nMay the best team win!", color=VALORS_THEME1)
+            embed.set_image(match_map.media)
+            embed.add_field(name=f"Team A - {match_sides[0].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name=f"Team B - {match_sides[1].name}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
+            await match_message.edit()
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_END):
@@ -354,10 +387,8 @@ class Match:
                 team0score = int(reply['Team0Score'])
                 team1score = int(reply['Team1Score'])
                 await asyncio.sleep(2)
-
-            # Flipped sides due to mid-game swap
-            b_players_data = await self.bot.rcon_manager.inspect_team(serveraddr, 1 - match.b_side.value)
-            a_players_data = await self.bot.rcon_manager.inspect_team(serveraddr, match.b_side.value)
+            
+            players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
             
             # Determine if Team A won
             a_won = (
@@ -373,7 +404,7 @@ class Match:
             users_aggregate_stats = {}
 
             # Create a dictionary mapping UniqueId to player data
-            players_dict = {player['UniqueId']: player for player in b_players_data + a_players_data}
+            players_dict = { player['UniqueId']: player for player in players_data }
 
             for platform_id, player_data in players_dict.items():
                 player = next((
@@ -422,9 +453,14 @@ class Match:
 
             await self.bot.store.add_users_match_stats(self.guild_id, self.match_id, users_match_stats)
             await self.bot.store.set_users_aggregate_stats(self.guild_id, users_aggregate_stats)
-            
             await self.increment_state()
-
+        
+        if check_state(MatchState.MATCH_CLEANUP):
+            await self.bot.rcon_manager.set_teamdeathmath(serveraddr)
+            await self.bot.rcon_manager.unban_all_players(serveraddr)
+            await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
+            await self.bot.rcon_manager.max_players(serveraddr, 10)
+            await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
             await self.bot.rcon_manager.unban_all_players(serveraddr)

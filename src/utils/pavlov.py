@@ -101,6 +101,25 @@ class RCONManager:
             return reply['InspectList']
     
     @safe_rcon
+    async def inspect_all(self, serveraddr: str) -> List[dict]:
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            reply = await rcon.send("InspectAll")
+            return reply['InspectList']
+    
+    @safe_rcon
+    async def set_pin(self, serveraddr: str, pin: str):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            await rcon.send(f"SetPin {pin}")
+    
+    @safe_rcon
+    async def set_name(self, serveraddr: str, name: str):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            await rcon.send(f"UpdateServerName {name}")
+    
+    @safe_rcon
     async def player_list(self, serveraddr: str) -> List[dict]:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
