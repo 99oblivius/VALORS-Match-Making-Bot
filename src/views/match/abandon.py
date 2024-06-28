@@ -21,6 +21,7 @@ class AbandonView(nextcord.ui.View):
         match = await self.bot.store.get_thread_match(interaction.channel.id)
         loop = asyncio.get_event_loop()
         await cleanup_match(loop, match.id)
+        await self.bot.store.add_abandon(interaction.guild.id, interaction.user.id)
         await interaction.guild.get_thread(match.match_thread).send("@here Match Abandoned")
         await interaction.response.send_message(
              f"Match successfully abandoned", ephemeral=True)

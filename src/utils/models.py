@@ -190,6 +190,7 @@ class MMBotUserAbandons(Base):
     id         = Column(Integer, primary_key=True, nullable=False)
     guild_id   = Column(BigInteger, nullable=False)
     user_id    = Column(BigInteger, nullable=False)
+    ignored    = Column(Boolean, nullable=False, default=False)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (

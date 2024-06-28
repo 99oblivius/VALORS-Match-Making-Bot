@@ -1,6 +1,6 @@
 import asyncio
 
-from .matches import Match
+from .match import Match
 from .match_states import MatchState
 
 active_matches = {}

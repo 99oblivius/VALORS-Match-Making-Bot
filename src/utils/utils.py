@@ -24,13 +24,28 @@ def format_mm_attendance(users: List[MMBotMatchUsers]):
 def format_team(team: bool) -> str:
     return 'B' if team else 'A'
 
-def shifted_window(l: List, phase: int=0, range: int=1) -> List:
+def shifted_window(l: list, phase: int=0, range: int=1) -> list:
     l = l + l[:range - 1]
     return l[phase:phase + range]
 
-def generate_auth_url(cache, guild_id: int, user_id: int, platform: str):
+def generate_auth_url(cache, guild_id: int, user_id: int, platform: str) -> str:
     token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     cache.hmset(token, {'guild_id': guild_id, 'discord_uuid': user_id, 'expires_at': expires_at.isoformat(), 'platform': platform})
     cache.expire(token, 300)
     return f"https://valorsbotapi.oblivius.dev/auth/{platform}/{token}"
+
+def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
+    if last_abandon is None:
+        last_abandon = datetime.now(timezone.utc)
+    if count == 1:
+        cooldown_end = last_abandon + timedelta(hours=2)
+    elif count == 2:
+        cooldown_end = last_abandon + timedelta(hours=6)
+    elif count == 3:
+        cooldown_end = last_abandon + timedelta(days=1)
+    else:
+        cooldown_end = last_abandon + timedelta(days=3)
+
+    cooldown_seconds = (cooldown_end - datetime.now(timezone.utc)).total_seconds()
+    return max(0, int(cooldown_seconds))

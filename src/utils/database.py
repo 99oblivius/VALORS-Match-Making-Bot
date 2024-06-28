@@ -1,6 +1,7 @@
 import logging
 from logging import getLogger
 from typing import List, Tuple, Dict, Any
+from datetime import timedelta, datetime, timezone
 from asyncio import AbstractEventLoop
 from sqlalchemy import inspect, delete, update, func, or_, text
 from sqlalchemy.dialects.postgresql import insert
@@ -27,7 +28,8 @@ from .models import (
     UserPlatformMappings,
     RconServers,
     MMBotUserAggregateStats,
-    MMBotUserMatchStats
+    MMBotUserMatchStats,
+    MMBotUserAbandons
 )
 
 from matches import MatchState
@@ -251,6 +253,62 @@ class Database:
                     MMBotMatchUsers.user_id == user_id,
                     MMBotMatchUsers.match_id == match_id))
             return result.scalars().first()
+
+
+############
+# ABANDONS #
+############
+    async def add_abandon(self, guild_id: int, user_id: int):
+        async with self._session_maker() as session:
+            session.add(MMBotUserAbandons(
+                guild_id=guild_id,
+                user_id=user_id))
+            await session.commit()
+    
+    async def ignore_abandon(self, guild_id: int, user_id: int):
+        async with self._session_maker() as session:
+            async with session.begin():
+                last_abandon = await session.execute(
+                    select(MMBotUserAbandons)
+                    .where(
+                        MMBotUserAbandons.guild_id == guild_id,
+                        MMBotUserAbandons.user_id == user_id,
+                        MMBotUserAbandons.ignored == False)
+                    .order_by(MMBotUserAbandons.timestamp.desc())
+                    .limit(1)
+                    .with_for_update())
+                last_abandon_record = last_abandon.scalars().first()
+                if last_abandon_record:
+                    last_abandon_record.ignored = True
+                    await session.commit()
+
+    async def get_abandon_count_last_period(self, guild_id: int, user_id: int, period: int=60)  -> Tuple[int, datetime]:
+        async with self._session_maker() as session:
+            last_abandon_subquery = (
+                select(MMBotUserAbandons.timestamp)
+                .where(
+                    MMBotUserAbandons.guild_id == guild_id, 
+                    MMBotUserAbandons.user_id == user_id,
+                    MMBotUserAbandons.ignored == False)
+                .order_by(MMBotUserAbandons.timestamp.desc())
+                .limit(1)
+            ).scalar_subquery()
+
+            result = await session.execute(last_abandon_subquery)
+            last_abandon = result.scalar()
+
+            if last_abandon is None:
+                return 0
+            
+            count_abandons = (
+                select(func.count(MMBotUserAbandons.id))
+                .where(
+                    MMBotUserAbandons.guild_id == guild_id,
+                    MMBotUserAbandons.user_id == user_id,
+                    MMBotUserAbandons.ignored == False,
+                    MMBotUserAbandons.timestamp >= last_abandon - timedelta(days=period)))
+            result = await session.execute(count_abandons)
+            return result.scalar(), last_abandon
 
 #########
 # QUEUE #

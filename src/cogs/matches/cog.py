@@ -10,7 +10,7 @@ from nextcord.ext import commands, tasks
 
 from config import *
 from utils.models import BotSettings
-from utils.utils import format_duration
+from utils.utils import format_duration, abandon_cooldown
 from matches import load_ongoing_matches, cleanup_match
 
 from views.match.accept import AcceptView
@@ -80,12 +80,15 @@ class Matches(commands.Cog):
         if not match:
             return await interaction.response.send_message(
                 "You must use this command in a match thread", ephemeral=True)
-        
+
+        previous_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)       
+        cooldown = abandon_cooldown(previous_abandons + 1, last_abandon)
+        mmr_loss = 0
         embed = nextcord.Embed(
             title="Abandon", 
             description=f"""Are you certain you want to abandon this match?
-_You abandoned a total of {1} times in the last month._
-_You will have a cooldown of `{format_duration()}`_""")
+_You abandoned a total of `{previous_abandons}` times in the last month._
+_You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
         await interaction.response.send_message(embed=embed, view=AbandonView(self.bot), ephemeral=True)
 
 
@@ -95,6 +98,15 @@ _You will have a cooldown of `{format_duration()}`_""")
     @nextcord.slash_command(name="mm", description="Match making commands", guild_ids=[GUILD_ID])
     async def match_making(self, interaction: nextcord.Interaction):
         pass
+
+    @match_making.subcommand(name="revoke_abandon", description="Revoke a user's current abandon")
+    async def revoke_abandon(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
+        count_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, user.id)
+        cooldown = abandon_cooldown(count_abandons, last_abandon)
+        if cooldown == 0:
+            return await interaction.response.send_message("This user is not currently in cooldown", ephemeral=True)
+        await self.bot.store.ignore_abandon(interaction.guild.id, user.id)
+        await interaction.response.send_message(f"{user.mention} had their cooldown revoked successfully.", ephemeral=True)
 
     @match_making.subcommand(name="settings", description="Match making settings")
     async def mm_settings(self, interaction: nextcord.Interaction):

@@ -7,8 +7,8 @@ import nextcord
 from nextcord.ext import commands
 
 from matches import make_match
-from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT
-from utils.utils import format_duration
+from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT, VALORS_THEME1_2
+from utils.utils import format_duration, abandon_cooldown
 
 
 class QueueButtonsView(nextcord.ui.View):
@@ -113,7 +113,14 @@ class QueueButtonsView(nextcord.ui.View):
             "Your current match has not ended yet.", ephemeral=True)
             await asyncio.sleep(1.5)
             return await msg.delete()
-        
+        previous_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)
+        cooldown = abandon_cooldown(previous_abandons, last_abandon)
+        if cooldown > 0:
+            embed = nextcord.Embed(
+                title="You are on cooldown due to abandoning a match",
+                description=f"You can queue again in `{format_duration(cooldown)}`",
+                color=VALORS_THEME1_2)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_queue_periods).items())
         expiry = int(datetime.now(timezone.utc).timestamp()) + 60 * int(periods[slot_id][1])
