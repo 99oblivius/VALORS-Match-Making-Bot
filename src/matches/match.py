@@ -16,7 +16,7 @@ from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
 from utils.utils import format_mm_attendance, format_duration
 
-from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT
+from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP
 from .functions import get_preferred_bans, get_preferred_map, get_preferred_side
 from .ranked_teams import get_teams
 
@@ -330,7 +330,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
-            await self.bot.rcon_manager.set_teamdeathmath(serveraddr)
+            await self.bot.rcon_manager.set_teamdeathmath(serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.unban_all_players(serveraddr)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
             await self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT)
@@ -376,7 +376,11 @@ class Match:
         
         if check_state(MatchState.MATCH_START_SND):
             m = next((m for m in maps if m.map == match.map), maps[0])
+            server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
+            await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'snd')
             await self.bot.rcon_manager.set_snd(serveraddr, m.resource_id if m.resource_id else m.map)
+            for m in server_maps:
+                await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'])
 
             embed = nextcord.Embed(title="Match", description="Match started!\nMay the best team win!", color=VALORS_THEME1)
             embed.set_image(match_map.media)
@@ -465,7 +469,9 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_CLEANUP):
-            await self.bot.rcon_manager.set_teamdeathmath(serveraddr)
+            await self.bot.rcon_manager.add_map(serveraddr, SERVER_DM_MAP, 'tdm')
+            await self.bot.rcon_manager.set_teamdeathmath(serveraddr, SERVER_DM_MAP)
+            await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'snd')
             await self.bot.rcon_manager.unban_all_players(serveraddr)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
             await self.bot.rcon_manager.max_players(serveraddr, 10)

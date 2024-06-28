@@ -66,10 +66,10 @@ class RCONManager:
             del self.servers[serveraddr]
 
     @safe_rcon
-    async def set_teamdeathmatch(self, serveraddr: str):
+    async def set_teamdeathmatch(self, serveraddr: str, resource_id: str):
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
-            await rcon.send(f"SwitchMap {SERVER_DM_MAP} tdm")
+            await rcon.send(f"SwitchMap {resource_id} tdm")
 
     @safe_rcon
     async def set_searchndestroy(self, serveraddr: str, resource_id: str):
@@ -77,6 +77,18 @@ class RCONManager:
             rcon = self.servers[serveraddr]
             await rcon.send(f"SwitchMap {resource_id} snd")
     
+    @safe_rcon
+    async def add_map(self, serveraddr: str, resource_id: str, mode: str):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            await rcon.send(f"AddMapRotation {resource_id} {mode}")
+    
+    @safe_rcon
+    async def remove_map(self, serveraddr: str, resource_id: str, mode: str):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            await rcon.send(f"RemoveMapRotation {resource_id} {mode}")
+
     @safe_rcon
     async def server_info(self, serveraddr: str) -> dict:
         if serveraddr in self.servers:
@@ -164,7 +176,15 @@ class RCONManager:
             await rcon.send(f"SwitchMap {map_id} snd")
 
     @safe_rcon
-    async def list_banned_players(self, serveraddr: str):
+    async def list_banned_players(self, serveraddr: str) -> List[str]:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
-            return await rcon.send("Banlist")
+            reply = await rcon.send("Banlist")
+            return reply['BanList']
+    
+    @safe_rcon
+    async def list_maps(self, serveraddr: str) -> List[Dict[str, str]]:
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            reply = await rcon.send("MapList")
+            return reply['MapList']

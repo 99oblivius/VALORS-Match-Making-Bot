@@ -2,80 +2,27 @@ import json
 import logging as log
 from io import BytesIO
 import asyncio
-from datetime import datetime
-import pytz
 
 import nextcord
-from nextcord.ext import commands, tasks
+from nextcord.ext import commands
 
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.utils import format_duration
-from matches import load_ongoing_matches, cleanup_match
+from matches import cleanup_match
 
-from views.match.accept import AcceptView
-from views.match.banning import BanView
-from views.match.map_pick import MapPickView
-from views.match.side_pick import SidePickView
 
 class Queues(commands.Cog):
-
-    @tasks.loop(seconds=60)
-    async def rotate_map_pool(self):
-        now = datetime.now(pytz.timezone('US/Eastern'))
-        if now.minute == 00 and now.hour == 00:
-            settings = await self.bot.store.get_settings(GUILD_ID)
-            maps = await self.bot.store.get_maps(GUILD_ID)
-            new_phase = (settings.mm_maps_phase - 1) % len(maps)
-            await self.bot.store.upsert(BotSettings, guild_id=GUILD_ID, mm_maps_phase=new_phase)
-
-    @rotate_map_pool.before_loop
-    async def wait_rotate_map_pool(self):
-        await self.bot.wait_until_ready()
-
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(QueueButtonsView.create_dummy_persistent(self.bot))
-        self.bot.add_view(AcceptView(self.bot))
-        self.bot.add_view(BanView.create_dummy_persistent(self.bot))
-        self.bot.add_view(MapPickView.create_dummy_persistent(self.bot))
-        self.bot.add_view(SidePickView.create_dummy_persistent(self.bot))
-        self.rotate_map_pool.start()
 
         await self.bot.queue_manager.fetch_and_initialize_users()
         log.info("[Queues] Cog started")
-
-        matches = await self.bot.store.get_ongoing_matches()
-        loop = asyncio.get_event_loop()
-        load_ongoing_matches(loop, self.bot, GUILD_ID, matches)
-
-    #####################
-    # MM SLASH COMMANDS #
-    #####################
-    @nextcord.slash_command(name="mm", description="Match making commands", guild_ids=[GUILD_ID])
-    async def match_making(self, interaction: nextcord.Interaction):
-        pass    
-
-    @match_making.subcommand(name="cancel", description="Cancel a match")
-    async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        staff_role = interaction.guild.get_role(settings.staff_role)
-        if staff_role and not staff_role in interaction.user.roles:
-            msg = await interaction.response.send_message("Missing permissions", ephemeral=True)
-            await asyncio.sleep(1)
-            await msg.delete()
-        if match_id == -1:
-            match = await self.bot.store.get_thread_match(interaction.channel.id)
-            if match: match_id = match.id
-        
-        loop = asyncio.get_event_loop()
-        if not await cleanup_match(loop, match_id):
-                return await interaction.response.send_message(f"Match id `{match_id}` failed to cleanup", ephemeral=True)
-        await interaction.response.send_message(f"Match id {match_id} cleaned up successfully", ephemeral=True)
 
     ########################
     # QUEUE SLASH COMMANDS #
@@ -95,19 +42,6 @@ class Queues(commands.Cog):
     async def set_logs(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_log_channel=interaction.channel.id)
         await interaction.response.send_message("Queue log channel set", ephemeral=True)
-
-    @queue_settings.subcommand(name="accept_period", description="Set match accept period")
-    async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
-        seconds: int=nextcord.SlashOption(min_value=0, max_value=1800)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_accept_period=seconds)
-        await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
-    
-    @set_mm_accept_period.on_autocomplete("seconds")
-    async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        if not seconds or not settings.mm_queue_periods:
-            return await interaction.response.send_autocomplete(choices=[180])
-        await interaction.response.send_autocomplete(choices=[seconds, settings.mm_accept_period])
 
     @queue_settings.subcommand(name="lfg_role", description="Set lfg role")
     async def set_mm_lfg(self, interaction: nextcord.Interaction, lfg: nextcord.Role):
@@ -129,11 +63,6 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
         await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
-
-    @queue_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
-    async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=size)
-        await interaction.response.send_message(f"Match making set to {size} maps range", ephemeral=True)
 
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
         embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
@@ -213,36 +142,6 @@ class Queues(commands.Cog):
         
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel.id)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
-    
-    @queue_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")
-    async def set_map_pool(self, interaction: nextcord.Interaction, 
-        maps: nextcord.Attachment=nextcord.SlashOption(description="Json string for map name and image url (ordered)")):
-        try:
-            file = await maps.read()
-            m = json.loads(file)
-        except Exception:
-            return await interaction.response.send_message(
-                "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
-        
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
-        await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
-        await interaction.response.send_message(
-            f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
-    
-    @queue_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
-    async def get_map_pool(self, interaction: nextcord.Interaction):
-        maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
-        map_dict = {m.map: m.media for m in maps}
-        
-        json_str = json.dumps(map_dict, indent=4)
-        json_bytes = json_str.encode('utf-8')
-        json_file = BytesIO(json_bytes)
-        json_file.seek(0)
-        file = nextcord.File(json_file, filename="map_pool.json")
-        
-        await interaction.response.send_message(
-            "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:1249109243114557461>", file=file, ephemeral=True)
 
 
 def setup(bot):
