@@ -64,6 +64,11 @@ class UserPlatformMappings(Base):
         primaryjoin="and_(UserPlatformMappings.guild_id == MMBotMatchUsers.guild_id, UserPlatformMappings.user_id == MMBotMatchUsers.user_id)")
 
 class RconServers(Base):
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return f'{self.host}:{self.port}' == other
+        return f'{self.host}:{self.port}' == f'{other.host}:{other.port}'
+    
     __tablename__ = 'rcon_servers'
 
     id          = Column(Integer, nullable=False)
@@ -133,15 +138,66 @@ class MMBotUsers(Base):
     user_id       = Column(BigInteger, primary_key=True, nullable=False)
     display_name  = Column(String(32))
     region        = Column(String(32))
-    mmr           = Column(Integer, nullable=False, default=800)
-    games         = Column(Integer, default=0)
-    wins          = Column(Integer, default=0)
-    loss          = Column(Integer, default=0)
-    team_a        = Column(Integer, default=0)
     registered    = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'region'], ['bot_regions.guild_id', 'bot_regions.label']),
+    )
+
+class MMBotUserMatchStats(Base):
+    __tablename__ = 'mm_bot_user_match_stats'
+
+    id             = Column(Integer, primary_key=True)
+    guild_id       = Column(BigInteger, nullable=False)
+    user_id        = Column(BigInteger, nullable=False)
+    match_id       = Column(Integer, nullable=False)
+    mmr            = Column(Integer, nullable=False, default=800)
+    games          = Column(Integer)
+    win            = Column(Boolean)
+    ct_start       = Column(Boolean)
+    score          = Column(Integer)
+    kills          = Column(Integer)
+    deaths         = Column(Integer)
+    assists        = Column(Integer)
+    ping           = Column(Integer)
+    timestamp      = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
+class MMBotUserAggregateStats(Base):
+    __tablename__ = 'mm_bot_user_aggregate_stats'
+
+    guild_id       = Column(BigInteger, primary_key=True, nullable=False)
+    user_id        = Column(BigInteger, primary_key=True, nullable=False)
+    games          = Column(Integer, default=0)
+    wins           = Column(Integer, default=0)
+    losses         = Column(Integer, default=0)
+    abandons       = Column(Integer, default=0)
+    ct_starts      = Column(Integer, default=0)
+    top_score      = Column(Integer, default=0)
+    top_kills      = Column(Integer, default=0)
+    top_assists    = Column(Integer, default=0)
+    total_score    = Column(Integer, default=0)
+    total_kills    = Column(Integer, default=0)
+    total_deaths   = Column(Integer, default=0)
+    total_assists  = Column(Integer, default=0)
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
+class MMBotUserAbandons(Base):
+    __tablename__ = 'mm_bot_user_abandons'
+
+    id         = Column(Integer, primary_key=True, nullable=False)
+    guild_id   = Column(BigInteger, nullable=False)
+    user_id    = Column(BigInteger, nullable=False)
+    timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
 class MMBotMaps(Base):
@@ -186,6 +242,7 @@ class MMBotMatches(Base):
     complete         = Column(Boolean, nullable=False, default=False)
     state            = Column(SmallInteger, nullable=False, default=1)
     b_side           = Column(sq_Enum(Side))
+    serveraddr       = Column(String(51))
 
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'
@@ -251,20 +308,3 @@ class MMBotMatchUsers(Base):
         back_populates="match_users", 
         primaryjoin="and_(MMBotMatchUsers.guild_id == UserPlatformMappings.guild_id, MMBotMatchUsers.user_id == UserPlatformMappings.user_id)")
 
-
-##############
-# MM HISTORY #
-##############
-class MMBotMMRHistory(Base):
-    __tablename__ = 'mm_bot_mmr_history'
-
-    id         = Column(Integer, primary_key=True)
-    guild_id   = Column(BigInteger, nullable=False)
-    user_id    = Column(BigInteger, nullable=False)
-    mmr        = Column(Integer, nullable=False)
-    mmr_delta  = Column(Integer, nullable=False)
-    timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
-
-    __table_args__ = (
-        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
-    )

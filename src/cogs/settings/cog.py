@@ -23,6 +23,7 @@ class Settings(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(RegistryButtonView(self.bot))
+        await self.bot.rcon_manager.clear_dangling_servers()
         log.info("[Queues] Cog started")
     
     @nextcord.slash_command(name="settings", description="Settings", guild_ids=[GUILD_ID])
@@ -48,7 +49,10 @@ class Settings(commands.Cog):
             except nextcord.errors.NotFound: pass
             else: await msg.delete()
         
-        embed = nextcord.Embed(title="Register for Match Making!", color=VALORS_THEME1_2)
+        embed = nextcord.Embed(
+            title="Register for Match Making!", 
+            description="1. Register with your Steam account\n2. Choose your region of origin\n3. Press Join", 
+            color=VALORS_THEME1_2)
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
         await self.bot.store.upsert(BotSettings, 

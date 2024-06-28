@@ -16,7 +16,7 @@ from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
 from utils.utils import format_mm_attendance, format_duration
 
-from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME
+from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT
 from .functions import get_preferred_bans, get_preferred_map, get_preferred_side
 from .ranked_teams import get_teams
 
@@ -47,12 +47,13 @@ class Match:
         def check_state(state: MatchState):
             return True if self.state == state else False
         
-        self.state                = await self.load_state()
-        settings: BotSettings     = await self.bot.store.get_settings(self.guild_id)
-        match                     = await self.bot.store.get_match(self.match_id)
-        users: MMBotQueueUsers    = await self.bot.store.get_users(self.guild_id)
-        players: MMBotMatchUsers  = await self.bot.store.get_players(self.match_id)
-        maps: MMBotMaps           = await self.bot.store.get_maps(self.guild_id)
+        self.state = await self.load_state()
+        settings: BotSettings           = await self.bot.store.get_settings(self.guild_id)
+        match: MMBotMatches             = await self.bot.store.get_match(self.match_id)
+        users: List[MMBotQueueUsers]    = await self.bot.store.get_users(self.guild_id)
+        players: List[MMBotMatchUsers]  = await self.bot.store.get_players(self.match_id)
+        maps: List[MMBotMaps]           = await self.bot.store.get_maps(self.guild_id)
+        serveraddr                      = await self.bot.store.get_serveraddr(self.match_id)
         
         guild = self.bot.get_guild(self.guild_id)
         queue_channel = guild.get_channel(settings.mm_queue_channel)
@@ -63,6 +64,7 @@ class Match:
 
         a_vc          = guild.get_channel(match.a_vc)
         b_vc          = guild.get_channel(match.b_vc)
+
         
         try:
             if match.match_message: match_message = await match_thread.fetch_message(match.match_message)
@@ -298,16 +300,135 @@ class Match:
                         return sum(region_distribution[server_region] for server_region in region_distribution)
                     
                     best_server = max(rcon_servers, key=lambda server: server_score(server.region))
-                    reply = await self.bot.rcon_manager.servers[f'{best_server.host}:{best_server.port}'].send("ServerInfo")
-                    if reply and 'ServerInfo' in reply:
+                    successful = await self.bot.rcon_manager.add_server[f'{best_server.host}:{best_server.port}']
+                    if successful:
                         server = best_server
                         break
                     rcon_servers.remove(best_server)
+                serveraddr = f'{server.host}:{server.port}'
+                await self.bot.store.set_serveraddr(self.match_id, serveraddr)
+                await self.bot.store.use_server(serveraddr)
             else:
                 pass
+            await self.increment_state()
+        
+        if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
+            await self.bot.rcon_manager.set_teamdeathmath(serveraddr)
+            await self.bot.rcon_manager.unban_all_players(serveraddr)
+            await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
+            await self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT)
+
+            server_players = {}
+            while len(server_players) < 10:
+                player_list = await self.bot.rcon_manager.player_list(serveraddr)
+                if current_players != server_players:
+                    current_players = { p['UniqueId'] for p in player_list }
+                    new_players = current_players - server_players
+                    server_players = current_players
+
+                    for platform_id in new_players:
+                        player = next((
+                            player for player in players 
+                            for p in player.user_platform_mappings
+                            if p.platform_id == platform_id
+                        ), None)
+                        teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                        team_list = await self.bot.rcon_manager.inspect_team(serveraddr, teamid)
+                        if player and platform_id not in (p['UniqueId'] for p in team_list):
+                            await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, player)
+                        else:
+                            await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
+                await asyncio.sleep(2)
+            await self.increment_state()
+        
+        if check_state(MatchState.MATCH_START_SND):
+            m = next((m for m in maps if m.map == match.map), maps[0])
+            await self.bot.rcon_manager.set_snd(serveraddr, m.resource_id if m.resource_id else m.map)
+            await self.increment_state()
+        
+        if check_state(MatchState.MATCH_WAIT_FOR_END):
+            team0score = 0
+            team1score = 0
+            while max(team0score, team1score) < 10:
+                reply = await self.bot.rcon_manager.server_info(serveraddr)
+                team0score = int(reply['Team0Score'])
+                team1score = int(reply['Team1Score'])
+                await asyncio.sleep(2)
+
+            # Flipped sides due to mid-game swap
+            b_players_data = await self.bot.rcon_manager.inspect_team(serveraddr, 1 - match.b_side.value)
+            a_players_data = await self.bot.rcon_manager.inspect_team(serveraddr, match.b_side.value)
+            
+            # Determine if Team A won
+            a_won = (
+                team1score == 10 and match.b_side.value == Side.T.value
+            ) or (
+                team0score == 10 and match.b_side.value == Side.CT.value
+            )
+
+            # Get aggregate stats for users
+            users_aggregate_data = await self.bot.store.get_users_aggregate_stats(self.guild_id, [p.user_id for p in players])
+
+            users_match_stats = {}
+            users_aggregate_stats = {}
+
+            # Create a dictionary mapping UniqueId to player data
+            players_dict = {player['UniqueId']: player for player in b_players_data + a_players_data}
+
+            for platform_id, player_data in players_dict.items():
+                player = next((
+                    player for player in players 
+                    for p in player.user_platform_mappings
+                    if p.platform_id == platform_id
+                ), None)
+                
+                if player:
+                    aggregate_data = users_aggregate_data[player.user_id]
+
+                    total_games = aggregate_data.games + 1
+                    win = a_won if player.team == Team.A else not a_won
+                    kills, deaths, assists = map(int, player_data['KDA'].split('/'))
+                    ct_start = (
+                        match.b_side == Side.T and player.team == Team.A
+                        ) or (
+                        match.b_side == Side.CT and player.team == Team.B)
+
+                    users_match_stats[player.user_id] = {
+                        "mmr": 800,
+                        "games": total_games,
+                        "win": win,
+                        "ct_start": ct_start,
+                        "score": int(player_data['Score']),
+                        "kills": kills,
+                        "deaths": deaths,
+                        "assists": assists,
+                        "ping": int(float(player_data['Ping']))
+                    }
+
+                    top_score = max(int(player_data['Score']), aggregate_data.top_score)
+                    users_aggregate_stats[player.user_id] = {
+                        "games": total_games,
+                        "wins": aggregate_data.wins + int(win),
+                        "losses": aggregate_data.losses + int(not win),
+                        "ct_starts": aggregate_data.ct_starts + int(ct_start),
+                        "top_score": top_score,
+                        "top_kills": max(kills, aggregate_data.top_kills),
+                        "top_assists": max(assists, aggregate_data.top_assists),
+                        "total_score": aggregate_data.total_score + int(player_data['Score']),
+                        "total_kills": aggregate_data.total_kills + kills,
+                        "total_deaths": aggregate_data.total_deaths + deaths,
+                        "total_assists": aggregate_data.total_assists + assists
+                    }
+
+            await self.bot.store.add_users_match_stats(self.guild_id, self.match_id, users_match_stats)
+            await self.bot.store.set_users_aggregate_stats(self.guild_id, users_aggregate_stats)
+            
+            await self.increment_state()
 
         
         if check_state(MatchState.CLEANUP):
+            await self.bot.rcon_manager.unban_all_players(serveraddr)
+            await self.bot.rcon_maanager.comp_mode(serveraddr, state=False)
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
             await match_thread.send(embed=embed)
             await asyncio.sleep(10)

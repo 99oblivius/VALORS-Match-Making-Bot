@@ -25,7 +25,9 @@ from .models import (
     MMBotUserMapPicks,
     MMBotUserSidePicks,
     UserPlatformMappings,
-    RconServers
+    RconServers,
+    MMBotUserAggregateStats,
+    MMBotUserMatchStats
 )
 
 from matches import MatchState
@@ -71,6 +73,21 @@ class Database:
 ################
 # RCON SERVERS #
 ################
+    async def set_serveraddr(self, match_id: int, serveraddr: str) -> None:
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotMatches)
+                .where(MMBotMatches.id == match_id)
+                .values(serveraddr=serveraddr))
+            await session.commit()
+        
+    async def get_serveraddr(self, match_id: int) -> None:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches.serveraddr)
+                .where(MMBotMatches.id == match_id))
+            return result.scalars().first()
+        
     async def get_servers(self, free: bool=False) -> List[RconServers]:
         async with self._session_maker() as session:
             if free:
@@ -96,6 +113,7 @@ class Database:
                 .where(
                     RconServers.host == host,
                     RconServers.port == port))
+            await session.commit()
 
     async def use_server(self, serveraddr: str) -> None:
         async with self._session_maker() as session:
@@ -106,6 +124,7 @@ class Database:
                     RconServers.host == host,
                     RconServers.port == port)
                 .values(being_used=True))
+            await session.commit()
 
     async def free_server(self, serveraddr: str) -> None:
         async with self._session_maker() as session:
@@ -116,6 +135,7 @@ class Database:
                     RconServers.host == host,
                     RconServers.port == port)
                 .values(being_used=False))
+            await session.commit()
 
 ###########
 # GET BOT #
@@ -157,6 +177,34 @@ class Database:
                     MMBotUsers.user_id == user_id)
                 .order_by(UserPlatformMappings.platform))
             return result.scalars().first()
+    
+    async def get_users_aggregate_stats(self, guild_id: int, user_ids: List[int]) -> Dict[int, MMBotUserAggregateStats]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserAggregateStats)
+                .where(
+                    MMBotUserAggregateStats.guild_id == guild_id,
+                    MMBotUserAggregateStats.user_id.in_(user_ids)))
+            stats_list = result.scalars().all()
+            return {stat.user_id: stat for stat in stats_list}
+    
+    async def set_users_aggregate_stats(self, guild_id: int, users_data: Dict[int, Dict[int]]) -> None:
+        async with self._session_maker() as session:
+            async with session.begin():
+                for user_id, user_data in users_data.items():
+                    await session.execute(
+                        update(MMBotUserAggregateStats)
+                        .where(
+                            MMBotUserAggregateStats.guild_id == guild_id,
+                            MMBotUserAggregateStats.user_id == user_id)
+                        .values(user_data))
+    
+    async def add_users_match_stats(self, guild_id: int, match_id: int, users_data: Dict[int, Dict[int]]) -> None:
+        async with self._session_maker() as session:
+            async with session.begin():
+                for user_id, user_data in users_data.items():
+                    data = {'guild_id': guild_id, 'user_id': user_id, 'match_id': match_id}
+                    session.add(MMBotUserMatchStats(data.update(user_data)))
     
     async def get_users(self, guild_id: int) -> List[MMBotUsers]:
         async with self._session_maker() as session:
@@ -270,7 +318,6 @@ class Database:
                 ]
                 insert_stmt = insert(MMBotMatchUsers).values(match_users)
                 await session.execute(insert_stmt)
-                await session.commit()
                 return new_match.id
     
     async def unqueue_user(self, channel_id: int, user_id: int):
@@ -539,8 +586,8 @@ class Database:
 ########
 # MAPS #
 ########
-    async def set_maps(self, guild_id: int, maps: List[Tuple[str, str]]):
-        data = [{"guild_id": guild_id, "map": m[0], "resource_id": m[1], "media": m[2], "active": True, "order": n} for n, m in enumerate(maps)]
+    async def set_maps(self, guild_id: int, maps: List[Dict[str, str]]):
+        data = [{"guild_id": guild_id, "map": m[0], "resource_id": m[1]['resource_id'], "media": m[1]['media'], "active": True, "order": n} for n, m in enumerate(maps)]
         
         async with self._session_maker() as session:
             async with session.begin():

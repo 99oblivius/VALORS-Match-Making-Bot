@@ -28,10 +28,10 @@ def exit_cleanup(a: list):
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
-        self.store: Database = Database()
-        self.cache: redis.StrictRedis = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-        self.queue_manager = QueueManager(self)
-        self.rcon_manager = RCONManager(self)
+        self.store: Database              = Database()
+        self.cache: redis.StrictRedis     = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        self.queue_manager: QueueManager  = QueueManager(self)
+        self.rcon_manager: RCONManager    = RCONManager(self)
 
 
 def main():
