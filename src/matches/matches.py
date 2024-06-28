@@ -96,6 +96,15 @@ class Match:
             done_event = asyncio.Event()
             await match_thread.send(''.join(add_mention), embed=embed, view=AcceptView(self.bot, done_event))
 
+            for player in players:
+                member = guild.get_member(player.user_id)
+                if member:
+                    embed = nextcord.Embed(
+                        title="Queue Popped!", 
+                        description=f"`{format_duration(settings.mm_accept_period)}` left to ACCEPT\n<#{match.match_thread}>!", 
+                        color=0x18ff18)
+                    await member.send(embed=embed)
+
             try: await asyncio.wait_for(done_event.wait(), timeout=settings.mm_accept_period)
             except asyncio.TimeoutError:
                 self.state = MatchState.CLEANUP - 1
@@ -345,10 +354,10 @@ class Match:
             server_players = {}
             while len(server_players) < 10:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
+                current_players = { p['UniqueId'] for p in player_list }
                 if current_players != server_players:
-                    current_players = { p['UniqueId'] for p in player_list }
-                    new_players = current_players - server_players
                     server_players = current_players
+                    new_players = current_players - server_players
 
                     for platform_id in new_players:
                         player = next((
