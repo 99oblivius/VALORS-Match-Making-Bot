@@ -11,7 +11,7 @@ from config import *
 from utils.models import BotSettings
 
 from config import *
-from views.regions.select import RegistryButtonView
+from views.register.select import RegistryButtonView
 
 from utils.models import BotRegions, BotSettings
 
@@ -115,15 +115,15 @@ class Settings(commands.Cog):
     @settings.subcommand(name="add_server", description="Add a pavlov server")
     async def add_server(self, interaction: nextcord.Interaction, 
         host: str=nextcord.SlashOption(required=True, description="Server address"),
-        port: str=nextcord.SlashOption(required=True, description="Server port"),
+        port: int=nextcord.SlashOption(min_value=0, max_value=65535, required=True, description="Server port"),
         password: str=nextcord.SlashOption(required=True, description="Server rcon password"),
         region: str=nextcord.SlashOption(required=True)
     ):
-        self.bot.store.add_server(host, port, password, region)
+        await self.bot.store.add_server(host, port, password, region)
         await interaction.response.send_message(
             f"`{region}` Server `{host}`:`{port}` added successfully.", ephemeral=True)
 
-    @set_regions.on_autocomplete("region")
+    @add_server.on_autocomplete("region")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, region: str):
         regions = await self.bot.store.get_regions(interaction.guild.id)
         region_labels = [r.label for r in regions]

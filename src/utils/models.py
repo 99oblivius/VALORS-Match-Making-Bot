@@ -59,10 +59,6 @@ class UserPlatformMappings(Base):
         UniqueConstraint('guild_id', 'user_id', 'platform', name='unique_guild_user_platform'),
     )
 
-    match_users = relationship("MMBotMatchUsers", 
-        back_populates="user_platform_mappings", 
-        primaryjoin="and_(UserPlatformMappings.guild_id == MMBotMatchUsers.guild_id, UserPlatformMappings.user_id == MMBotMatchUsers.user_id)")
-
 class RconServers(Base):
     def __eq__(self, other):
         if isinstance(other, str):
@@ -71,7 +67,7 @@ class RconServers(Base):
     
     __tablename__ = 'rcon_servers'
 
-    id          = Column(Integer, nullable=False)
+    id          = Column(Integer, primary_key=True, nullable=False)
     host        = Column(String(45), nullable=False)
     port        = Column(Integer, nullable=False)
     password    = Column(Text, nullable=False)
@@ -304,7 +300,6 @@ class MMBotMatchUsers(Base):
         ForeignKeyConstraint(['match_id'], ['mm_bot_matches.id']),
     )
 
-    user_platform_mappings = relationship("UserPlatformMappings", 
-        back_populates="match_users", 
-        primaryjoin="and_(MMBotMatchUsers.guild_id == UserPlatformMappings.guild_id, MMBotMatchUsers.user_id == UserPlatformMappings.user_id)")
+    user_platform_mappings = relationship("UserPlatformMappings",
+        primaryjoin="and_(MMBotMatchUsers.guild_id == foreign(UserPlatformMappings.guild_id), MMBotMatchUsers.user_id == foreign(UserPlatformMappings.user_id))")
 

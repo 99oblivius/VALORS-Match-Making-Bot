@@ -12,38 +12,29 @@ from utils.models import MMBotMatchUsers, Team
 from config import SERVER_DM_MAP
 
 
-class PavlovState(IntEnum):
-    NOT_STARTED   = auto()
-    INITIALIZING  = auto()
-    RUNNING       = auto()
-    ENDED         = auto()
-
-
 class RCONManager:
-    def safe_rcon(self, func):
+    def safe_rcon(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            serveraddr = args[0]
+            self = args[0]
+            serveraddr = args[1]
             if serveraddr not in self.server_timeouts:
                 self.server_timeouts[serveraddr] = asyncio.Lock()
-            
-            await self.server_timeouts[serveraddr].acquire()
-            
-            try:
-                result = await func(*args, **kwargs)
-            except ConnectionRefusedError:
-                if serveraddr in self.servers:
-                    del self.servers[serveraddr]
-                    del self.server_timeouts[serveraddr]
-                self.server_timeouts[serveraddr].release()
-                return None
-            
-            async def release_lock():
-                await asyncio.sleep(0.15)
-                self.server_timeouts[serveraddr].release()
-            
-            asyncio.create_task(release_lock())
-            return result
+
+            async with self.server_timeouts[serveraddr]:
+                try:
+                    result = func(*args, **kwargs)
+                except ConnectionRefusedError:
+                    if serveraddr in self.servers:
+                        del self.servers[serveraddr]
+                        del self.server_timeouts[serveraddr]
+                    return None
+                
+                async def release_lock():
+                    await asyncio.sleep(0.15)
+                    self.server_timeouts[serveraddr].release()
+                asyncio.create_task(release_lock())
+                return result
         return wrapper
 
     def __init__(self, bot: commands.Bot):
@@ -177,20 +168,3 @@ class RCONManager:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
             return await rcon.send("Banlist")
-
-class Pavlov:
-    def __init__(self, loop):
-        self.state: PavlovState = PavlovState.NOT_STARTED
-        self._conn: PavlovRCON = PavlovRCON("127.0.0.1", 9104, "password")
-        loop.create_task(self.match_state())
-    
-    async def match_state(self):
-        self.state = PavlovState.INITIALIZING
-        while True:
-            data = await self._conn.send("ServerInfo")
-            if not data:
-                break
-            self.state = PavlovState.RUNNING
-            await asyncio.sleep(1)
-            
-        self.state = PavlovState.ENDED

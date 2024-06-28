@@ -1,6 +1,6 @@
 import logging
 from logging import getLogger
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 from asyncio import AbstractEventLoop
 from sqlalchemy import inspect, delete, update, func, or_, text
 from sqlalchemy.dialects.postgresql import insert
@@ -173,10 +173,10 @@ class Database:
             result = await session.execute(
                 select(UserPlatformMappings)
                 .where(
-                    MMBotUsers.guild_id == guild_id, 
-                    MMBotUsers.user_id == user_id)
+                    UserPlatformMappings.guild_id == guild_id, 
+                    UserPlatformMappings.user_id == user_id)
                 .order_by(UserPlatformMappings.platform))
-            return result.scalars().first()
+            return result.scalars().all()
     
     async def get_users_aggregate_stats(self, guild_id: int, user_ids: List[int]) -> Dict[int, MMBotUserAggregateStats]:
         async with self._session_maker() as session:
@@ -188,7 +188,7 @@ class Database:
             stats_list = result.scalars().all()
             return {stat.user_id: stat for stat in stats_list}
     
-    async def set_users_aggregate_stats(self, guild_id: int, users_data: Dict[int, Dict[int]]) -> None:
+    async def set_users_aggregate_stats(self, guild_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 for user_id, user_data in users_data.items():
@@ -199,7 +199,7 @@ class Database:
                             MMBotUserAggregateStats.user_id == user_id)
                         .values(user_data))
     
-    async def add_users_match_stats(self, guild_id: int, match_id: int, users_data: Dict[int, Dict[int]]) -> None:
+    async def add_users_match_stats(self, guild_id: int, match_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 for user_id, user_data in users_data.items():
