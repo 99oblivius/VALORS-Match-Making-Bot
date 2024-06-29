@@ -11,7 +11,7 @@ from config import *
 from utils.models import BotSettings
 
 from config import *
-from views.register.select import RegistryButtonView
+from views.register import RegistryButtonView
 
 from utils.models import BotRegions, BotSettings
 

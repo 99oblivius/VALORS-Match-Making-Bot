@@ -3,11 +3,11 @@ from logging import getLogger
 from typing import List, Tuple, Dict, Any
 from datetime import timedelta, datetime, timezone
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func, or_, text
+from sqlalchemy import inspect, delete, update, func, or_, text, and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
-from sqlalchemy.orm import sessionmaker, joinedload
+from sqlalchemy.orm import sessionmaker, joinedload, selectinload
 from sqlalchemy.future import select
 from config import DATABASE_URL
 
@@ -15,7 +15,7 @@ from .models import (
     BotSettings, 
     BotRegions,
     MMBotQueueUsers,
-    MMBotMatchUsers,
+    MMBotMatchPlayers,
     MMBotMatches,
     MMBotUsers,
     MMBotUserBans,
@@ -27,7 +27,7 @@ from .models import (
     MMBotUserSidePicks,
     UserPlatformMappings,
     RconServers,
-    MMBotUserAggregateStats,
+    MMBotUserSummaryStats,
     MMBotUserMatchStats,
     MMBotUserAbandons
 )
@@ -103,6 +103,15 @@ class Database:
                     .order_by(RconServers.id))
             return result.scalars().all()
     
+    async def get_server(self, host: str, port: int) -> RconServers:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(RconServers)
+                .where(
+                    RconServers.host == host, 
+                    RconServers.port == port))
+            return result.scalars().first()
+    
     async def add_server(self, host: str, port: int, password: str, region: str) -> None:
         async with self._session_maker() as session:
             session.add(RconServers(host=host, port=port, password=password, region=region))
@@ -124,7 +133,7 @@ class Database:
                 update(RconServers)
                 .where(
                     RconServers.host == host,
-                    RconServers.port == port)
+                    RconServers.port == int(port))
                 .values(being_used=True))
             await session.commit()
 
@@ -135,7 +144,7 @@ class Database:
                 update(RconServers)
                 .where(
                     RconServers.host == host,
-                    RconServers.port == port)
+                    RconServers.port == int(port))
                 .values(being_used=False))
             await session.commit()
 
@@ -180,25 +189,25 @@ class Database:
                 .order_by(UserPlatformMappings.platform))
             return result.scalars().all()
     
-    async def get_users_aggregate_stats(self, guild_id: int, user_ids: List[int]) -> Dict[int, MMBotUserAggregateStats]:
+    async def get_users_summary_stats(self, guild_id: int, user_ids: List[int]) -> Dict[int, MMBotUserSummaryStats]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserAggregateStats)
+                select(MMBotUserSummaryStats)
                 .where(
-                    MMBotUserAggregateStats.guild_id == guild_id,
-                    MMBotUserAggregateStats.user_id.in_(user_ids)))
+                    MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.user_id.in_(user_ids)))
             stats_list = result.scalars().all()
             return {stat.user_id: stat for stat in stats_list}
     
-    async def set_users_aggregate_stats(self, guild_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
+    async def set_users_summary_stats(self, guild_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 for user_id, user_data in users_data.items():
                     await session.execute(
-                        update(MMBotUserAggregateStats)
+                        update(MMBotUserSummaryStats)
                         .where(
-                            MMBotUserAggregateStats.guild_id == guild_id,
-                            MMBotUserAggregateStats.user_id == user_id)
+                            MMBotUserSummaryStats.guild_id == guild_id,
+                            MMBotUserSummaryStats.user_id == user_id)
                         .values(user_data))
     
     async def add_users_match_stats(self, guild_id: int, match_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
@@ -206,13 +215,15 @@ class Database:
             async with session.begin():
                 for user_id, user_data in users_data.items():
                     data = {'guild_id': guild_id, 'user_id': user_id, 'match_id': match_id}
-                    session.add(MMBotUserMatchStats(data.update(user_data)))
+                    data.update(user_data)
+                    session.add(MMBotUserMatchStats(**data))
     
-    async def get_users(self, guild_id: int) -> List[MMBotUsers]:
+    async def get_users(self, guild_id: int, user_ids: List[int] = None) -> List[MMBotUsers]:
         async with self._session_maker() as session:
-            result = await session.execute(
-                select(MMBotUsers)
-                .where(MMBotUsers.guild_id == guild_id))
+            query = select(MMBotUsers).options(selectinload(MMBotUsers.summary_stats)).where(MMBotUsers.guild_id == guild_id)
+            if user_ids:
+                query = query.where(MMBotUsers.user_id.in_(user_ids))
+            result = await session.execute(query)
             return result.scalars().all()
     
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
@@ -247,11 +258,11 @@ class Database:
     async def get_user_team(self, guild_id: int, user_id: int, match_id: int) -> Team:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMatchUsers.team)
+                select(MMBotMatchPlayers.team)
                 .where(
-                    MMBotMatchUsers.guild_id == guild_id,
-                    MMBotMatchUsers.user_id == user_id,
-                    MMBotMatchUsers.match_id == match_id))
+                    MMBotMatchPlayers.guild_id == guild_id,
+                    MMBotMatchPlayers.user_id == user_id,
+                    MMBotMatchPlayers.match_id == match_id))
             return result.scalars().first()
 
 
@@ -282,23 +293,22 @@ class Database:
                     last_abandon_record.ignored = True
                     await session.commit()
 
-    async def get_abandon_count_last_period(self, guild_id: int, user_id: int, period: int=60)  -> Tuple[int, datetime]:
+    async def get_abandon_count_last_period(self, guild_id: int, user_id: int, period: int=60) -> Tuple[int, datetime]:
         async with self._session_maker() as session:
-            last_abandon_subquery = (
+            last_abandon_query = (
                 select(MMBotUserAbandons.timestamp)
                 .where(
                     MMBotUserAbandons.guild_id == guild_id, 
                     MMBotUserAbandons.user_id == user_id,
                     MMBotUserAbandons.ignored == False)
                 .order_by(MMBotUserAbandons.timestamp.desc())
-                .limit(1)
-            ).scalar_subquery()
+                .limit(1))
 
-            result = await session.execute(last_abandon_subquery)
+            result = await session.execute(last_abandon_query)
             last_abandon = result.scalar()
 
             if last_abandon is None:
-                return 0
+                return 0, None
             
             count_abandons = (
                 select(func.count(MMBotUserAbandons.id))
@@ -307,8 +317,10 @@ class Database:
                     MMBotUserAbandons.user_id == user_id,
                     MMBotUserAbandons.ignored == False,
                     MMBotUserAbandons.timestamp >= last_abandon - timedelta(days=period)))
+            
             result = await session.execute(count_abandons)
-            return result.scalar(), last_abandon
+            count = result.scalar()
+            return count, last_abandon
 
 #########
 # QUEUE #
@@ -374,7 +386,7 @@ class Database:
                     { 'guild_id': user.guild_id, 'user_id': user.user_id, 'match_id': new_match.id }
                     for user in queue_users
                 ]
-                insert_stmt = insert(MMBotMatchUsers).values(match_users)
+                insert_stmt = insert(MMBotMatchPlayers).values(match_users)
                 await session.execute(insert_stmt)
                 return new_match.id
     
@@ -440,39 +452,48 @@ class Database:
                     MMBotMatches.a_thread == thread_id,
                     MMBotMatches.b_thread == thread_id)))
             return result.scalars().first()
-    
-    async def get_players(self, match_id: int) -> List[MMBotMatchUsers]:
+
+    async def get_players(self, match_id: int) -> List[MMBotMatchPlayers]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMatchUsers)
-                .options(joinedload(MMBotMatchUsers.user_platform_mappings))
-                .where(MMBotMatchUsers.match_id == match_id))
+                select(MMBotMatchPlayers)
+                .options(selectinload(MMBotMatchPlayers.user_platform_mappings))
+                .where(MMBotMatchPlayers.match_id == match_id))
+            return result.scalars().all()
+    
+    async def get_unaccepted_players(self, match_id: int) -> List[MMBotMatchPlayers]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatchPlayers)
+                .where(
+                    MMBotMatchPlayers.match_id == match_id, 
+                    MMBotMatchPlayers.accepted == False))
             return result.scalars().all()
         
-    async def get_player(self, match_id: int, user_id: int) -> MMBotMatchUsers:
+    async def get_player(self, match_id: int, user_id: int) -> MMBotMatchPlayers:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMatchUsers)
-                .options(joinedload(MMBotMatchUsers.user_platform_mappings))
-                .where(MMBotMatchUsers.match_id == match_id)
-                .where(MMBotMatchUsers.user_id == user_id))
+                select(MMBotMatchPlayers)
+                .options(joinedload(MMBotMatchPlayers.user_platform_mappings))
+                .where(MMBotMatchPlayers.match_id == match_id)
+                .where(MMBotMatchPlayers.user_id == user_id))
             return result.scalars().first()
     
     async def get_accepted_players(self, match_id: int) -> int:
         async with self._session_maker() as session:
-            stmt = select(func.count(MMBotMatchUsers.user_id)).where(
-                MMBotMatchUsers.match_id == match_id,
-                MMBotMatchUsers.accepted == True)
+            stmt = select(func.count(MMBotMatchPlayers.user_id)).where(
+                MMBotMatchPlayers.match_id == match_id,
+                MMBotMatchPlayers.accepted == True)
             result = await session.execute(stmt)
             return result.scalars().first()
     
     async def is_user_in_match(self, user_id: int) -> bool:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotMatchUsers)
-                .join(MMBotMatches, MMBotMatchUsers.match_id == MMBotMatches.id)
+                select(MMBotMatchPlayers)
+                .join(MMBotMatches, MMBotMatchPlayers.match_id == MMBotMatches.id)
                 .filter(
-                    MMBotMatchUsers.user_id == user_id,
+                    MMBotMatchPlayers.user_id == user_id,
                     MMBotMatches.complete == False))
             match_user = result.scalars().first()
             return match_user is not None
@@ -482,18 +503,18 @@ class Database:
             async with session.begin():
                 for team, user_ids in user_teams.items():
                     await session.execute(
-                        update(MMBotMatchUsers)
+                        update(MMBotMatchPlayers)
                         .where(
-                            MMBotMatchUsers.match_id == match_id,
-                            MMBotMatchUsers.user_id.in_(user_ids))
+                            MMBotMatchPlayers.match_id == match_id,
+                            MMBotMatchPlayers.user_id.in_(user_ids))
                         .values(team=team))
 
     async def remove_match_and_players(self, match_id: int) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 await session.execute(
-                    delete(MMBotMatchUsers)
-                    .where(MMBotMatchUsers.match_id == match_id))
+                    delete(MMBotMatchPlayers)
+                    .where(MMBotMatchPlayers.match_id == match_id))
                 await session.execute(
                     delete(MMBotMatches)
                     .where(MMBotMatches.id == match_id))

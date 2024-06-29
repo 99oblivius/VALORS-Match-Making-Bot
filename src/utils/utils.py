@@ -2,7 +2,7 @@ from typing import List
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from utils.models import MMBotMatchUsers
+from utils.models import MMBotMatchPlayers
 
 def format_duration(seconds):
     intervals = (
@@ -18,7 +18,7 @@ def format_duration(seconds):
         if value != 0: result.append(f"{value} {name}")
     return ' '.join(result) if result else "0 seconds"
 
-def format_mm_attendance(users: List[MMBotMatchUsers]):
+def format_mm_attendance(users: List[MMBotMatchPlayers]):
     return "\n".join([f"{'🟢' if user.accepted else '🔴'} <@{user.user_id}>" for user in users])
 
 def format_team(team: bool) -> str:
@@ -38,7 +38,9 @@ def generate_auth_url(cache, guild_id: int, user_id: int, platform: str) -> str:
 def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
     if last_abandon is None:
         last_abandon = datetime.now(timezone.utc)
-    if count == 1:
+    if count == 0:
+        return 0
+    elif count == 1:
         cooldown_end = last_abandon + timedelta(hours=2)
     elif count == 2:
         cooldown_end = last_abandon + timedelta(hours=6)

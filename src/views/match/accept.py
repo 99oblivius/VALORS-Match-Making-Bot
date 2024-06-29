@@ -28,7 +28,7 @@ class AcceptView(nextcord.ui.View):
             await msg.delete()
             return
         
-        await self.bot.store.update(MMBotMatchUsers, 
+        await self.bot.store.update(MMBotMatchPlayers, 
             guild_id=interaction.guild.id, match_id=match.id, user_id=interaction.user.id, accepted=True)
         players = await self.bot.store.get_players(match.id)
         

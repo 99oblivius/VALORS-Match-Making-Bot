@@ -13,9 +13,10 @@ from sqlalchemy import (
     ForeignKey, 
     ForeignKeyConstraint,
     UniqueConstraint,
-    func
+    func,
+    event
 )
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import relationship
 
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -140,6 +141,8 @@ class MMBotUsers(Base):
         ForeignKeyConstraint(['guild_id', 'region'], ['bot_regions.guild_id', 'bot_regions.label']),
     )
 
+    summary_stats = relationship("MMBotUserSummaryStats", uselist=False, back_populates="user")
+
 class MMBotUserMatchStats(Base):
     __tablename__ = 'mm_bot_user_match_stats'
 
@@ -162,11 +165,12 @@ class MMBotUserMatchStats(Base):
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
-class MMBotUserAggregateStats(Base):
-    __tablename__ = 'mm_bot_user_aggregate_stats'
+class MMBotUserSummaryStats(Base):
+    __tablename__ = 'mm_bot_user_summary_stats'
 
     guild_id       = Column(BigInteger, primary_key=True, nullable=False)
     user_id        = Column(BigInteger, primary_key=True, nullable=False)
+    mmr            = Column(Integer, default=800)
     games          = Column(Integer, default=0)
     wins           = Column(Integer, default=0)
     losses         = Column(Integer, default=0)
@@ -183,6 +187,8 @@ class MMBotUserAggregateStats(Base):
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
+    
+    user = relationship("MMBotUsers", back_populates="summary_stats")
 
 class MMBotUserAbandons(Base):
     __tablename__ = 'mm_bot_user_abandons'
@@ -287,8 +293,8 @@ class MMBotUserSidePicks(Base):
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
-class MMBotMatchUsers(Base):
-    __tablename__ = 'mm_bot_match_users'
+class MMBotMatchPlayers(Base):
+    __tablename__ = 'mm_bot_match_players'
 
     guild_id  = Column(BigInteger, primary_key=True, nullable=False)
     user_id   = Column(BigInteger, primary_key=True, nullable=False)
@@ -302,5 +308,5 @@ class MMBotMatchUsers(Base):
     )
 
     user_platform_mappings = relationship("UserPlatformMappings",
-        primaryjoin="and_(MMBotMatchUsers.guild_id == foreign(UserPlatformMappings.guild_id), MMBotMatchUsers.user_id == foreign(UserPlatformMappings.user_id))")
+        primaryjoin="and_(MMBotMatchPlayers.guild_id == foreign(UserPlatformMappings.guild_id), MMBotMatchPlayers.user_id == foreign(UserPlatformMappings.user_id))")
 

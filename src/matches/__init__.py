@@ -33,8 +33,11 @@ async def cleanup_match(loop, match_id) -> bool:
         await task
     except asyncio.CancelledError:
         pass
-
-    await match.change_state(MatchState.CLEANUP)
+    
+    if match.state > MatchState.MATCH_FIND_SERVER:
+        await match.change_state(MatchState.MATCH_CLEANUP)
+    else:
+        await match.change_state(MatchState.CLEANUP)
 
     task = loop.create_task(match.run())
     task.add_done_callback(lambda t: running_matches.pop(match.match_id, None))

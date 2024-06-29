@@ -55,26 +55,27 @@ class Matches(commands.Cog):
     # MM SLASH COMMANDS #
     #####################
 
-    @nextcord.slashcommand(name="mm_cancel", description="Cancel a match")
+    @nextcord.slash_command(name="mm_cancel", description="Cancel a match")
     async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        staff_role = interaction.guild.get_role(settings.staff_role)
+        staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if staff_role and not staff_role in interaction.user.roles:
             msg = await interaction.response.send_message("Missing permissions", ephemeral=True)
             await asyncio.sleep(1)
             await msg.delete()
+            return
         if match_id == -1:
             match = await self.bot.store.get_thread_match(interaction.channel.id)
             if match: match_id = match.id
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):
-                return await interaction.response.send_message(
-                    f"Match id `{match_id}` failed to cleanup", ephemeral=True)
+            return await interaction.response.send_message(
+                f"Match id `{match_id}` failed to cleanup", ephemeral=True)
         await interaction.response.send_message(
-            f"Match id {match_id} cleaned up successfully", ephemeral=True)
+            f"Match id {match_id} cleaning up", ephemeral=True)
     
-    @nextcord.slashcommand(name="mm_abandon", description="Abandon a match")
+    @nextcord.slash_command(name="mm_abandon", description="Abandon a match")
     async def mm_abandon(self, interaction: nextcord.Interaction):
         match = await self.bot.store.get_thread_match(interaction.channel.id)
         if not match:

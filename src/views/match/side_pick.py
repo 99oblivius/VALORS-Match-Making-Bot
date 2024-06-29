@@ -19,11 +19,11 @@ class SidePickView(nextcord.ui.View):
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
 
-        button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:T")
+        button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:CT")
         button.callback = partial(instance.pick_callback, button)
         instance.add_item(button)
 
-        button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:CT")
+        button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:T")
         button.callback = partial(instance.pick_callback, button)
         instance.add_item(button)
         return instance

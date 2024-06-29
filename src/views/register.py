@@ -10,7 +10,8 @@ from utils.utils import generate_auth_url
 from utils.models import (
     BotRegions,
     MMBotUsers,
-    Platform
+    Platform,
+    MMBotUserSummaryStats
 )
 
 
@@ -57,6 +58,9 @@ class RegionSelect(nextcord.ui.Select):
             guild_id=interaction.guild.id, 
             user_id=interaction.user.id, 
             region=self.values[0])
+        await self.bot.store.upsert(MMBotUserSummaryStats, 
+            guild_id=interaction.guild.id, 
+            user_id=interaction.user.id)
         embed = nextcord.Embed(
             title="Regions", 
             description=f"You have successfully selected `{self.values[0]}`", 

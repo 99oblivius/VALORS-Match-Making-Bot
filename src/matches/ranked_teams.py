@@ -5,15 +5,9 @@ import random
 
 from utils.models import MMBotUsers
 
-
-class MMBotUsers:
-    def __init__(self, user_id: int, mmr: int):
-        self.user_id = user_id
-        self.mmr = mmr
-
 def preparing_user_data(users: List[MMBotUsers]) -> Tuple[int, np.ndarray, np.ndarray]:
     num_players = len(users)
-    mmr_results = np.array([user.mmr for user in users], dtype=np.int32)
+    mmr_results = np.array([user.summary_stats.mmr for user in users], dtype=np.int32)
     rankings = np.argsort(mmr_results)[::-1]
     return num_players, mmr_results, rankings
 

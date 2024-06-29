@@ -99,15 +99,22 @@ class QueueButtonsView(nextcord.ui.View):
             self.ready_lock[lock_id] = asyncio.Lock()
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
-        in_match = await self.bot.store.is_user_in_match(interaction.user.id)
+        user_platforms = await self.bot.store.get_user_platforms(interaction.guild.id, interaction.user.id)
+        if not user_platforms:
+            return await interaction.response.send_message(
+                "Verify with at least one platform.", ephemeral=True)
+        
         in_queue = False
         if not settings: return await interaction.response.send_message(
             "Settings not found.", ephemeral=True)
+        
+        user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
         if not user: return await interaction.response.send_message(
             "You are not registered.", ephemeral=True)
         if not user.region: return await interaction.response.send_message(
             "You must select your region.", ephemeral=True)
+        
+        in_match = await self.bot.store.is_user_in_match(interaction.user.id)
         if in_match:
             msg = await interaction.response.send_message(
             "Your current match has not ended yet.", ephemeral=True)
