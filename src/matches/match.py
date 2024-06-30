@@ -264,6 +264,15 @@ class Match:
             await a_thread.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_bans=bans)
             await self.increment_state()
+            
+        if check_state(MatchState.PICKING_START):
+            embed = nextcord.Embed(title="Team A pick map", description=f"<#{a_thread.id}>", color=HOME_THEME)
+            embed.add_field(name="Team A", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name="Team B", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+            await match_message.edit(embed=embed)
+            await self.increment_state()
         
         if check_state(MatchState.A_PICK):
             time_to_pick = 20
@@ -285,6 +294,15 @@ class Match:
             embed.title = "A picked"
             await b_thread.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick.map)
+            await self.increment_state()
+        
+        if check_state(MatchState.PICK_SWAP):
+            embed = nextcord.Embed(title="Team B pick side", description=f"<#{b_thread.id}>", color=AWAY_THEME)
+            embed.add_field(name="Team A", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+            embed.add_field(name="Team B", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+            await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
