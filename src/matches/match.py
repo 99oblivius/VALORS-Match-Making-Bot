@@ -76,7 +76,7 @@ class Match:
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
         serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
-        if self.state > MatchState.MATCH_FIND_SERVER:
+        if serveraddr:
             host, port = serveraddr.split(':')
             server = await self.bot.store.get_server(host, int(port))
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
@@ -103,7 +103,6 @@ class Match:
         except Exception: pass
 
         if check_state(MatchState.NOT_STARTED):
-            print("NOT_STARTED")
             await self.increment_state()
         
         if check_state(MatchState.CREATE_MATCH_THREAD):
@@ -136,7 +135,7 @@ class Match:
                             await member.send(embed=embed)
 
             notify_tasks = [
-                asyncio.create_task(notify_unaccepted_players(20)),
+                asyncio.create_task(notify_unaccepted_players(30)),
                 asyncio.create_task(notify_unaccepted_players(settings.mm_accept_period - 30))
             ]
 
@@ -216,7 +215,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_BANS):
-            time_to_ban = 30
+            time_to_ban = 20
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=HOME_THEME)
@@ -227,7 +226,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.A_BAN)
-            bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
+            bans = get_preferred_bans(maps, bans, total_bans=2)
             view = ChosenBansView(bans)
             embed = nextcord.Embed(title="You banned", color=HOME_THEME)
             await a_message.edit(embed=embed, view=view)
@@ -246,7 +245,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_BANS):
-            time_to_ban = 30
+            time_to_ban = 20
             players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=AWAY_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, match)
@@ -257,7 +256,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
             
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.B_BAN)
-            bans = get_preferred_bans([m.map for m in maps], bans, total_bans=2)
+            bans = get_preferred_bans(maps, bans, total_bans=2)
             view = ChosenBansView(bans)
             embed = nextcord.Embed(title="You banned", color=AWAY_THEME)
             await b_message.edit(embed=embed, view=view)
@@ -267,7 +266,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.A_PICK):
-            time_to_pick = 30
+            time_to_pick = 20
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=HOME_THEME)
@@ -289,7 +288,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
-            time_to_pick = 30
+            time_to_pick = 20
             players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
             embed = nextcord.Embed(title="Pick your side", description=format_duration(time_to_pick), color=AWAY_THEME)
@@ -338,8 +337,7 @@ class Match:
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in players])
             rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             server = None
-            if rcon_servers:
-                print("RCON_SERVERS BEING CHECKED")
+            if not rcon_servers:
                 while server is None or len(rcon_servers) > 0:
                     region_distribution = Counter([user.region for user in users])
 
@@ -347,9 +345,7 @@ class Match:
                         return sum(region_distribution[server_region] for server_region in region_distribution)
                     
                     best_server = max(rcon_servers, key=lambda server: server_score(server.region))
-                    print("GOING THROUGH SERVER ", best_server)
                     successful = await self.bot.rcon_manager.add_server(best_server.host, best_server.port, best_server.password)
-                    log.critical(f"AAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAA\nsuccessful server add: {successful}")
                     if successful:
                         server = best_server
                         break
@@ -357,7 +353,7 @@ class Match:
                 serveraddr = f'{server.host}:{server.port}'
                 await self.bot.store.set_serveraddr(self.match_id, serveraddr)
                 await self.bot.store.use_server(serveraddr)
-            if not rcon_servers or server is None:
+            if rcon_servers or server is None:
                 embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
                 embed.set_image(match_map.media)
                 embed.add_field(name=f"Team A - {match_sides[0].name}", 
@@ -365,7 +361,7 @@ class Match:
                 embed.add_field(name=f"Team B - {match_sides[1].name}", 
                     value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
                 embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-                await match_thread.edit(embed=embed)
+                await match_message.edit(embed=embed)
                 self.state = MatchState.CLEANUP - 1
             await self.increment_state()
         
@@ -522,9 +518,10 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
-            await self.bot.store.free_server(serveraddr)
-            await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
-            await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
+            if serveraddr:
+                await self.bot.store.free_server(serveraddr)
+                await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
+                await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
             await match_thread.send(embed=embed)
             await asyncio.sleep(10)

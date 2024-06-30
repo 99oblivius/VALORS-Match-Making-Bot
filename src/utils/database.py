@@ -571,22 +571,22 @@ class Database:
                 result = await session.execute(
                     select(MMBotMatches.a_bans)
                     .where(MMBotMatches.id == match_id))
-                bans = result.scalars().first()
-                return bans or []
+                bans = result.scalar_one_or_none()
+                return bans if bans else []
             elif team == Team.B:
                 result = await session.execute(
                     select(MMBotMatches.b_bans)
                     .where(MMBotMatches.id == match_id))
-                bans = result.scalars().first()
-                return bans or []
+                bans = result.scalar_one_or_none()
+                return bans if bans else []
             else:
                 result = await session.execute(
                     select(MMBotMatches.a_bans, MMBotMatches.b_bans)
                     .where(MMBotMatches.id == match_id))
-                row = result.fetchone()
-                if row:
-                    a_bans, b_bans = row
-                    return (a_bans or []) + (b_bans or [])
+                bans = result.one_or_none()
+                if bans:
+                    a_bans, b_bans = bans
+                    return (a_bans if a_bans else []) + (b_bans if b_bans else [])
                 return []
     
     async def get_user_map_bans(self, match_id: int, user_id: int) -> List[str]:
@@ -618,7 +618,7 @@ class Database:
             pick_counts = result.all()
             return [(row.map, row.pick_count) for row in pick_counts]
 
-    async def get_map_votes(self, match_id: int) -> List[MMBotMaps]:
+    async def get_map_votes(self, match_id: int) -> List[MMBotUserMapPicks]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserMapPicks)

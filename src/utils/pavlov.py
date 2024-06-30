@@ -18,8 +18,6 @@ class RCONManager:
             serveraddr = args[1]
             if serveraddr not in self.server_timeouts:
                 self.server_timeouts[serveraddr] = asyncio.Lock()
-
-            print(f"servers: {self.servers}")
             async with self.server_timeouts[serveraddr]:
                 attempts = 0
                 while attempts < kwargs.get('retry_attempts', 10):
@@ -57,9 +55,7 @@ class RCONManager:
         reply = None
         rcon = PavlovRCON(host, port, password)
         try:
-            print("TRYING TO ADD SERVER")
             reply = await rcon.send("ServerInfo")
-            print(f"[ADD SERVER] REPLY::: {reply}")
         except ConnectionRefusedError:
             return False
         if reply and reply.get('Successful', False):
@@ -77,8 +73,6 @@ class RCONManager:
     async def set_teamdeathmatch(self, serveraddr: str, resource_id: str, *args, **kwargs):
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
-            print("rcon: ", rcon)
-            print("resource_id: ", resource_id)
             return await rcon.send(f"SwitchMap {resource_id} TDM")
 
     @safe_rcon

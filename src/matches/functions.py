@@ -1,8 +1,9 @@
 import random
 from typing import List
+from utils.models import MMBotMaps, MMBotUserMapPicks
 
-def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> List[str]:
-    map_options = { m: 0 for m in maps }
+def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:
+    map_options = { m.map: 0 for m in maps }
     for ban in bans: map_options[ban] += 1
 
     ban_votes = [(k, v) for k, v in sorted(map_options.items(), key=lambda item: item[1], reverse=True)]
@@ -17,16 +18,15 @@ def get_preferred_bans(maps: List[str], bans: List[str], total_bans: int=2) -> L
         bans.append(chosen_ban[0])
         ban_votes.remove(chosen_ban)
     
-    order_map = {m: n for n, m in enumerate(maps)}
+    order_map = {m.map: n for n, m in enumerate(maps)}
     bans.sort(key=lambda x: order_map[x])
     
     return bans
 
-from utils.models import MMBotMaps, MMBotUserMapPicks
 def get_preferred_map(maps: List[MMBotMaps], picks: List[MMBotUserMapPicks]) -> MMBotMaps:
     random.shuffle(picks)
-    map_dict = {m.map: m for m in maps}
-    pick_options = {m.map: 0 for m in maps}
+    map_dict = { m.map: m for m in maps }
+    pick_options = { m.map: 0 for m in maps }
     for pick in picks:
         if pick.map in pick_options:
             pick_options[pick.map] += 1

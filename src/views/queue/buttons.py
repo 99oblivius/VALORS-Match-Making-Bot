@@ -100,9 +100,9 @@ class QueueButtonsView(nextcord.ui.View):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         user_platforms = await self.bot.store.get_user_platforms(interaction.guild.id, interaction.user.id)
-        if not user_platforms:
-            return await interaction.response.send_message(
-                "Verify with at least one platform.", ephemeral=True)
+        # if not user_platforms:
+        #     return await interaction.response.send_message(
+        #         "Verify with at least one platform.", ephemeral=True)
         
         in_queue = False
         if not settings: return await interaction.response.send_message(

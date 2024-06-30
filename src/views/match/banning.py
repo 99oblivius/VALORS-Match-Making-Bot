@@ -13,7 +13,7 @@ class BanView(nextcord.ui.View):
     def __init__(self, bot, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.timeout = None
-        self.bot = bot
+        self.bot: commands.Bot = bot
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
