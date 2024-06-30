@@ -41,6 +41,7 @@ class QueueManager:
                 await user.send(embed=embed)
             self.active_users.pop(user_id, None)
             self.tasks.pop(user_id, None)
+            self.bot.new_activity_value -= 1
         except Exception as e:
             log.critical(f"[QueueManager] {repr(e)}")
 
@@ -50,17 +51,20 @@ class QueueManager:
         self.active_users[user_id] = expiry_timestamp
         task = asyncio.create_task(self.reminder_and_kick(user_id, expiry_timestamp))
         self.tasks[user_id] = task
+        self.bot.new_activity_value += 1
 
     def remove_user(self, user_id):
         if user_id in self.tasks:
             self.tasks[user_id].cancel()
             self.tasks.pop(user_id, None)
         self.active_users.pop(user_id, None)
+        self.bot.new_activity_value -= 1
 
-    async def fetch_and_initialize_users(self):
+    async def fetch_and_initialize_users(self) -> int:
         settings = await self.bot.store.get_settings(GUILD_ID)
         try:
             queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
+            self.bot.new_activity_value = len(queue_users) if queue_users else 0
         except AttributeError:
             return log.warning("[QueueManager] No GUILDS")
         for user in queue_users:

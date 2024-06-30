@@ -1,21 +1,36 @@
 import json
 import logging as log
 from io import BytesIO
-import asyncio
+from datetime import datetime
 
 import nextcord
-from nextcord.ext import commands
+from nextcord.ext import commands, tasks
 
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.utils import format_duration
-from matches import cleanup_match
 
 
 class Queues(commands.Cog):
+    @tasks.loop(seconds=5)
+    async def queue_activity(self):
+        try:
+            if self.bot.last_activity_value != self.bot.new_activity_value:
+                self.bot.last_activity_value = self.bot.new_activity_value
+                await self.bot.change_presence(
+                    activity=nextcord.CustomActivity(
+                        name=f"Queue [{self.bot.new_activity_value}/{MATCH_PLAYER_COUNT}]"))
+        except Exception as e:
+            print(f"Exception in queue_activity: {repr(e)}")
+
+    @queue_activity.before_loop
+    async def wait_queue_activity(self):
+        await self.bot.wait_until_ready()
+    
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.queue_activity.start()
     
     @commands.Cog.listener()
     async def on_ready(self):

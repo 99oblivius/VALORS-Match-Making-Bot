@@ -30,7 +30,6 @@ class MatchState(IntEnum):
     MATCH_START_SND         = auto()
     MATCH_WAIT_FOR_END      = auto()
     MATCH_CLEANUP           = auto()
-    MATCH_SCORES            = auto()
 
     CLEANUP                 = auto()
     FINISHED                = auto()
