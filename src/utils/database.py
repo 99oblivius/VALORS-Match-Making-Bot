@@ -209,14 +209,6 @@ class Database:
                             MMBotUserSummaryStats.guild_id == guild_id,
                             MMBotUserSummaryStats.user_id == user_id)
                         .values(user_data))
-    
-    async def add_users_match_stats(self, guild_id: int, match_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
-        async with self._session_maker() as session:
-            async with session.begin():
-                for user_id, user_data in users_data.items():
-                    data = {'guild_id': guild_id, 'user_id': user_id, 'match_id': match_id}
-                    data.update(user_data)
-                    session.add(MMBotUserMatchStats(**data))
 
     async def upsert_user_match_stats(self, guild_id: int, match_id: int, user_stats: Dict[int, Dict[str, Any]]) -> None:
         async with self._session_maker() as session:
@@ -242,24 +234,16 @@ class Database:
     
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
         async with self._session_maker() as session:
+            stmt = insert(MMBotUsers).values(guild_id=guild_id, user_id=user_id)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['guild_id', 'user_id'])
+            await session.execute(stmt)
+            await session.commit()
+
             result = await session.execute(
                 select(MMBotUsers)
-                .where(
-                    MMBotUsers.guild_id == guild_id, 
-                    MMBotUsers.user_id == user_id))
-            user = result.scalars().first()
-            
-            if user is None:
-                session.add(MMBotUsers(guild_id=guild_id, user_id=user_id,))
-                await session.commit()
-            
-                result = await session.execute(
-                    select(MMBotUsers)
-                    .where(
-                        MMBotUsers.guild_id == guild_id, 
-                        MMBotUsers.user_id == user_id))
-                user = result.scalars().first()
-            return user
+                .where(MMBotUsers.guild_id == guild_id, MMBotUsers.user_id == user_id)
+            )
+            return result.scalars().first()
 
     async def null_user_region(self, guild_id: int, label: str):
         async with self._session_maker() as session:
@@ -357,20 +341,18 @@ class Database:
             return result.scalars().all()
     
     async def upsert_queue_user(self, user_id: int, guild_id: int, queue_channel: int, queue_expiry: int):
-        if await self.in_queue(guild_id, user_id):
-            async with self._session_maker() as session:
-                await session.execute(
-                    update(MMBotQueueUsers)
-                    .where(
-                        MMBotQueueUsers.user_id == user_id,
-                        MMBotQueueUsers.guild_id == guild_id,
-                        MMBotQueueUsers.queue_channel == queue_channel, 
-                        MMBotQueueUsers.in_queue == True)
-                    .values(queue_expiry=queue_expiry))
-                await session.commit()
-            return True
-        await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
-        return False
+        async with self._session_maker() as session:
+            stmt = insert(MMBotQueueUsers).values(
+                user_id=user_id,
+                guild_id=guild_id,
+                queue_channel=queue_channel,
+                queue_expiry=queue_expiry,
+                in_queue=True)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['user_id', 'guild_id', 'queue_channel'],
+                set_=dict(queue_expiry=queue_expiry, in_queue=True))
+            await session.execute(stmt)
+            await session.commit()
     
     async def unqueue_add_match_users(self, settings: BotSettings, channel_id: int) -> int:
         async with self._session_maker() as session:
@@ -546,20 +528,15 @@ class Database:
 ##############
 # MATCH BANS #
 ##############
-    async def set_map_bans(self, match_id: int, bans: list, team: bool):
+    async def set_map_bans(self, match_id: int, bans: list, team: Team):
         async with self._session_maker() as session:
+            stmt = update(MMBotMatches).where(MMBotMatches.id == match_id)
             if team == Team.A:
-                await session.execute(
-                    update(MMBotMatches)
-                    .where(MMBotMatches.id == match_id)
-                    .values(a_bans=bans))
-                await session.commit()
+                stmt = stmt.values(a_bans=bans)
             elif team == Team.B:
-                await session.execute(
-                    update(MMBotMatches)
-                    .where(MMBotMatches.id == match_id)
-                    .values(b_bans=bans))
-                await session.commit()
+                stmt = stmt.values(b_bans=bans)
+            await session.execute(stmt)
+            await session.commit()
 
     async def get_ban_counts(self, guild_id: int, match_id: int, phase: Phase) -> List[Tuple[str, int]]:
         async with self._session_maker() as session:

@@ -474,30 +474,24 @@ class Match:
 
             users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in players])
 
-            while max(team_scores) < 10:
-                reply = (await self.bot.rcon_manager.server_info(serveraddr)).get('ServerInfo', {})
-                team_scores[0] = int(reply.get('Team0Score', 0))
-                team_scores[1] = int(reply.get('Team1Score', 0))
-                current_round = int(reply.get('RoundNumber', 0))
-
-                players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
-                players_dict = {player['UniqueId']: player for player in players_data.get('InspectList', [])}
-
+            async def update_player_stats(players_data, current_round):
+                updates = {}
                 for player in players:
                     user_id = player.user_id
                     platform_id = next((p.platform_id for p in player.user_platform_mappings), None)
                     
-                    if platform_id in players_dict:
-                        player_data = players_dict[platform_id]
+                    if platform_id in players_data:
+                        player_data = players_data[platform_id]
                         disconnection_tracker[user_id] = 0
 
                         if user_id not in users_match_stats:
+                            current_mmr = users_summary_data[user_id].mmr
                             users_match_stats[user_id] = {
-                                "mmr": None,
-                                "games": users_summary_data.get(user_id, {}).get('games', 0) + 1,
+                                "mmr_before": current_mmr,
+                                "mmr_change": None,
+                                "games": users_summary_data[user_id].games + 1,
                                 "win": None,
-                                "ct_start": (match.b_side == Side.T and player.team == Team.A) or 
-                                            (match.b_side == Side.CT and player.team == Team.B),
+                                "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
                                 "score": 0,
                                 "kills": 0,
                                 "deaths": 0,
@@ -519,61 +513,77 @@ class Match:
                             "rounds_played": current_round
                         })
                         
-                        await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, user_id, users_match_stats[user_id])
-
+                        updates[user_id] = users_match_stats[user_id]
                     else:
-                        disconnection_tracker[user_id] += 1
-                        if disconnection_tracker[user_id] >= 5 and user_id not in abandoned_users:
-                            abandoned_users.append(user_id)
-                            await self.bot.store.add_abandon(self.guild_id, user_id)
-                            
-                            # Update the match table
-                            await self.bot.store.update_match_abandonment(self.match_id, abandoned_users)
-                            
-                            # Notify the match thread
-                            await match_thread.send(f"<@{user_id}> has been marked as abandoned due to disconnection.")
+                        await handle_player_disconnection(user_id)
 
-                if current_round > last_round_number:
-                    last_round_number = current_round
-                    log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+                if updates:
+                    await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, updates)
+
+            async def handle_player_disconnection(user_id):
+                disconnection_tracker[user_id] += 1
+                if disconnection_tracker[user_id] >= 5 and user_id not in abandoned_users:
+                    abandoned_users.append(user_id)
+                    await self.bot.store.add_abandon(self.guild_id, user_id)
+                    await self.bot.store.update_match_abandons(self.match_id, abandoned_users)
+                    await match_thread.send(f"<@{user_id}> has been marked as abandoned due to disconnection.")
+
+            while max(team_scores) < 10:
+                try:
+                    reply = (await self.bot.rcon_manager.server_info(serveraddr)).get('ServerInfo', {})
+                    team_scores[0] = int(reply.get('Team0Score', 0))
+                    team_scores[1] = int(reply.get('Team1Score', 0))
+                    current_round = int(reply.get('RoundNumber', 0))
+
+                    players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
+                    players_dict = {player['UniqueId']: player for player in players_data.get('InspectList', [])}
+
+                    await update_player_stats(players_dict, current_round)
+
+                    if current_round > last_round_number:
+                        last_round_number = current_round
+                        log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+
+                except Exception as e:
+                    log.error(f"Error during match {self.match_id}: {e}")
 
                 await asyncio.sleep(2)
-
-            # Determine the winner
+            
             a_won = (team_scores[1] == 10 and match.b_side == Side.T) or (team_scores[0] == 10 and match.b_side == Side.CT)
 
-            # Final update for all players
+            final_updates = {}
             for player in players:
                 user_id = player.user_id
                 if user_id in users_match_stats:
-                    win = a_won if player.team == Team.A else not a_win
-                    mmr_change = calculate_mmr_change(users_match_stats[user_id], win, user_id in abandoned_users)
-                    users_match_stats[user_id]["win"] = win
-                    users_match_stats[user_id]["mmr"] = mmr_change
-                    await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, user_id, {"win": win, "mmr": mmr_change})
+                    win = a_won if player.team == Team.A else not a_won
+                    current_stats = users_match_stats[user_id]
+                    
+                    mmr_change = calculate_mmr_change(current_stats, win, user_id in abandoned_users)
+                    current_stats.update({ "win": win, "mmr_change": mmr_change })
+                    final_updates[user_id] = current_stats
 
-            # Update summary stats
+            await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, final_updates)
+
             users_summary_stats = {}
-
             for player in players:
                 user_id = player.user_id
                 if user_id in users_match_stats:
                     match_stats = users_match_stats[user_id]
-                    summary_data = users_summary_data.get(user_id, {})
+                    summary_data = users_summary_data[user_id]
 
                     users_summary_stats[user_id] = {
-                        "mmr": summary_data.get('mmr', 800) + match_stats['mmr'],
-                        "games": summary_data.get('games', 0) + 1,
-                        "wins": summary_data.get('wins', 0) + int(match_stats['win']),
-                        "losses": summary_data.get('losses', 0) + int(not match_stats['win']),
-                        "ct_starts": summary_data.get('ct_starts', 0) + int(match_stats['ct_start']),
-                        "top_score": max(match_stats['score'], summary_data.get('top_score', 0)),
-                        "top_kills": max(match_stats['kills'], summary_data.get('top_kills', 0)),
-                        "top_assists": max(match_stats['assists'], summary_data.get('top_assists', 0)),
-                        "total_score": summary_data.get('total_score', 0) + match_stats['score'],
-                        "total_kills": summary_data.get('total_kills', 0) + match_stats['kills'],
-                        "total_deaths": summary_data.get('total_deaths', 0) + match_stats['deaths'],
-                        "total_assists": summary_data.get('total_assists', 0) + match_stats['assists']
+                        "mmr": summary_data.mmr + match_stats['mmr'],
+                        "games": summary_data.games + 1,
+                        "wins": summary_data.wins + int(match_stats['win']),
+                        "losses": summary_data.losses + int(not match_stats['win']),
+                        "ct_starts": summary_data.ct_starts + int(match_stats['ct_start']),
+                        "top_score": max(match_stats['score'], summary_data.top_score),
+                        "top_kills": max(match_stats['kills'], summary_data.top_kills),
+                        "top_assists": max(match_stats['assists'], summary_data.top_assists),
+                        "total_score": summary_data.total_score + match_stats['score'],
+                        "total_kills": summary_data.total_kills + match_stats['kills'],
+                        "total_deaths": summary_data.total_deaths + match_stats['deaths'],
+                        "total_assists": summary_data.total_assists + match_stats['assists']
                     }
 
             await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
