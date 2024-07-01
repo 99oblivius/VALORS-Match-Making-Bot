@@ -355,7 +355,7 @@ class Match:
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in players])
             rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             server = None
-            if not rcon_servers:
+            if rcon_servers:
                 while server is None or len(rcon_servers) > 0:
                     region_distribution = Counter([user.region for user in users])
 
@@ -371,7 +371,7 @@ class Match:
                 serveraddr = f'{server.host}:{server.port}'
                 await self.bot.store.set_serveraddr(self.match_id, serveraddr)
                 await self.bot.store.use_server(serveraddr)
-            if rcon_servers or server is None:
+            if not rcon_servers or server is None:
                 embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
                 embed.set_image(match_map.media)
                 embed.add_field(name=f"Team A - {match_sides[0].name}", 
@@ -384,6 +384,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
+            match = await self.bot.store.get_match(self.match_id)
             await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.unban_all_players(serveraddr)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
@@ -400,33 +401,38 @@ class Match:
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
-            embed.add_field(name="Server", value=f"`{server_name}`")
+            embed.add_field(name="Server", value=f"`{server_name}`", inline=False)
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             await match_message.edit(embed=embed)
 
-            server_players = {}
+            server_players = set()
             while len(server_players) < MATCH_PLAYER_COUNT:
                 log.info(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
-                current_players = { p['UniqueId'] for p in player_list.get('PlayerList', []) }
-                print(f"current_players:\n{current_players}\nserver_players:\n{server_players}\n\n")
-                if current_players != server_players:
-                    server_players = current_players
-                    new_players = current_players - server_players
-
+                current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
+                
+                new_players = current_players - server_players
+                if new_players:
+                    log.info(f"[{self.match_id}] New players joined: {new_players}")
                     for platform_id in new_players:
                         player = next((
                             player for player in players 
                             for p in player.user_platform_mappings
                             if p.platform_id == platform_id
                         ), None)
-                        teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
-                        team_list = await self.bot.rcon_manager.inspect_team(serveraddr, teamid)
-                        if player and platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
-                            await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
+                        
+                        if player:
+                            teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                            team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
+                            if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
+                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
                         else:
+                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
+                
+                server_players = current_players
                 await asyncio.sleep(2)
             await self.increment_state()
         
@@ -437,41 +443,11 @@ class Match:
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
             for m in server_maps.get('MapList', []):
                 await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'])
-
-            embed = nextcord.Embed(title="Match", description="Match started!\nMay the best team win!", color=VALORS_THEME1)
-            embed.set_image(match_map.media)
-            embed.add_field(name=f"Team A - {match_sides[0].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
-            embed.add_field(name=f"Team B - {match_sides[1].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
-            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-            await match_message.edit(embed=embed)
-            await self.increment_state()
-        
-        if check_state(MatchState.MATCH_WAIT_FOR_END):
-            team0score = 0
-            team1score = 0
-            while max(team0score, team1score) < 10:
-                reply = (await self.bot.rcon_manager.server_info(serveraddr)).get('ServerInfo', None)
-                team0score = int(reply.get('Team0Score', 0))
-                team1score = int(reply.get('Team1Score', 0))
-                await asyncio.sleep(2)
             
-            a_won = (
-                team1score == 10 and match.b_side.value == Side.T.value
-            ) or (
-                team0score == 10 and match.b_side.value == Side.CT.value
-            )
+            player_list = await self.bot.rcon_manager.player_list(serveraddr)
+            current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
 
-            users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in players])
-
-            users_match_stats = {}
-            users_summary_stats = {}
-
-            players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
-            players_dict = { player['UniqueId']: player for player in players_data.get('InspectList', []) }
-
-            for platform_id, player_data in players_dict.items():
+            for platform_id in current_players:
                 player = next((
                     player for player in players 
                     for p in player.user_platform_mappings
@@ -479,45 +455,127 @@ class Match:
                 ), None)
                 
                 if player:
-                    summary_data = users_summary_data[player.user_id]
+                    teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                    team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
+                    if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
+                        log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                        await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
 
-                    total_games = summary_data.games + 1
-                    win = a_won if player.team == Team.A else not a_won
-                    kills, deaths, assists = map(int, player_data['KDA'].split('/'))
-                    ct_start = (
-                        match.b_side == Side.T and player.team == Team.A
-                        ) or (
-                        match.b_side == Side.CT and player.team == Team.B)
+            embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
+            await match_thread.send(embed=embed)
+            await self.increment_state()
+        
+        if check_state(MatchState.MATCH_WAIT_FOR_END):
+            team_scores = [0, 0]
+            users_match_stats = {}
+            disconnection_tracker = {player.user_id: 0 for player in players}
+            last_round_number = 0
+            abandoned_users = []
 
-                    users_match_stats[player.user_id] = {
-                        "mmr": 800,
-                        "games": total_games,
-                        "win": win,
-                        "ct_start": ct_start,
-                        "score": int(player_data['Score']),
-                        "kills": kills,
-                        "deaths": deaths,
-                        "assists": assists,
-                        "ping": int(float(player_data['Ping']))
+            users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in players])
+
+            while max(team_scores) < 10:
+                reply = (await self.bot.rcon_manager.server_info(serveraddr)).get('ServerInfo', {})
+                team_scores[0] = int(reply.get('Team0Score', 0))
+                team_scores[1] = int(reply.get('Team1Score', 0))
+                current_round = int(reply.get('RoundNumber', 0))
+
+                players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
+                players_dict = {player['UniqueId']: player for player in players_data.get('InspectList', [])}
+
+                for player in players:
+                    user_id = player.user_id
+                    platform_id = next((p.platform_id for p in player.user_platform_mappings), None)
+                    
+                    if platform_id in players_dict:
+                        player_data = players_dict[platform_id]
+                        disconnection_tracker[user_id] = 0
+
+                        if user_id not in users_match_stats:
+                            users_match_stats[user_id] = {
+                                "mmr": None,
+                                "games": users_summary_data.get(user_id, {}).get('games', 0) + 1,
+                                "win": None,
+                                "ct_start": (match.b_side == Side.T and player.team == Team.A) or 
+                                            (match.b_side == Side.CT and player.team == Team.B),
+                                "score": 0,
+                                "kills": 0,
+                                "deaths": 0,
+                                "assists": 0,
+                                "ping": None,
+                                "rounds_played": 0
+                            }
+
+                        kills, deaths, assists = map(int, player_data['KDA'].split('/'))
+                        score = int(player_data['Score'])
+                        ping = int(float(player_data['Ping']))
+
+                        users_match_stats[user_id].update({
+                            "score": score,
+                            "kills": kills,
+                            "deaths": deaths,
+                            "assists": assists,
+                            "ping": ping,
+                            "rounds_played": current_round
+                        })
+                        
+                        await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, user_id, users_match_stats[user_id])
+
+                    else:
+                        disconnection_tracker[user_id] += 1
+                        if disconnection_tracker[user_id] >= 5 and user_id not in abandoned_users:
+                            abandoned_users.append(user_id)
+                            await self.bot.store.add_abandon(self.guild_id, user_id)
+                            
+                            # Update the match table
+                            await self.bot.store.update_match_abandonment(self.match_id, abandoned_users)
+                            
+                            # Notify the match thread
+                            await match_thread.send(f"<@{user_id}> has been marked as abandoned due to disconnection.")
+
+                if current_round > last_round_number:
+                    last_round_number = current_round
+                    log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+
+                await asyncio.sleep(2)
+
+            # Determine the winner
+            a_won = (team_scores[1] == 10 and match.b_side == Side.T) or (team_scores[0] == 10 and match.b_side == Side.CT)
+
+            # Final update for all players
+            for player in players:
+                user_id = player.user_id
+                if user_id in users_match_stats:
+                    win = a_won if player.team == Team.A else not a_win
+                    mmr_change = calculate_mmr_change(users_match_stats[user_id], win, user_id in abandoned_users)
+                    users_match_stats[user_id]["win"] = win
+                    users_match_stats[user_id]["mmr"] = mmr_change
+                    await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, user_id, {"win": win, "mmr": mmr_change})
+
+            # Update summary stats
+            users_summary_stats = {}
+
+            for player in players:
+                user_id = player.user_id
+                if user_id in users_match_stats:
+                    match_stats = users_match_stats[user_id]
+                    summary_data = users_summary_data.get(user_id, {})
+
+                    users_summary_stats[user_id] = {
+                        "mmr": summary_data.get('mmr', 800) + match_stats['mmr'],
+                        "games": summary_data.get('games', 0) + 1,
+                        "wins": summary_data.get('wins', 0) + int(match_stats['win']),
+                        "losses": summary_data.get('losses', 0) + int(not match_stats['win']),
+                        "ct_starts": summary_data.get('ct_starts', 0) + int(match_stats['ct_start']),
+                        "top_score": max(match_stats['score'], summary_data.get('top_score', 0)),
+                        "top_kills": max(match_stats['kills'], summary_data.get('top_kills', 0)),
+                        "top_assists": max(match_stats['assists'], summary_data.get('top_assists', 0)),
+                        "total_score": summary_data.get('total_score', 0) + match_stats['score'],
+                        "total_kills": summary_data.get('total_kills', 0) + match_stats['kills'],
+                        "total_deaths": summary_data.get('total_deaths', 0) + match_stats['deaths'],
+                        "total_assists": summary_data.get('total_assists', 0) + match_stats['assists']
                     }
 
-                    top_score = max(int(player_data['Score']), summary_data.top_score)
-                    users_summary_stats[player.user_id] = {
-                        "mmr": 800,
-                        "games": total_games,
-                        "wins": summary_data.wins + int(win),
-                        "losses": summary_data.losses + int(not win),
-                        "ct_starts": summary_data.ct_starts + int(ct_start),
-                        "top_score": top_score,
-                        "top_kills": max(kills, summary_data.top_kills),
-                        "top_assists": max(assists, summary_data.top_assists),
-                        "total_score": summary_data.total_score + int(player_data['Score']),
-                        "total_kills": summary_data.total_kills + kills,
-                        "total_deaths": summary_data.total_deaths + deaths,
-                        "total_assists": summary_data.total_assists + assists
-                    }
-
-            await self.bot.store.add_users_match_stats(self.guild_id, self.match_id, users_match_stats)
             await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
             await self.increment_state()
         

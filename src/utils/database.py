@@ -217,6 +217,20 @@ class Database:
                     data = {'guild_id': guild_id, 'user_id': user_id, 'match_id': match_id}
                     data.update(user_data)
                     session.add(MMBotUserMatchStats(**data))
+
+    async def upsert_user_match_stats(self, guild_id: int, match_id: int, user_stats: Dict[int, Dict[str, Any]]) -> None:
+        async with self._session_maker() as session:
+            async with session.begin():
+                for user_id, stats in user_stats.items():
+                    stmt = insert(MMBotUserMatchStats).values(
+                        guild_id=guild_id,
+                        user_id=user_id,
+                        match_id=match_id,
+                        **stats)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['guild_id', 'user_id', 'match_id'],
+                        set_=stats)
+                    await session.execute(stmt)
     
     async def get_users(self, guild_id: int, user_ids: List[int] = None) -> List[MMBotUsers]:
         async with self._session_maker() as session:
@@ -321,6 +335,14 @@ class Database:
             result = await session.execute(count_abandons)
             count = result.scalar()
             return count, last_abandon
+
+    async def update_match_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotMatches)
+                .where(MMBotMatches.id == match_id)
+                .values(abandoned_by=abandoned_user_ids))
+            await session.commit()
 
 #########
 # QUEUE #
