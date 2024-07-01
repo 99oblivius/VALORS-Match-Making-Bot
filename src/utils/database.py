@@ -210,7 +210,7 @@ class Database:
                             MMBotUserSummaryStats.user_id == user_id)
                         .values(user_data))
 
-    async def upsert_user_match_stats(self, guild_id: int, match_id: int, user_stats: Dict[int, Dict[str, Any]]) -> None:
+    async def upsert_users_match_stats(self, guild_id: int, match_id: int, user_stats: Dict[int, Dict[str, Any]]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 for user_id, stats in user_stats.items():
@@ -320,8 +320,12 @@ class Database:
             count = result.scalar()
             return count, last_abandon
 
-    async def update_match_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
+    async def set_matche_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
         async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotUserMatchStats)
+                .where(MMBotUserMatchStats.match_id == match_id)
+                .values(abandoned=True))
             await session.execute(
                 update(MMBotMatches)
                 .where(MMBotMatches.id == match_id)

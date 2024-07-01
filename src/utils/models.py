@@ -177,7 +177,6 @@ class MMBotUserSummaryStats(Base):
     games          = Column(Integer, default=0)
     wins           = Column(Integer, default=0)
     losses         = Column(Integer, default=0)
-    abandons       = Column(Integer, default=0)
     ct_starts      = Column(Integer, default=0)
     top_score      = Column(Integer, default=0)
     top_kills      = Column(Integer, default=0)
