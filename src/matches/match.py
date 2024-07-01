@@ -1,8 +1,6 @@
 import asyncio
 from functools import wraps
 import logging as log
-import time
-from enum import Enum
 import random
 from typing import List
 from collections import Counter
@@ -17,7 +15,7 @@ from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
 from utils.utils import format_mm_attendance, format_duration
 
-from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP
+from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP, STARTING_MMR
 from .functions import get_preferred_bans, get_preferred_map, get_preferred_side, calculate_mmr_change
 from .ranked_teams import get_teams
 
@@ -482,7 +480,7 @@ class Match:
                         player_data = players_dict[platform_id]
                         if user_id not in users_match_stats:
                             users_match_stats[user_id] = {
-                                "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).mmr,
+                                "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
                                 "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
                                 "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
                                 "score": 0,
@@ -539,17 +537,17 @@ class Match:
                                 user_id = player.user_id
                                 await self.bot.store.add_abandon(self.guild_id, user_id)
                                 await match_thread.send(f"<@{user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
-                                ally_team = match.a_mmr if player.team == Team.A else match.b_mmr
-                                enemy_team = match.b_mmr if player.team == Team.A else match.a_mmr
-                                users_match_stats[user_id]['mmr_change'] = calculate_mmr_change(
-                                    users_match_stats[user_id], abandoned=True, ally_team_avg_mmr=ally_team, enemy_team_avg_mmr=enemy_team)
+                                ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
+                                enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
+                                users_match_stats[user_id]['mmr_change'] = calculate_mmr_change(users_match_stats[user_id], 
+                                    abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
                                 abandonee_match_update[user_id] = users_match_stats[user_id]
                                 abandonee_summary_update[user_id] = { "mmr": users_summary_data[user_id].mmr + users_match_stats[user_id]['mmr_change'] }
 
                         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, abandonee_match_update)
                         await self.bot.store.set_users_summary_stats(self.guild_id, abandonee_summary_update)
                         break
-                    
+
                     if is_new_round:
                         last_round_number = current_round
                         log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
@@ -561,18 +559,20 @@ class Match:
                 await asyncio.sleep(2)
             
             if not abandoned_users:
-                # flipped due to teams swapping
-                a_won = (team_scores[1] > team_scores[0] and match.b_side == Side.T) or (team_scores[0] > team_scores[1] and match.b_side == Side.CT)
-
                 final_updates = {}
                 for player in players:
                     user_id = player.user_id
                     if user_id in users_match_stats:
-                        win = a_won if player.team == Team.A else not a_won
+                        ct_start = current_stats['ct_start']
+                        win = team_scores[1] > team_scores[0] if ct_start else team_scores[0] > team_scores[1]
                         current_stats = users_match_stats[user_id]
-                        ally_team = match.a_mmr if player.team == Team.A else match.b_mmr
-                        enemy_team = match.b_mmr if player.team == Team.A else match.a_mmr
-                        mmr_change = calculate_mmr_change(current_stats, win=win, ally_team_avg_mmr=ally_team, enemy_team_avg_mmr=enemy_team)
+
+                        ally_score = team_scores[1] if ct_start else team_scores[0]
+                        enemy_score = team_scores[0] if ct_start else team_scores[1]
+                        ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
+                        enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
+                        mmr_change = calculate_mmr_change(current_stats, 
+                            ally_team_score=ally_score, enemy_team_score=enemy_score, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win)
                         current_stats.update({ "win": win, "mmr_change": mmr_change })
                         final_updates[user_id] = current_stats
 

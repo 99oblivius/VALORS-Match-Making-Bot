@@ -14,7 +14,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     UniqueConstraint,
     func,
-    event
+    Float
 )
 from sqlalchemy.orm import relationship
 
@@ -150,8 +150,8 @@ class MMBotUserMatchStats(Base):
     guild_id       = Column(BigInteger, nullable=False)
     user_id        = Column(BigInteger, nullable=False)
     match_id       = Column(Integer, nullable=False)
-    mmr_before     = Column(Integer)
-    mmr_change     = Column(Integer)
+    mmr_before     = Column(Float)
+    mmr_change     = Column(Float)
     games          = Column(Integer)
     win            = Column(Boolean)
     ct_start       = Column(Boolean)
@@ -171,20 +171,22 @@ class MMBotUserMatchStats(Base):
 class MMBotUserSummaryStats(Base):
     __tablename__ = 'mm_bot_user_summary_stats'
 
-    guild_id       = Column(BigInteger, primary_key=True, nullable=False)
-    user_id        = Column(BigInteger, primary_key=True, nullable=False)
-    mmr            = Column(Integer, default=800)
-    games          = Column(Integer, default=0)
-    wins           = Column(Integer, default=0)
-    losses         = Column(Integer, default=0)
-    ct_starts      = Column(Integer, default=0)
-    top_score      = Column(Integer, default=0)
-    top_kills      = Column(Integer, default=0)
-    top_assists    = Column(Integer, default=0)
-    total_score    = Column(Integer, default=0)
-    total_kills    = Column(Integer, default=0)
-    total_deaths   = Column(Integer, default=0)
-    total_assists  = Column(Integer, default=0)
+    guild_id        = Column(BigInteger, primary_key=True, nullable=False)
+    user_id         = Column(BigInteger, primary_key=True, nullable=False)
+    mmr             = Column(Float, default=800)
+    games           = Column(Integer, default=0)
+    wins            = Column(Integer, default=0)
+    losses          = Column(Integer, default=0)
+    ct_starts       = Column(Integer, default=0)
+    top_score       = Column(Integer, default=0)
+    top_kills       = Column(Integer, default=0)
+    top_assists     = Column(Integer, default=0)
+    top_winstreak   = Column(Integer, default=0)
+    top_losestreak  = Column(Integer, default=0)
+    total_score     = Column(Integer, default=0)
+    total_kills     = Column(Integer, default=0)
+    total_deaths    = Column(Integer, default=0)
+    total_assists   = Column(Integer, default=0)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
@@ -237,8 +239,8 @@ class MMBotMatches(Base):
     b_message        = Column(BigInteger)
     a_bans           = Column(ARRAY(String(32)))
     b_bans           = Column(ARRAY(String(32)))
-    a_mmr            = Column(Integer)
-    b_mmr            = Column(Integer)
+    a_mmr            = Column(Float)
+    b_mmr            = Column(Float)
     map              = Column(String(32))
     a_score          = Column(SmallInteger)
     b_score          = Column(SmallInteger)
