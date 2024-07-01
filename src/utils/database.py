@@ -320,7 +320,7 @@ class Database:
             count = result.scalar()
             return count, last_abandon
 
-    async def set_matche_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
+    async def set_match_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
         async with self._session_maker() as session:
             await session.execute(
                 update(MMBotUserMatchStats)
