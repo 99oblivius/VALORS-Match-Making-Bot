@@ -3,7 +3,7 @@ from logging import getLogger
 from typing import List, Tuple, Dict, Any
 from datetime import timedelta, datetime, timezone
 from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func, or_, text, and_
+from sqlalchemy import inspect, delete, update, func, or_, text, and_, desc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -759,3 +759,53 @@ class Database:
                     MMBotUserSidePicks.match_id == match_id,
                     MMBotUserSidePicks.user_id == user_id))
             return result.scalars().all()
+
+###############
+# MATCH STATs #
+###############
+    async def get_user_summary_stats(self, guild_id: int, user_id: int) -> MMBotUserSummaryStats:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserSummaryStats)
+                .where(
+                    MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.user_id == user_id))
+            return result.scalars().first()
+
+    async def get_recent_match_stats(self, guild_id: int, user_id: int, limit: int = 10) -> List[MMBotUserMatchStats]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMatchStats)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id)
+                .order_by(desc(MMBotUserMatchStats.timestamp))
+                .limit(limit))
+            return result.scalars().all()
+
+    async def get_match_stats_in_period(self, guild_id: int, user_id: int, start_date: datetime, end_date: datetime) -> List[MMBotUserMatchStats]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMatchStats)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.timestamp.between(start_date, end_date))
+                .order_by(MMBotUserMatchStats.timestamp))
+            return result.scalars().all()
+
+    async def get_avg_stats_last_n_games(self, guild_id: int, user_id: int, n: int = 10) -> Dict[str, float]:
+        async with self._session_maker() as session:
+            subquery = select(MMBotUserMatchStats).where(
+                MMBotUserMatchStats.guild_id == guild_id,
+                MMBotUserMatchStats.user_id == user_id
+            ).order_by(desc(MMBotUserMatchStats.timestamp)).limit(n).subquery()
+
+            result = await session.execute(
+                select(
+                    func.avg(subquery.c.kills).label('avg_kills'),
+                    func.avg(subquery.c.deaths).label('avg_deaths'),
+                    func.avg(subquery.c.assists).label('avg_assists'),
+                    func.avg(subquery.c.score).label('avg_score'),
+                    func.avg(subquery.c.mmr_change).label('avg_mmr_change')))
+            return dict(result.first())

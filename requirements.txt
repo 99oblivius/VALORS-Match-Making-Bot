@@ -1,6 +1,7 @@
 python-dotenv
 nextcord
 plotly
+kaleido
 pytz
 SQLAlchemy[asyncio]
 asyncpg

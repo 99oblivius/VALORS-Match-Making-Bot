@@ -4,7 +4,7 @@ import logging as log
 
 import nextcord
 
-from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1
+from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1, VALORS_THEME1
 from utils.utils import format_duration
 
 class QueueManager:
@@ -16,6 +16,7 @@ class QueueManager:
     async def reminder_and_kick(self, user_id: int, expiry: int):
         try:
             settings = await self.bot.store.get_settings(GUILD_ID)
+            guild = self.bot.get_guild(GUILD_ID)
             reminder_time = expiry - int(datetime.now(timezone.utc).timestamp()) - settings.mm_queue_reminder
             reminder_msg = None
             if reminder_time > 0:
@@ -39,6 +40,16 @@ class QueueManager:
                     description=f"You were removed from the queue in \n<#{settings.mm_queue_channel}>.", 
                     color=VALORS_THEME1_1)
                 await user.send(embed=embed)
+
+            channel = guild.get_channel(settings.mm_queue_channel)
+            message = await channel.fetch_message(settings.mm_queue_message)
+            queue_users = await self.bot.store.get_queue_users(channel.id)
+            embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
+            message_lines = []
+            for n, item in enumerate(queue_users, 1):
+                message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
+            embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+            await message.edit(embeds=[message.embeds[0], embed])
             self.active_users.pop(user_id, None)
             self.tasks.pop(user_id, None)
             self.bot.new_activity_value -= 1

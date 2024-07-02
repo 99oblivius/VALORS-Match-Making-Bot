@@ -166,8 +166,6 @@ class QueueButtonsView(nextcord.ui.View):
             self.bot.new_activity_value = total_in_queue
         
         await self.update_queue_message(interaction)
-        await asyncio.sleep(5)
-        await msg.delete()
     
     async def unready_callback(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
@@ -176,11 +174,41 @@ class QueueButtonsView(nextcord.ui.View):
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
         self.bot.new_activity_value -= 1
         await self.update_queue_message(interaction)
-        await asyncio.sleep(5)
-        await msg.delete()
     
     async def stats_callback(self, interaction: nextcord.Interaction):
-        await interaction.response.send_message(f"{interaction.user.display_name} clicked!", ephemeral=True)
+        user = interaction.user
+        summary_stats = await self.bot.store.get_user_summary_stats(interaction.guild.id, user.id)
+        if not summary_stats:
+            return await interaction.response.send_message(f"No stats found for {user.mention}.", ephemeral=True)
+
+        recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
+        avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
+
+        embed = nextcord.Embed(title=f"Stats for {user.display_name}", color=VALORS_THEME1)
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+
+        # Summary stats
+        embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)
+        embed.add_field(name="Total Games", value=summary_stats.games, inline=True)
+        embed.add_field(name="Win Rate", value=f"{(summary_stats.wins / summary_stats.games * 100):.2f}%" if summary_stats.games > 0 else "N/A", inline=True)
+        embed.add_field(name="Total Kills", value=summary_stats.total_kills, inline=True)
+        embed.add_field(name="Total Deaths", value=summary_stats.total_deaths, inline=True)
+        embed.add_field(name="Total Assists", value=summary_stats.total_assists, inline=True)
+        embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
+        embed.add_field(name="Average Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
+
+        # Recent performance
+        embed.add_field(name="Recent Performance (Last 10 Games)", value="\u200b", inline=False)
+        embed.add_field(name="Avg Kills", value=f"{avg_stats['avg_kills']:.2f}", inline=True)
+        embed.add_field(name="Avg Deaths", value=f"{avg_stats['avg_deaths']:.2f}", inline=True)
+        embed.add_field(name="Avg Assists", value=f"{avg_stats['avg_assists']:.2f}", inline=True)
+        embed.add_field(name="Avg Score", value=f"{avg_stats['avg_score']:.2f}", inline=True)
+        embed.add_field(name="Avg MMR Change", value=f"{avg_stats['avg_mmr_change']:.2f}", inline=True)
+
+        # Recent matches
+        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
+        embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def lfg_callback(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)

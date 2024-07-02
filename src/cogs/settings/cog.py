@@ -52,14 +52,15 @@ class Settings(commands.Cog):
         
         embed = nextcord.Embed(
             title="Register for Match Making!", 
-            description="1. Register with your Steam account\n2. Choose your region of origin\n3. Press Join", 
             color=VALORS_THEME1_2)
+        embed.add_field(name="1.", value="Verify your Steam account", inline=True)
+        embed.add_field(name="2.", value="Choose your region", inline=True)
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
         await self.bot.store.upsert(BotSettings, 
-                                    guild_id=interaction.guild.id, 
-                                    register_channel=interaction.channel.id, 
-                                    register_message=msg.id)
+            guild_id=interaction.guild.id, 
+            register_channel=interaction.channel.id, 
+            register_message=msg.id)
         await interaction.response.send_message("Registry channel set", ephemeral=True)
     
     @settings.subcommand(name="regions", description="Set regions")

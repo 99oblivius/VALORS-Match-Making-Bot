@@ -1,7 +1,7 @@
 import json
 import logging as log
 from io import BytesIO
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import nextcord
 from nextcord.ext import commands, tasks
@@ -10,6 +10,7 @@ from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
 from utils.utils import format_duration
+from utils.statistics import create_stat_graph
 
 
 class Queues(commands.Cog):
@@ -59,11 +60,100 @@ class Queues(commands.Cog):
         if interaction.guild.id in self.bot.last_lfg_ping:
             if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
                 return await interaction.response.send_message(
-f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
-Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+    f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
+    Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
         
         self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
+
+    @nextcord.slash_command(name="mm_stats", description="List your recent performance", guild_ids=[GUILD_ID])
+    async def stats(self, interaction: nextcord.Interaction, 
+        user: nextcord.User | None = nextcord.SlashOption(required=False)
+    ):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        if user is None:
+            user = interaction.user
+
+        summary_stats = await self.bot.store.get_user_summary_stats(interaction.guild.id, user.id)
+        if not summary_stats:
+            return await interaction.response.send_message(f"No stats found for {user.mention}.", ephemeral=True)
+
+        recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
+        avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
+
+        embed = nextcord.Embed(title=f"Stats for {user.display_name}", color=VALORS_THEME1)
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+
+        # Summary stats
+        embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)
+        embed.add_field(name="Total Games", value=summary_stats.games, inline=True)
+        embed.add_field(name="Win Rate", value=f"{(summary_stats.wins / summary_stats.games * 100):.2f}%" if summary_stats.games > 0 else "N/A", inline=True)
+        embed.add_field(name="Total Kills", value=summary_stats.total_kills, inline=True)
+        embed.add_field(name="Total Deaths", value=summary_stats.total_deaths, inline=True)
+        embed.add_field(name="Total Assists", value=summary_stats.total_assists, inline=True)
+        embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
+        embed.add_field(name="Average Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
+
+        # Recent performance
+        embed.add_field(name="Recent Performance (Last 10 Games)", value="\u200b", inline=False)
+        embed.add_field(name="Avg Kills", value=f"{avg_stats['avg_kills']:.2f}", inline=True)
+        embed.add_field(name="Avg Deaths", value=f"{avg_stats['avg_deaths']:.2f}", inline=True)
+        embed.add_field(name="Avg Assists", value=f"{avg_stats['avg_assists']:.2f}", inline=True)
+        embed.add_field(name="Avg Score", value=f"{avg_stats['avg_score']:.2f}", inline=True)
+        embed.add_field(name="Avg MMR Change", value=f"{avg_stats['avg_mmr_change']:.2f}", inline=True)
+
+        # Recent matches
+        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
+        embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
+        await interaction.response.send_message(
+            embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
+
+    @nextcord.slash_command(name="mm_graph", description="Graph your recent rating performance", guild_ids=[GUILD_ID])
+    async def graph(self, interaction: nextcord.Interaction,
+        graph_type: str = nextcord.SlashOption(
+            name="type",
+            description="Type of graph to display",
+            choices={
+                "MMR over time": "mmr_time",
+                "Kills per game": "kills_game",
+                "K/D ratio over time": "kd_time",
+                "Win rate over time": "winrate_time",
+                "Score per game": "score_game"
+            },
+            required=True),
+        period: str = nextcord.SlashOption(
+            name="period",
+            description="Time period (format: 0y0m0d0h, e.g., 1y6m for 1 year and 6 months)",
+            required=False,
+            default="1m"),
+    ):
+        user = interaction.user
+
+        # Parse the period
+        period_match = re.match(r"(?:(\d+)y)?(?:(\d+)m)?(?:(\d+)d)?(?:(\d+)h)?", period)
+        if not period_match:
+            return await interaction.response.send_message("Invalid period format. Use 0y0m0d0h (e.g., 1y6m for 1 year and 6 months).", ephemeral=True)
+
+        years, months, days, hours = map(lambda x: int(x) if x else 0, period_match.groups())
+        start_date = datetime.now() - timedelta(days=years*365 + months*30 + days, hours=hours)
+        end_date = datetime.now()
+
+        match_stats = await self.bot.store.get_match_stats_in_period(interaction.guild.id, user.id, start_date, end_date)
+
+        if not match_stats:
+            return await interaction.response.send_message(f"No data found for {user.mention} in the specified period.", ephemeral=True)
+
+        fig = create_stat_graph(graph_type, match_stats)
+        
+        # Save the plot to a BytesIO object
+        img_bytes = BytesIO()
+        fig.write_image(img_bytes, format="png")
+        img_bytes.seek(0)
+
+        # Create a Discord file from the BytesIO object
+        file = nextcord.File(img_bytes, filename="graph.png")
+
+        await interaction.response.send_message(f"Graph for {user.mention}", file=file, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
     ##############################
     # QUEUE SETTINGS SUBCOMMANDS #
