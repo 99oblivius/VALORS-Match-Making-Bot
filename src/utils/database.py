@@ -794,7 +794,7 @@ class Database:
                 .order_by(MMBotUserMatchStats.timestamp))
             return result.scalars().all()
 
-    async def get_avg_stats_last_n_games(self, guild_id: int, user_id: int, n: int = 10) -> Dict[str, float]:
+    async def get_avg_stats_last_n_games(self, guild_id: int, user_id: int, n: int = 10) -> Dict[str, float] | None:
         async with self._session_maker() as session:
             subquery = select(MMBotUserMatchStats).where(
                 MMBotUserMatchStats.guild_id == guild_id,
@@ -808,4 +808,12 @@ class Database:
                     func.avg(subquery.c.assists).label('avg_assists'),
                     func.avg(subquery.c.score).label('avg_score'),
                     func.avg(subquery.c.mmr_change).label('avg_mmr_change')))
-            return dict(result.first())
+            row = result.first()
+            if row:
+                return {
+                    'avg_kills': row.avg_kills,
+                    'avg_deaths': row.avg_deaths,
+                    'avg_assists': row.avg_assists,
+                    'avg_score': row.avg_score,
+                    'avg_mmr_change': row.avg_mmr_change }
+            return None
