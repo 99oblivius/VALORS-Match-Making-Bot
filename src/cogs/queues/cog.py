@@ -74,8 +74,7 @@ class Queues(commands.Cog):
 
     @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[GUILD_ID])
     async def rating_change(self, interaction: nextcord.Interaction):
-        if user is None:
-            user = interaction.user
+        user = interaction.user
 
         last_match_mmr = await self.bot.store.get_last_match_mmr_impact(interaction.guild.id, user.id)
 
