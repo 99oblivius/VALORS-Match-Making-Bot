@@ -454,46 +454,6 @@ class Match:
             abandoned_users = []
             users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in players])
 
-            async def update_players_stats(players_dict, is_new_round):
-                for player in players:
-                    user_id = player.user_id
-                    platform_id = next((p.platform_id for p in player.user_platform_mappings), None)
-                    
-                    if platform_id in players_dict:
-                        player_data = players_dict[platform_id]
-                        if user_id not in users_match_stats:
-                            users_match_stats[user_id] = {
-                                "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
-                                "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
-                                "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
-                                "score": 0,
-                                "kills": 0,
-                                "deaths": 0,
-                                "assists": 0,
-                                "rounds_played": 0 }
-                        
-                        kills, deaths, assists = map(int, player_data['KDA'].split('/'))
-                        score = int(player_data['Score'])
-                        ping = int(float(player_data['Ping']))
-                        
-                        users_match_stats[user_id].update({
-                            "score": score,
-                            "kills": kills,
-                            "deaths": deaths,
-                            "assists": assists,
-                            "ping": ping })
-                        
-                        if is_new_round:
-                            users_match_stats[user_id]['rounds_played'] += 1
-                            disconnection_tracker[user_id] = 0
-                    elif is_new_round:
-                        disconnection_tracker[user_id] += 1
-                        
-                        if disconnection_tracker[user_id] >= 5:
-                            abandoned_users.append(user_id)
-                
-                await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, users_match_stats)
-
             while max(team_scores) < 10:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
@@ -502,35 +462,70 @@ class Match:
                     current_round = int(reply['RoundNumber'])
 
                     is_new_round = current_round > last_round_number
+                    if is_new_round:
+                        last_round_number = current_round
+                        log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
                     players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
                     
-                    platform_to_player = {
-                        p.platform_id: player
-                        for player in players
-                        for p in player.user_platform_mappings
-                    }
-                    current_players = set(players_dict.keys())
-                    for platform_id in current_players:
-                        player = platform_to_player.get(platform_id, None)
+                    found_player_ids = { p.user_id: False for p in players }
+                    for platform_id, player_data in players_dict.items():
+                        player = next(
+                            (player
+                                for player in players
+                                if any(platform_id == p.platform_id for p in player.user_platform_mappings)),
+                            None)
 
+                        teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                        if player_data['Team'] != teamid:
+                            log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                            await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
+                        
                         if player:
-                            teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
-                            player_info = players_dict.get(platform_id)
-                            if player_info and player_info['Team'] != teamid:
-                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                                await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
+                            user_id = player.user_id
+                            found_player_ids[user_id] = True
+                            if user_id not in users_match_stats:
+                                users_match_stats[user_id] = {
+                                    "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
+                                    "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
+                                    "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
+                                    "score": 0,
+                                    "kills": 0,
+                                    "deaths": 0,
+                                    "assists": 0,
+                                    "rounds_played": 0 }
+                            
+                            player_data = players_dict[platform_id]
+                            kills, deaths, assists = map(int, player_data['KDA'].split('/'))
+                            score = int(player_data['Score'])
+                            ping = int(float(player_data['Ping']))
+                            
+                            users_match_stats[user_id].update({
+                                "score": score,
+                                "kills": kills,
+                                "deaths": deaths,
+                                "assists": assists,
+                                "ping": ping })
+                            
+                            if is_new_round:
+                                users_match_stats[user_id]['rounds_played'] += 1
+                                disconnection_tracker[user_id] = 0
                         else:
                             log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
-
-                    await update_players_stats(players_dict, is_new_round)
+                        
+                    if is_new_round:
+                        for pid, found in found_player_ids.items():
+                            if not found:
+                                disconnection_tracker[pid] += 1
+                                if disconnection_tracker[pid] >= 5:
+                                    abandoned_users.append(pid)
+                    
+                    await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, users_match_stats)
 
                     if abandoned_users:
                         await self.bot.store.set_match_abandons(self.match_id, abandoned_users)
-                        self.state = MatchState.MATCH_CLEANUP - 1
-
                         abandonee_match_update = {}
                         abandonee_summary_update = {}
                         for abandonee_id in abandoned_users:
@@ -548,13 +543,8 @@ class Match:
 
                         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, abandonee_match_update)
                         await self.bot.store.set_users_summary_stats(self.guild_id, abandonee_summary_update)
+                        self.state = MatchState.MATCH_CLEANUP - 1
                         break
-
-                    if is_new_round:
-                        last_round_number = current_round
-                        log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
-                except KeyError:
-                    pass
                 except Exception as e:
                     log.error(f"Error during match {self.match_id}: {e}")
 
