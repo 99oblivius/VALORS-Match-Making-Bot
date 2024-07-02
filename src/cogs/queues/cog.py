@@ -95,7 +95,7 @@ class Queues(commands.Cog):
         
         if not settings or not settings.mm_queue_periods:
             return await interaction.response.send_message(
-                "Failed...\nSet queue periods with </queue settings set_queue_periods:1249109243114557461>", ephemeral=True)
+                "Failed...\nSet queue periods with </queue settings set_queue_periods:1257503334533828618>", ephemeral=True)
 
         msg = await self.send_queue_buttons(interaction)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
@@ -127,7 +127,7 @@ class Queues(commands.Cog):
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
         await interaction.response.send_message(
-            f"Queue periods set to `{periods_str}`\nUse </queue settings set_register:1249942181180084235> to update", ephemeral=True)
+            f"Queue periods set to `{periods_str}`\nUse </queue settings set_register:1257503333674123367> to update", ephemeral=True)
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
@@ -143,7 +143,7 @@ class Queues(commands.Cog):
         json_file = BytesIO(json_bytes)
         json_file.seek(0)
         await interaction.response.send_message(
-            "Here are the current queue periods:\n_edit and upload with_ </queue settings set_queue_periods:1249109243114557461>", file=nextcord.File(json_file, filename="queue_periods.json"), ephemeral=True)
+            "Here are the current queue periods:\n_edit and upload with_ </queue settings set_queue_periods:1257503334533828618>", file=nextcord.File(json_file, filename="queue_periods.json"), ephemeral=True)
     
     @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
     async def set_text_channel(self, interaction: nextcord.Interaction):

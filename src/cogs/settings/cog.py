@@ -96,7 +96,7 @@ class Settings(commands.Cog):
             await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji.strip(), index=n)
             
         await interaction.response.send_message(
-            f"Regions set\nUse </settings set_register:1249942181180084235> to update", ephemeral=True)
+            f"Regions set\nUse </settings set_register:1257503333674123367> to update", ephemeral=True)
 
     @set_regions.on_autocomplete("regions")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, regions: str):

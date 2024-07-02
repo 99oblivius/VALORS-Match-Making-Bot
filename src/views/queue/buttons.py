@@ -7,7 +7,7 @@ import nextcord
 from nextcord.ext import commands
 
 from matches import make_match
-from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT, VALORS_THEME1_2
+from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT, VALORS_THEME1_2, LFG_PING_DELAY
 from utils.utils import format_duration, abandon_cooldown
 
 
@@ -27,10 +27,6 @@ class QueueButtonsView(nextcord.ui.View):
         
         button = nextcord.ui.Button(label="Unready", custom_id=f"mm_queue_button:unready")
         button.callback = instance.unready_callback
-        instance.add_item(button)
-
-        button = nextcord.ui.Button(label="Queue", custom_id=f"mm_queue_button:queue")
-        button.callback = instance.queue_callback
         instance.add_item(button)
     
         button = nextcord.ui.Button(label="Stats", custom_id=f"mm_queue_button:stats")
@@ -70,12 +66,6 @@ class QueueButtonsView(nextcord.ui.View):
         instance.add_item(button)
 
         row += 1
-        button = nextcord.ui.Button(
-            label="Queue", 
-            row=row,
-            style=nextcord.ButtonStyle.blurple, 
-            custom_id=f"mm_queue_button:queue")
-        instance.add_item(button)
     
         button = nextcord.ui.Button(
             label="Stats", 
@@ -92,6 +82,15 @@ class QueueButtonsView(nextcord.ui.View):
         instance.add_item(button)
 
         return instance
+
+    async def update_queue_message(self, interaction: nextcord.Interaction):
+        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
+        message_lines = []
+        for n, item in enumerate(queue_users, 1):
+            message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
+        embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+        await interaction.edit(embeds=[interaction.message.embeds[0], embed])
 
     async def ready_callback(self, interaction: nextcord.Interaction):
         lock_id = f'{interaction.channel.id}'
@@ -155,12 +154,7 @@ class QueueButtonsView(nextcord.ui.View):
                 make_match(loop, self.bot, interaction.guild.id, match_id)
             self.bot.new_activity_value = total_in_queue
         
-        
-        if in_queue: title = "You updated your queue time!"
-        else: title = "You joined the queue!"
-        embed = nextcord.Embed(title=title, color=VALORS_THEME1)
-        embed.add_field(name=f"{total_in_queue} in queue", value=f"for `{format_duration(60 * periods[slot_id][1])}` until <t:{expiry}:t>")
-        msg = await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self.update_queue_message(interaction)
         await asyncio.sleep(5)
         await msg.delete()
     
@@ -169,20 +163,10 @@ class QueueButtonsView(nextcord.ui.View):
             return await interaction.response.send_message("You are not queued up",ephemeral=True)
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
-        embed = nextcord.Embed(title="You have left queue", color=VALORS_THEME1)
         self.bot.new_activity_value -= 1
-        msg = await interaction.response.send_message(embed=embed, ephemeral=True)
+        await self.update_queue_message(interaction)
         await asyncio.sleep(5)
         await msg.delete()
-    
-    async def queue_callback(self, interaction: nextcord.Interaction):
-        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
-        message_lines = []
-        for n, item in enumerate(queue_users, 1):
-            message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
-        embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def stats_callback(self, interaction: nextcord.Interaction):
         await interaction.response.send_message(f"{interaction.user.display_name} clicked!", ephemeral=True)
@@ -190,12 +174,19 @@ class QueueButtonsView(nextcord.ui.View):
     async def lfg_callback(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not settings.mm_lfg_role:
-            return await interaction.response.send_message("mm_lfg_role not set. Set it with </queue settings mm_lfg_role:1249109243114557461>", ephemeral=True)
+            return await interaction.response.send_message("lfg_role not set. Set it with </queue settings lfg_role:1257503334533828618>", ephemeral=True)
         
         channel = interaction.guild.get_channel(settings.mm_text_channel)
         if not channel:
-            return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1249109243114557461>", ephemeral=True)
+            return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1257503334533828618>", ephemeral=True)
         
+        if interaction.guild.id in self.bot.last_lfg_ping:
+            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
+                return await interaction.response.send_message(
+f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
+Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+        
+        self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await channel.send(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
         embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALORS_THEME1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)

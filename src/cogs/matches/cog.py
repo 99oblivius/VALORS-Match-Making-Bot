@@ -159,7 +159,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         file = nextcord.File(json_file, filename="map_pool.json")
         
         await interaction.response.send_message(
-            "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:1249109243114557461>", file=file, ephemeral=True)
+            "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:1257503332952707173>", file=file, ephemeral=True)
 
 
 def setup(bot):
