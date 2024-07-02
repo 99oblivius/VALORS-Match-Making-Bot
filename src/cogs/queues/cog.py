@@ -1,7 +1,7 @@
 import json
 import logging as log
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timezone
 
 import nextcord
 from nextcord.ext import commands, tasks
@@ -45,6 +45,25 @@ class Queues(commands.Cog):
     @nextcord.slash_command(name="queue", description="Queue settings", guild_ids=[GUILD_ID])
     async def queue(self, interaction: nextcord.Interaction):
         pass
+
+    @nextcord.slash_command(name="mm_lfg", description="Ping Looking for Game members", guild_ids=[GUILD_ID])
+    async def ping_lfg(self, interaction: nextcord.Interaction):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        if not settings.mm_lfg_role:
+            return await interaction.response.send_message("lfg_role not set. Set it with </queue settings lfg_role:1257503334533828618>", ephemeral=True)
+        
+        channel = interaction.guild.get_channel(settings.mm_text_channel)
+        if not channel:
+            return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1257503334533828618>", ephemeral=True)
+        
+        if interaction.guild.id in self.bot.last_lfg_ping:
+            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
+                return await interaction.response.send_message(
+f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
+Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+        
+        self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
+        await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
 
     ##############################
     # QUEUE SETTINGS SUBCOMMANDS #

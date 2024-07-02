@@ -215,6 +215,6 @@ Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>"
         
         if lfg_role in interaction.user.roles:
             await interaction.user.remove_roles(lfg_role)
-            return await interaction.response.send_message(f"\- You removed {lfg_role.mention}", ephemeral=True)
+            return await interaction.response.send_message(f"\- You removed {lfg_role.mention} from yourself", ephemeral=True)
         await interaction.user.add_roles(lfg_role)
-        await interaction.response.send_message(f"+ You added {lfg_role.mention}", ephemeral=True)
+        await interaction.response.send_message(f"+ You added {lfg_role.mention} to yourself", ephemeral=True)
