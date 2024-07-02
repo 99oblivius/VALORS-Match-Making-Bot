@@ -100,9 +100,9 @@ class QueueButtonsView(nextcord.ui.View):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         user_platforms = await self.bot.store.get_user_platforms(interaction.guild.id, interaction.user.id)
-        # if not user_platforms:
-        #     return await interaction.response.send_message(
-        #         "Verify with at least one platform.", ephemeral=True)
+        if not user_platforms:
+            return await interaction.response.send_message(
+                "Verify with at least one platform.", ephemeral=True)
         
         in_queue = False
         if not settings: return await interaction.response.send_message(
@@ -148,10 +148,12 @@ class QueueButtonsView(nextcord.ui.View):
             if total_in_queue == MATCH_PLAYER_COUNT:
                 self.bot.queue_manager.remove_user(interaction.user.id)
                 for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
+                self.bot.new_activity_value = 0
 
                 match_id = await self.bot.store.unqueue_add_match_users(settings, interaction.channel.id)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
+            self.bot.new_activity_value = total_in_queue
         
         
         if in_queue: title = "You updated your queue time!"
@@ -168,6 +170,7 @@ class QueueButtonsView(nextcord.ui.View):
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
         embed = nextcord.Embed(title="You have left queue", color=VALORS_THEME1)
+        self.bot.new_activity_value -= 1
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
         await msg.delete()

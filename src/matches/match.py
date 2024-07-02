@@ -388,7 +388,7 @@ class Match:
             await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
             await self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT)
 
-            pin = ''.join(random.choices('0123456789', k=4))
+            pin = 5
             await self.bot.rcon_manager.set_pin(serveraddr, pin)
             server_name = f"VALORS MM - {self.match_id}"
             await self.bot.rcon_manager.set_name(serveraddr, server_name)
@@ -399,7 +399,7 @@ class Match:
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
-            embed.add_field(name="Server", value=f"`{server_name}`", inline=False)
+            embed.add_field(name="TDM Server", value=f"`{server_name}`", inline=False)
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             await match_message.edit(embed=embed)
@@ -441,23 +441,6 @@ class Match:
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
             for m in server_maps.get('MapList', []):
                 await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'])
-            
-            player_list = await self.bot.rcon_manager.player_list(serveraddr)
-            current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
-
-            for platform_id in current_players:
-                player = next((
-                    player for player in players 
-                    for p in player.user_platform_mappings
-                    if p.platform_id == platform_id
-                ), None)
-                
-                if player:
-                    teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
-                    team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
-                    if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
-                        log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                        await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
             await match_thread.send(embed=embed)
@@ -522,6 +505,25 @@ class Match:
 
                     players_data = await self.bot.rcon_manager.inspect_all(serveraddr)
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
+                    
+                    platform_to_player = {
+                        p.platform_id: player
+                        for player in players
+                        for p in player.user_platform_mappings
+                    }
+                    current_players = set(players_dict.keys())
+                    for platform_id in current_players:
+                        player = platform_to_player.get(platform_id, None)
+
+                        if player:
+                            teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                            player_info = players_dict.get(platform_id)
+                            if player_info and player_info['Team'] != teamid:
+                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
+                        else:
+                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
+                            await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
 
                     await update_players_stats(players_dict, is_new_round)
 
@@ -576,8 +578,8 @@ class Match:
                         current_stats.update({ "win": win, "mmr_change": mmr_change })
                         final_updates[user_id] = current_stats
 
-                await self.bot.store.upsert_user_match_stats(self.guild_id, self.match_id, final_updates)
-
+                await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
+                
                 users_summary_stats = {}
                 for player in players:
                     user_id = player.user_id
@@ -599,12 +601,38 @@ class Match:
                             "total_deaths": summary_data.total_deaths + match_stats['deaths'],
                             "total_assists": summary_data.total_assists + match_stats['assists']
                         }
-
                 await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
+
+            rank_roles = sorted(
+                [(r.mmr_threshold, guild.get_role(r.role_id)) 
+                for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0], reverse=True)
+            
+            def get_rank_role(mmr):
+                return next((role for threshold, role in rank_roles if mmr >= threshold), None)
+            
+            role_update_tasks = []
+            for player in players:
+                user_id = player.user_id
+                if user_id in users_match_stats and user_id in users_summary_data:
+                    old_mmr = users_summary_data[user_id].mmr
+                    new_mmr = old_mmr + users_match_stats[user_id]['mmr_change']
+                    
+                    old_rank_role = get_rank_role(old_mmr)
+                    new_rank_role = get_rank_role(new_mmr)
+
+                    if old_rank_role != new_rank_role:
+                        member = guild.get_member(user_id)
+                        if member:
+                            if old_rank_role:
+                                role_update_tasks.append(member.remove_roles(old_rank_role, reason="Updating MMR rank"))
+                            if new_rank_role:
+                                role_update_tasks.append(member.add_roles(new_rank_role, reason="Updating MMR rank"))
+            await asyncio.gather(*role_update_tasks)
+
             await self.increment_state()
         
         if check_state(MatchState.MATCH_CLEANUP):
-            pin = ''.join(random.choices('0123456789', k=4))
+            pin = 5
             server_name = f"VALORS {server.region} #{server.id}"
             await self.bot.rcon_manager.kick_all(serveraddr)
             await self.bot.rcon_manager.set_name(serveraddr, server_name)

@@ -51,14 +51,12 @@ class QueueManager:
         self.active_users[user_id] = expiry_timestamp
         task = asyncio.create_task(self.reminder_and_kick(user_id, expiry_timestamp))
         self.tasks[user_id] = task
-        self.bot.new_activity_value += 1
 
     def remove_user(self, user_id):
         if user_id in self.tasks:
             self.tasks[user_id].cancel()
             self.tasks.pop(user_id, None)
         self.active_users.pop(user_id, None)
-        self.bot.new_activity_value -= 1
 
     async def fetch_and_initialize_users(self) -> int:
         settings = await self.bot.store.get_settings(GUILD_ID)

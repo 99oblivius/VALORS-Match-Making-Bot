@@ -29,7 +29,8 @@ from .models import (
     RconServers,
     MMBotUserSummaryStats,
     MMBotUserMatchStats,
-    MMBotUserAbandons
+    MMBotUserAbandons,
+    MMBotRanks
 )
 
 from matches import MatchState
@@ -166,6 +167,24 @@ class Database:
                 .order_by(BotRegions.index))
             return result.scalars().all()
 
+    async def get_ranks(self, guild_id: int) -> List[MMBotRanks]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotRanks)
+                .where(MMBotRanks.guild_id == guild_id)
+                .order_by(MMBotRanks.mmr_threshold))
+            return result.scalars().all()
+    
+    async def set_ranks(self, guild_id: int, ranks: Dict[str, Dict[str, int]]) -> None:
+        async with self._session_maker() as session:
+            ranks_list = [
+                {**rank_data, 'guild_id': guild_id}
+                for _, rank_data in ranks.items()
+            ]
+            await session.execute(
+                insert(MMBotRanks)
+                .values(ranks_list))
+            await session.commit()
 
 ########
 # USER #
@@ -234,16 +253,24 @@ class Database:
     
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
         async with self._session_maker() as session:
-            stmt = insert(MMBotUsers).values(guild_id=guild_id, user_id=user_id)
-            stmt = stmt.on_conflict_do_nothing(index_elements=['guild_id', 'user_id'])
-            await session.execute(stmt)
-            await session.commit()
-
             result = await session.execute(
                 select(MMBotUsers)
-                .where(MMBotUsers.guild_id == guild_id, MMBotUsers.user_id == user_id)
-            )
-            return result.scalars().first()
+                .where(
+                    MMBotUsers.guild_id == guild_id, 
+                    MMBotUsers.user_id == user_id))
+            user = result.scalars().first()
+
+            if user is None:
+                session.add(MMBotUsers(guild_id=guild_id, user_id=user_id,))
+                await session.commit()
+
+                result = await session.execute(
+                    select(MMBotUsers)
+                    .where(
+                        MMBotUsers.guild_id == guild_id, 
+                        MMBotUsers.user_id == user_id))
+                user = result.scalars().first()
+            return user
 
     async def null_user_region(self, guild_id: int, label: str):
         async with self._session_maker() as session:
@@ -345,18 +372,20 @@ class Database:
             return result.scalars().all()
     
     async def upsert_queue_user(self, user_id: int, guild_id: int, queue_channel: int, queue_expiry: int):
-        async with self._session_maker() as session:
-            stmt = insert(MMBotQueueUsers).values(
-                user_id=user_id,
-                guild_id=guild_id,
-                queue_channel=queue_channel,
-                queue_expiry=queue_expiry,
-                in_queue=True)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=['user_id', 'guild_id', 'queue_channel'],
-                set_=dict(queue_expiry=queue_expiry, in_queue=True))
-            await session.execute(stmt)
-            await session.commit()
+        if await self.in_queue(guild_id, user_id):
+            async with self._session_maker() as session:
+                await session.execute(
+                    update(MMBotQueueUsers)
+                    .where(
+                        MMBotQueueUsers.user_id == user_id,
+                        MMBotQueueUsers.guild_id == guild_id,
+                        MMBotQueueUsers.queue_channel == queue_channel, 
+                        MMBotQueueUsers.in_queue == True)
+                    .values(queue_expiry=queue_expiry))
+                await session.commit()
+            return True
+        await self.insert(MMBotQueueUsers, user_id=user_id, guild_id=guild_id, queue_channel=queue_channel, queue_expiry=queue_expiry)
+        return False
     
     async def unqueue_add_match_users(self, settings: BotSettings, channel_id: int) -> int:
         async with self._session_maker() as session:

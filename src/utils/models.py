@@ -113,6 +113,15 @@ class BotRegions(Base):
     emoji     = Column(String(32))
     index     = Column(SmallInteger, default=0)
 
+class MMBotRanks(Base):
+    __tablename__ = 'mm_bot_ranks'
+
+    id             = Column(Integer, primary_key=True)
+    guild_id       = Column(BigInteger, ForeignKey('bot_settings.guild_id'), nullable=False)
+    mmr_threshold  = Column(Integer, nullable=False)
+    role_id        = Column(BigInteger, nullable=False)
+    timestamp      = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
 class MMBotQueueUsers(Base):
     __tablename__ = 'mm_bot_queue_users'
 
@@ -181,8 +190,6 @@ class MMBotUserSummaryStats(Base):
     top_score       = Column(Integer, default=0)
     top_kills       = Column(Integer, default=0)
     top_assists     = Column(Integer, default=0)
-    top_winstreak   = Column(Integer, default=0)
-    top_losestreak  = Column(Integer, default=0)
     total_score     = Column(Integer, default=0)
     total_kills     = Column(Integer, default=0)
     total_deaths    = Column(Integer, default=0)

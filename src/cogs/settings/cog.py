@@ -1,6 +1,7 @@
 import json
 from typing import List
 import logging as log
+from io import BytesIO
 
 from fuzzywuzzy import process
 
@@ -8,7 +9,7 @@ import nextcord
 from nextcord.ext import commands
 
 from config import *
-from utils.models import BotSettings
+from utils.models import BotSettings, MMBotRanks
 
 from config import *
 from views.register import RegistryButtonView
@@ -151,6 +152,44 @@ class Settings(commands.Cog):
         matches = process.extract(serveraddr, serveraddrs, limit=25)
         matched_serveraddrs = [match[0] for match in matches]
         return matched_serveraddrs
+    
+    @settings.subcommand(name="get_ranks", description="Get the current MMR ranks")
+    async def get_ranks(self, interaction: nextcord.Interaction):
+        ranks = await self.bot.store.get_ranks(interaction.guild.id)
+        if not ranks:
+            return await interaction.response.send_message("No ranks set.", ephemeral=True)
+        
+        ranks_dict = {f"Rank {rank.id}": {"mmr": rank.mmr_threshold, "role_id": rank.role_id} for rank in ranks}
+        
+        json_str = json.dumps(ranks_dict, indent=4)
+        json_bytes = json_str.encode('utf-8')
+        json_file = BytesIO(json_bytes)
+        json_file.seek(0)
+        await interaction.response.send_message(
+            "Here are the current ranks:\n_edit and upload with_ </ranks set_ranks:1249109243114557461>", 
+            file=nextcord.File(json_file, filename="mmr_ranks.json"), 
+            ephemeral=True)
+
+    @settings.subcommand(name="set_ranks", description="Set MMR ranks")
+    async def set_ranks(self, interaction: nextcord.Interaction, 
+        ranks: nextcord.Attachment=nextcord.SlashOption(description="JSON file for MMR ranks")):
+        try:
+            file = await ranks.read()
+            ranks = json.loads(file)
+        except Exception as e:
+            log.error(f"[Ranks] Error loading json file: {repr(e)}")
+            return await interaction.response.send_message(
+                "The file you provided did not contain a valid JSON string\ne.g. `{\"Bronze\": {\"mmr_threshold\": 1000, \"role_id\": 123456789}}`", ephemeral=True)
+
+        if len(ranks) > 25:
+            return await interaction.response.send_message("Failed.\nToo many ranks", ephemeral=True)
+        
+        await self.bot.store.remove(MMBotRanks, guild_id=interaction.guild.id)
+        await self.bot.store.set_ranks(interaction.guild.id, ranks)
+
+        await interaction.response.send_message(
+            f"Ranks set successfully. Use </ranks get_ranks:1249109243114557461> to view them.", ephemeral=True)
+
 
 def setup(bot):
     bot.add_cog(Settings(bot))
