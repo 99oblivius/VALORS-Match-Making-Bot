@@ -55,7 +55,7 @@ class Matches(commands.Cog):
     # MM SLASH COMMANDS #
     #####################
 
-    @nextcord.slash_command(name="mm_cancel", description="Cancel a match")
+    @nextcord.slash_command(name="cancel", description="Cancel a match")
     async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
@@ -75,7 +75,7 @@ class Matches(commands.Cog):
         await interaction.response.send_message(
             f"Match id {match_id} cleaning up", ephemeral=True)
     
-    @nextcord.slash_command(name="mm_abandon", description="Abandon a match")
+    @nextcord.slash_command(name="abandon", description="Abandon a match")
     async def mm_abandon(self, interaction: nextcord.Interaction):
         match = await self.bot.store.get_thread_match(interaction.channel.id)
         if not match:

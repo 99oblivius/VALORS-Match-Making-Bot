@@ -817,3 +817,17 @@ class Database:
                     'avg_score': row.avg_score,
                     'avg_mmr_change': row.avg_mmr_change }
             return None
+
+    async def get_last_match_mmr_impact(self, guild_id: int, user_id: int) -> Tuple[float, float] | None:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMatchStats.mmr_before, MMBotUserMatchStats.mmr_change)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id)
+                .order_by(desc(MMBotUserMatchStats.timestamp))
+                .limit(1))
+            last_match = result.first()
+            if last_match:
+                return last_match.mmr_before, last_match.mmr_change
+            return None

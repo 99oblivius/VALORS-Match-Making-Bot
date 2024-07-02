@@ -48,7 +48,7 @@ class Queues(commands.Cog):
     async def queue(self, interaction: nextcord.Interaction):
         pass
 
-    @nextcord.slash_command(name="mm_lfg", description="Ping Looking for Game members", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="lfg", description="Ping Looking for Game members", guild_ids=[GUILD_ID])
     async def ping_lfg(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
@@ -60,6 +60,9 @@ class Queues(commands.Cog):
         if not channel:
             return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1257503334533828618>", ephemeral=True)
         
+        if interaction.channel.id != settings.mm_text_channel:
+            return await interaction.response.send_message(f"You can only use this command in <#{settings.mm_text_channel}>", ephemeral=True)
+
         if interaction.guild.id in self.bot.last_lfg_ping:
             if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
                 return await interaction.response.send_message(
@@ -69,7 +72,37 @@ class Queues(commands.Cog):
         self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
 
-    @nextcord.slash_command(name="mm_stats", description="List your recent performance", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[GUILD_ID])
+    async def rating_change(self, interaction: nextcord.Interaction):
+        if user is None:
+            user = interaction.user
+
+        last_match_mmr = await self.bot.store.get_last_match_mmr_impact(interaction.guild.id, user.id)
+
+        if not last_match_mmr:
+            return await interaction.response.send_message(f"No recent match data found for {user.mention}.", ephemeral=True)
+
+        mmr_before, mmr_change = last_match_mmr
+        mmr_after = mmr_before + mmr_change
+
+        embed = nextcord.Embed(title=f"Last Match MMR Impact for {user.display_name}", color=VALORS_THEME1)
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+
+        embed.add_field(name="MMR Before", value=f"{mmr_before:.2f}", inline=True)
+        embed.add_field(name="MMR After", value=f"{mmr_after:.2f}", inline=True)
+        embed.add_field(name="MMR Change", value=f"{mmr_change:+.2f}", inline=True)
+
+        last_match = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 1)
+        if last_match:
+            match = last_match[0]
+            embed.add_field(name="Match Result", value="Win" if match.win else "Loss", inline=True)
+            embed.add_field(name="K/D/A", value=f"{match.kills}/{match.deaths}/{match.assists}", inline=True)
+            embed.add_field(name="Score", value=str(match.score), inline=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await interaction.response.send_message(embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
+
+    @nextcord.slash_command(name="stats", description="List your recent performance", guild_ids=[GUILD_ID])
     async def stats(self, interaction: nextcord.Interaction, 
         user: nextcord.User | None = nextcord.SlashOption(required=False)
     ):
@@ -87,7 +120,6 @@ class Queues(commands.Cog):
         embed = nextcord.Embed(title=f"Stats for {user.display_name}", color=VALORS_THEME1)
         embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
-        # Summary stats
         embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)
         embed.add_field(name="Total Games", value=summary_stats.games, inline=True)
         embed.add_field(name="Win Rate", value=f"{(summary_stats.wins / summary_stats.games * 100):.2f}%" if summary_stats.games > 0 else "N/A", inline=True)
@@ -97,18 +129,16 @@ class Queues(commands.Cog):
         embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
         embed.add_field(name="Average Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
 
-        # Recent performance
         if avg_stats:
             embed.add_field(name="\u200b", value="Recent Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats.get('avg_kills', None)}:.2f' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats.get('avg_deaths', None)}:.2f' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats.get('avg_assists', None)}:.2f' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Score", value=f"{f'{avg_stats.get('avg_score', None)}:.2f' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats.get('avg_mmr_change', None)}:.2f' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats['avg_kills']}:.2f' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats['avg_deaths']}:.2f' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats['avg_assists']}:.2f' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Score", value=f"{f'{avg_stats['avg_score']}:.2f' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats['avg_mmr_change']}:.2f' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
         else:
             embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
-        # Recent matches
         if recent_matches:
             recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
             embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
@@ -118,7 +148,7 @@ class Queues(commands.Cog):
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
-    @nextcord.slash_command(name="mm_graph", description="Graph your recent rating performance", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="graph", description="Graph your recent rating performance", guild_ids=[GUILD_ID])
     async def graph(self, interaction: nextcord.Interaction,
         graph_type: str = nextcord.SlashOption(
             name="type",
@@ -140,7 +170,6 @@ class Queues(commands.Cog):
     ):
         user = interaction.user
 
-        # Parse the period
         period_match = re.match(r"(?:(\d+)y)?(?:(\d+)m)?(?:(\d+)d)?(?:(\d+)h)?", period)
         if not period_match:
             return await interaction.response.send_message("Invalid period format. Use 0y0m0d0h (e.g., 1y6m for 1 year and 6 months).", ephemeral=True)
@@ -156,12 +185,10 @@ class Queues(commands.Cog):
 
         fig = create_stat_graph(graph_type, match_stats)
         
-        # Save the plot to a BytesIO object
         img_bytes = BytesIO()
         fig.write_image(img_bytes, format="png")
         img_bytes.seek(0)
 
-        # Create a Discord file from the BytesIO object
         file = nextcord.File(img_bytes, filename="graph.png")
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await interaction.response.send_message(f"Graph for {user.mention}", file=file, ephemeral=interaction.channel.id != settings.mm_text_channel)
