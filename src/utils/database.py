@@ -44,6 +44,9 @@ class Database:
         self._engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=True)
         self._session_maker: sessionmaker = sessionmaker(bind=self._engine, class_=AsyncSession, expire_on_commit=False)
     
+    def __del__(self):
+        self._engine.dispose()
+    
 ###########
 # CLASSIC #
 ###########

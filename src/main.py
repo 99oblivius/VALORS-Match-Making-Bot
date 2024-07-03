@@ -32,11 +32,13 @@ class Bot(commands.Bot):
         self.last_activity_value = -1
         self.new_activity_value = 0
 
-
         self.store: Database              = Database()
         self.cache: redis.StrictRedis     = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.queue_manager: QueueManager  = QueueManager(self)
         self.rcon_manager: RCONManager    = RCONManager(self)
+    
+    def __del__(self):
+        del self.store
 
 
 def main():
