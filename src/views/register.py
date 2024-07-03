@@ -78,13 +78,6 @@ class VerifyView(nextcord.ui.View):
             url=urls[0])
         self.add_item(button)
 
-        button = nextcord.ui.Button(
-            label="PlayStation", 
-            style=nextcord.ButtonStyle.link,
-            url=urls[1],
-            disabled=True)
-        self.add_item(button)
-
         self.add_item(RegionSelect(bot, regions))
 
 

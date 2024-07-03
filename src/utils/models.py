@@ -175,6 +175,7 @@ class MMBotUserMatchStats(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+        UniqueConstraint('guild_id', 'user_id', 'match_id', name='unique_guild_user_match'),
     )
 
 class MMBotUserSummaryStats(Base):

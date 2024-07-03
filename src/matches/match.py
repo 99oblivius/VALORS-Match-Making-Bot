@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from functools import wraps
 import logging as log
 import random
@@ -449,17 +450,24 @@ class Match:
         if check_state(MatchState.MATCH_WAIT_FOR_END):
             team_scores = [0, 0]
             users_match_stats = {}
+            last_users_match_stats = {}
             disconnection_tracker = {player.user_id: 0 for player in players}
             last_round_number = 0
             abandoned_users = []
             users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in players])
+
+            gamemode = 'TDM'
+            while gamemode != 'SND':
+                reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
+                gamemode = reply['GameMode']
+                await asyncio.sleep(2)
 
             while max(team_scores) < 10:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
                     team_scores[0] = int(reply['Team0Score'])
                     team_scores[1] = int(reply['Team1Score'])
-                    current_round = int(reply['RoundNumber'])
+                    current_round = int(reply['Round'])
 
                     is_new_round = current_round > last_round_number
                     if is_new_round:
@@ -478,7 +486,7 @@ class Match:
                             None)
 
                         teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
-                        if player_data['Team'] != teamid:
+                        if int(player_data['TeamId']) != int(teamid):
                             log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
                             await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
                         
@@ -522,7 +530,9 @@ class Match:
                                 if disconnection_tracker[pid] >= 5:
                                     abandoned_users.append(pid)
                     
-                    await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, users_match_stats)
+                    if last_users_match_stats != users_match_stats:
+                        await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, users_match_stats)
+                        last_users_match_stats = users_match_stats
 
                     if abandoned_users:
                         await self.bot.store.set_match_abandons(self.match_id, abandoned_users)
@@ -533,10 +543,21 @@ class Match:
                             if player:
                                 user_id = player.user_id
                                 await self.bot.store.add_abandon(self.guild_id, user_id)
-                                await match_thread.send(f"<@{user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
+                                # await match_thread.send(f"<@{user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
                                 ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
                                 enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
-                                users_match_stats[user_id]['mmr_change'] = calculate_mmr_change(users_match_stats[user_id], 
+                                stats = users_match_stats.get(user_id, None)
+                                if stats is None:
+                                    users_match_stats[user_id] = {
+                                        "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
+                                        "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
+                                        "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
+                                        "score": 0,
+                                        "kills": 0,
+                                        "deaths": 0,
+                                        "assists": 0,
+                                        "rounds_played": 0 }
+                                users_match_stats[user_id]['mmr_change'] = calculate_mmr_change(stats, 
                                     abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
                                 abandonee_match_update[user_id] = users_match_stats[user_id]
                                 abandonee_summary_update[user_id] = { "mmr": users_summary_data[user_id].mmr + users_match_stats[user_id]['mmr_change'] }
@@ -546,8 +567,7 @@ class Match:
                         self.state = MatchState.MATCH_CLEANUP - 1
                         break
                 except Exception as e:
-                    log.error(f"Error during match {self.match_id}: {e}")
-
+                    log.error(f"Error during match {self.match_id}: {traceback.format_exc()}")
                 await asyncio.sleep(2)
             
             if not abandoned_users:
@@ -555,9 +575,19 @@ class Match:
                 for player in players:
                     user_id = player.user_id
                     if user_id in users_match_stats:
+                        current_stats = users_match_stats.get(user_id, None)
+                        if current_stats is None:
+                            users_match_stats[user_id] = {
+                                "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
+                                "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
+                                "ct_start": (player.team == Team.A) == (match.b_side == Side.T),
+                                "score": 0,
+                                "kills": 0,
+                                "deaths": 0,
+                                "assists": 0,
+                                "rounds_played": 0 }
                         ct_start = current_stats['ct_start']
                         win = team_scores[1] > team_scores[0] if ct_start else team_scores[0] > team_scores[1]
-                        current_stats = users_match_stats[user_id]
 
                         ally_score = team_scores[1] if ct_start else team_scores[0]
                         enemy_score = team_scores[0] if ct_start else team_scores[1]
