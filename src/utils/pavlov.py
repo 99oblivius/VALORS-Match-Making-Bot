@@ -24,7 +24,7 @@ class RCONManager:
                     try:
                         result = await func(*args, **kwargs)
                         print(f"[pavlov] [{func.__name__} n={attempts} addr={serveraddr}] {json.dumps(result, indent=4)}")
-                        if result == "\r\n": result = None
+                        if isinstance(result, str): result = None
                         if result and result.get('Successful', True):
                             async def delay_release():
                                 await asyncio.sleep(0.15)

@@ -200,10 +200,10 @@ class QueueButtonsView(nextcord.ui.View):
         # Recent performance
         if avg_stats:
             embed.add_field(name="\u200b", value="Recent Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats.get('avg_kills', None)}:.2f' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats.get('avg_deaths', None)}:.2f' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats.get('avg_assists', None)}:.2f' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Score", value=f"{f'{avg_stats.get('avg_score', None)}:.2f' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats.get('avg_kills', None):.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats.get('avg_deaths', None):.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats.get('avg_assists', None):.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Score", value=f"{f'{avg_stats.get('avg_score', None):.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
             embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats.get('avg_mmr_change', None)}:.2f' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
         else:
             embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)

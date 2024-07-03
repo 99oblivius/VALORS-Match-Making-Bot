@@ -32,7 +32,7 @@ class Match:
     async def wait_for_snd_mode(self):
         while True:
             try:
-                reply = (await self.bot.rcon_manager.server_info(self.match.server_address))['ServerInfo']
+                reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                 if reply['GameMode'] == 'SND':
                     break
                 await asyncio.sleep(2)
@@ -61,7 +61,7 @@ class Match:
                     disconnection_tracker[user_id] = 0
             else:
                 log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
-                await self.bot.rcon_manager.kick_player(self.match.server_address, platform_id)
+                await self.bot.rcon_manager.kick_player(self.match.serveraddr, platform_id)
         
         return found_player_ids
 
@@ -69,7 +69,7 @@ class Match:
         teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
         if int(player_data['TeamId']) != int(teamid):
             log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-            await self.bot.rcon_manager.allocate_team(self.match.server_address, platform_id, teamid)
+            await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
 
     def initialize_user_match_stats(self, user_id, player, users_summary_data):
         return {
@@ -89,8 +89,7 @@ class Match:
             "score": int(player_data['Score']),
             "kills": kills,
             "deaths": deaths,
-            "assists": assists,
-            "ping": int(float(player_data['Ping']))
+            "assists": assists
         })
 
     def check_disconnections(self, found_player_ids, disconnection_tracker, abandoned_users):
@@ -108,7 +107,7 @@ class Match:
             player = next((p for p in self.players if p.user_id == abandonee_id), None)
             if player:
                 await self.bot.store.add_abandon(self.guild_id, abandonee_id)
-                await match_thread.send(f"<@{user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
+                await self.match_thread.send(f"<@{player.user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
                 stats = users_match_stats.get(abandonee_id, self.initialize_user_match_stats(abandonee_id, player, users_summary_data))
@@ -135,7 +134,7 @@ class Match:
             "total_assists": summary_data.total_assists + match_stats['assists']
         }
     
-    async def finalize_match(self, users_match_stats, users_summary_data, team_scores):
+    async def finalize_match(self, users_match_stats, users_summary_data, team_scores, players_dict):
         final_updates = {}
         users_summary_stats = {}
         for player in self.players:
@@ -143,16 +142,19 @@ class Match:
             if user_id in users_match_stats:
                 current_stats = users_match_stats[user_id]
                 ct_start = current_stats['ct_start']
-                win = team_scores[1] > team_scores[0] if ct_start else team_scores[0] > team_scores[1]
+                win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
 
-                ally_score = team_scores[1] if ct_start else team_scores[0]
-                enemy_score = team_scores[0] if ct_start else team_scores[1]
+                ally_score = team_scores[0] if ct_start else team_scores[1]
+                enemy_score = team_scores[1] if ct_start else team_scores[0]
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
                 mmr_change = calculate_mmr_change(current_stats, 
                     ally_team_score=ally_score, enemy_team_score=enemy_score, 
                     ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win)
-                current_stats.update({"win": win, "mmr_change": mmr_change})
+                
+                player_data = player_dicts.get(user_id, None)
+                ping = int(float(player_data.get('Ping'))) if player_data else -1
+                current_stats.update({"win": win, "mmr_change": mmr_change, "ping": ping})
                 final_updates[user_id] = current_stats
 
                 summary_data = users_summary_data[user_id]
@@ -218,7 +220,7 @@ class Match:
                 if match and match.match_thread:
                     match_thread = guild.get_thread(match.match_thread)
                     if match_thread:
-                        await match_thread.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
+                        await self.match_thread.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
                 event = asyncio.Event()
                 await event.wait()
         return wrapper
@@ -234,8 +236,8 @@ class Match:
         
         self.state = await self.load_state()
         settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
-        match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
-        players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
+        self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
+        self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map                         = await self.bot.store.get_match_map(self.match_id)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
@@ -249,42 +251,42 @@ class Match:
         guild = self.bot.get_guild(self.guild_id)
         queue_channel = guild.get_channel(settings.mm_queue_channel)
 
-        match_thread  = guild.get_thread(match.match_thread)
-        a_thread      = guild.get_thread(match.a_thread)
-        b_thread      = guild.get_thread(match.b_thread)
+        self.match_thread  = guild.get_thread(self.match.match_thread)
+        a_thread      = guild.get_thread(self.match.a_thread)
+        b_thread      = guild.get_thread(self.match.b_thread)
 
-        a_vc          = guild.get_channel(match.a_vc)
-        b_vc          = guild.get_channel(match.b_vc)
+        a_vc          = guild.get_channel(self.match.a_vc)
+        b_vc          = guild.get_channel(self.match.b_vc)
 
         
         try:
-            if match.match_message: match_message = await match_thread.fetch_message(match.match_message)
+            if self.match.match_message: match_message = await self.match_thread.fetch_message(self.match.match_message)
         except Exception: pass
         try:
-            if match.a_message: a_message = await match_thread.fetch_message(match.a_message)
+            if self.match.a_message: a_message = await self.match_thread.fetch_message(self.match.a_message)
         except Exception: pass
         try:
-            if match.b_message: b_message = await match_thread.fetch_message(match.b_message)
+            if self.match.b_message: b_message = await self.match_thread.fetch_message(self.match.b_message)
         except Exception: pass
 
         if check_state(MatchState.NOT_STARTED):
             await self.increment_state()
         
         if check_state(MatchState.CREATE_MATCH_THREAD):
-            match_thread = await queue_channel.create_thread(
+            self.match_thread = await queue_channel.create_thread(
                 name=f"Match - #{self.match_id}",
                 auto_archive_duration=1440,
                 invitable=False,
                 reason=f"Match - #{self.match_id}")
-            await self.bot.store.update(MMBotMatches, id=self.match_id, match_thread=match_thread.id)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, match_thread=self.match_thread.id)
             await self.increment_state()
         
         if check_state(MatchState.ACCEPT_PLAYERS):
-            add_mention = (f"<@{player.user_id}>" for player in players)
+            add_mention = (f"<@{player.user_id}>" for player in self.players)
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
-            embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(players))
+            embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
-            await match_thread.send(''.join(add_mention), embed=embed, view=AcceptView(self.bot, done_event))
+            await self.match_thread.send(''.join(add_mention), embed=embed, view=AcceptView(self.bot, done_event))
 
             async def notify_unaccepted_players(delay: int=30):
                 await asyncio.sleep(delay)
@@ -295,7 +297,7 @@ class Match:
                         if member:
                             embed = nextcord.Embed(
                                 title="Queue Popped!", 
-                                description=f"{format_duration(settings.mm_accept_period - delay)} left to ACCEPT\n{match_thread.mention}!", 
+                                description=f"{format_duration(settings.mm_accept_period - delay)} left to ACCEPT\n{self.match_thread.mention}!", 
                                 color=0x18ff18)
                             await member.send(embed=embed)
 
@@ -309,22 +311,22 @@ class Match:
             except asyncio.TimeoutError:
                 self.state = MatchState.CLEANUP - 1
                 embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
-                await match_thread.send(embed=embed)
+                await self.match_thread.send(embed=embed)
             finally: [task.cancel() for task in notify_tasks]
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAMS):
-            users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in players])
+            users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
             a_players, b_players, a_mmr, b_mmr = get_teams(users)
             await self.bot.store.set_players_team(
                 match_id=self.match_id, 
                 user_teams={Team.A: a_players, Team.B: b_players})
-            players = await self.bot.store.get_players(self.match_id)
+            self.players = await self.bot.store.get_players(self.match_id)
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_mmr=a_mmr, b_mmr=b_mmr)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
-            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in players if player.team == Team.A }
+            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.layers if player.team == Team.A }
             player_overwrites.update({
                 guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
                 guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
@@ -338,7 +340,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_B):
-            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in players if player.team == Team.B }
+            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.players if player.team == Team.B }
             player_overwrites.update({
                 guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
                 guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
@@ -369,22 +371,22 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.BANNING_START):
-            await match_thread.purge(bulk=True)
+            await self.match_thread.purge(bulk=True)
             embed = nextcord.Embed(title="Team A ban first", description=f"<#{a_thread.id}>", color=HOME_THEME)
             embed.add_field(name="Team A", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
-            match_message = await match_thread.send(embed=embed)
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+            match_message = await self.match_thread.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
         
         if check_state(MatchState.A_BANS):
             time_to_ban = 20
-            players = await self.bot.store.get_players(self.match_id)
-            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
+            self.players = await self.bot.store.get_players(self.match_id)
+            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=HOME_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, match)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
@@ -403,18 +405,18 @@ class Match:
         if check_state(MatchState.BAN_SWAP):
             embed = nextcord.Embed(title="Team B ban second", description=f"<#{b_thread.id}>", color=AWAY_THEME)
             embed.add_field(name="Team A", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.B_BANS):
             time_to_ban = 20
-            players = await self.bot.store.get_players(self.match_id)
+            self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=AWAY_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, match)
-            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match)
+            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.B)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
             await asyncio.sleep(time_to_ban)
@@ -433,18 +435,18 @@ class Match:
         if check_state(MatchState.PICKING_START):
             embed = nextcord.Embed(title="Team A pick map", description=f"<#{a_thread.id}>", color=HOME_THEME)
             embed.add_field(name="Team A", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.A_PICK):
             time_to_pick = 20
-            players = await self.bot.store.get_players(self.match_id)
-            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.A)
+            self.players = await self.bot.store.get_players(self.match_id)
+            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=HOME_THEME)
-            view = await MapPickView.create_showable(self.bot, self.guild_id, match)
+            view = await MapPickView.create_showable(self.bot, self.guild_id, self.match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
@@ -464,18 +466,18 @@ class Match:
         if check_state(MatchState.PICK_SWAP):
             embed = nextcord.Embed(title="Team B pick side", description=f"<#{b_thread.id}>", color=AWAY_THEME)
             embed.add_field(name="Team A", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
             time_to_pick = 20
-            players = await self.bot.store.get_players(self.match_id)
-            add_mention = (f"<@{player.user_id}>" for player in players if player.team == Team.B)
+            self.players = await self.bot.store.get_players(self.match_id)
+            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.B)
             embed = nextcord.Embed(title="Pick your side", description=format_duration(time_to_pick), color=AWAY_THEME)
-            view = await SidePickView.create_showable(self.bot, self.guild_id, match)
+            view = await SidePickView.create_showable(self.bot, self.guild_id, self.match)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  b_message=b_message.id, phase=Phase.B_PICK)
             await asyncio.sleep(time_to_pick)
@@ -495,21 +497,21 @@ class Match:
             await self.increment_state()
 
         if check_state(MatchState.MATCH_STARTING):
-            await match_thread.purge(bulk=True)
+            await self.match_thread.purge(bulk=True)
             match_map = await self.bot.store.get_match_map(self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
             embed = nextcord.Embed(title="Starting", description="Setting up server", color=VALORS_THEME1)
             embed.set_image(match_map.media)
             embed.add_field(name=f"Team A - {match_sides[0].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-            match_message = await match_thread.send(embed=embed)
+            match_message = await self.match_thread.send(embed=embed)
 
             embed = nextcord.Embed(
                 title="Match starting!",
-                description=f"Return to {match_thread.mention}",
+                description=f"Return to {self.match_thread.mention}",
                 color=VALORS_THEME1)
             await a_thread.send(embed=embed)
             await b_thread.send(embed=embed)
@@ -517,7 +519,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_FIND_SERVER):
-            users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in players])
+            users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
             rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             server = None
             if rcon_servers:
@@ -540,16 +542,16 @@ class Match:
                 embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
                 embed.set_image(match_map.media)
                 embed.add_field(name=f"Team A - {match_sides[0].name}", 
-                    value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                    value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
                 embed.add_field(name=f"Team B - {match_sides[1].name}", 
-                    value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                    value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
                 embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
                 await match_message.edit(embed=embed)
                 self.state = MatchState.CLEANUP - 1
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
-            match = await self.bot.store.get_match(self.match_id)
+            self.match = await self.bot.store.get_match(self.match_id)
             await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.unban_all_players(serveraddr)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
@@ -563,9 +565,9 @@ class Match:
             embed = nextcord.Embed(title="Match", description=f"Server ready!", color=VALORS_THEME1)
             embed.set_image(match_map.media)
             embed.add_field(name=f"Team A - {match_sides[0].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.add_field(name="TDM Server", value=f"`{server_name}`", inline=False)
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
@@ -582,13 +584,13 @@ class Match:
                     log.info(f"[{self.match_id}] New players joined: {new_players}")
                     for platform_id in new_players:
                         player = next((
-                            player for player in players 
+                            player for player in self.players 
                             for p in player.user_platform_mappings
                             if p.platform_id == platform_id
                         ), None)
                         
                         if player:
-                            teamid = match.b_side.value if player.team == Team.B else 1 - match.b_side.value
+                            teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
                             team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
                             if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
                                 log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
@@ -602,7 +604,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):
-            m = next((m for m in maps if m.map == match.map), maps[0])
+            m = next((m for m in maps if m.map == self.match.map), maps[0])
             server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
             await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
@@ -610,7 +612,7 @@ class Match:
                 await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'])
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
-            await match_thread.send(embed=embed)
+            await self.match_thread.send(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_END):
@@ -630,7 +632,7 @@ class Match:
 
             while max(team_scores) < 10:
                 try:
-                    reply = (await self.bot.rcon_manager.server_info(self.match.server_address))['ServerInfo']
+                    reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
                     current_round = int(reply['Round'])
 
@@ -639,7 +641,7 @@ class Match:
                         last_round_number = current_round
                         log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
-                    players_data = await self.bot.rcon_manager.inspect_all(self.match.server_address)
+                    players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr)
                     players_dict = {player['UniqueId']: player for player in players_data['InspectList']}
                     
                     found_player_ids = await self.process_players(players_dict, users_match_stats, users_summary_data, disconnection_tracker, is_new_round)
@@ -652,7 +654,7 @@ class Match:
                         last_users_match_stats = copy.deepcopy(users_match_stats)
 
                     if abandoned_users:
-                        await self.handle_abandons(abandoned_users, users_match_stats, users_summary_data, match_thread)
+                        await self.handle_abandons(abandoned_users, users_match_stats, users_summary_data, self.match_thread)
                         self.state = MatchState.MATCH_CLEANUP - 1
                         break
                 except Exception as e:
@@ -660,7 +662,7 @@ class Match:
                 await asyncio.sleep(2)
             
             if not abandoned_users:
-                await self.finalize_match(users_match_stats, users_summary_data, team_scores)
+                await self.finalize_match(users_match_stats, users_summary_data, team_scores, players_dict)
 
             await self.update_rank_roles(users_match_stats, users_summary_data)
             await self.increment_state()
@@ -674,7 +676,7 @@ class Match:
             await self.bot.rcon_manager.set_pin(serveraddr, pin)
             await self.bot.rcon_manager.add_map(serveraddr, SERVER_DM_MAP, 'TDM')
             await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
-            m = next((m for m in maps if m.map == match.map), maps[0])
+            m = next((m for m in maps if m.map == self.match.map), maps[0])
             await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
             await self.bot.rcon_manager.max_players(serveraddr, 10)
@@ -686,11 +688,14 @@ class Match:
                 await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
                 await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
-            await match_thread.send(embed=embed)
+            try:
+                await self.match_thread.send(embed=embed)
+            except AttributeError:
+                pass
             await asyncio.sleep(10)
             # match_thread
             try:
-                if match_thread: await match_thread.delete()
+                if self.match_thread: await self.match_thread.delete()
             except nextcord.HTTPException: pass
             # a_thread
             try:
@@ -703,7 +708,7 @@ class Match:
             # move users back
             guild = self.bot.get_guild(self.guild_id)
             voice_channel = guild.get_channel(settings.mm_voice_channel)
-            for player in players:
+            for player in self.players:
                 member = guild.get_member(player.user_id)
                 if member and member.voice and member.voice.channel in [a_vc, b_vc]:
                     await asyncio.sleep(0.1)

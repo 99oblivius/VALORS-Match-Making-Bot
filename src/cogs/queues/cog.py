@@ -130,11 +130,11 @@ class Queues(commands.Cog):
 
         if avg_stats:
             embed.add_field(name="\u200b", value="Recent Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats['avg_kills']}:.2f' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats['avg_deaths']}:.2f' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats['avg_assists']}:.2f' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Score", value=f"{f'{avg_stats['avg_score']}:.2f' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats['avg_mmr_change']}:.2f' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats['avg_kills']:.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats['avg_deaths']:.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats['avg_assists']:.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg Score", value=f"{f'{avg_stats['avg_score']:.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats['avg_mmr_change']:.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
         else:
             embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
@@ -273,7 +273,7 @@ class Queues(commands.Cog):
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
         await interaction.response.send_message(
-            f"Queue periods set to `{periods_str}`\nUse </queue settings set_register:1257503333674123367> to update", ephemeral=True)
+            f"Queue periods set to `{periods_str}`\nUse </queue settings set_queue:1257503334533828618> to update", ephemeral=True)
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
