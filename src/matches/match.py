@@ -152,8 +152,8 @@ class Match:
                     ally_team_score=ally_score, enemy_team_score=enemy_score, 
                     ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win)
                 
-                player_data = player_dicts.get(user_id, None)
-                ping = int(float(player_data.get('Ping'))) if player_data else -1
+                player_data = players_dict.get(user_id, None)
+                ping = int(float(player_data['Ping'])) if player_data else -1
                 current_stats.update({"win": win, "mmr_change": mmr_change, "ping": ping})
                 final_updates[user_id] = current_stats
 
@@ -282,7 +282,10 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.ACCEPT_PLAYERS):
-            add_mention = (f"<@{player.user_id}>" for player in self.players)
+            add_mention = []
+            for player in self.players:
+                add_mention.append(f"<@{player.user_id}>")
+                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
@@ -326,7 +329,7 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
-            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.layers if player.team == Team.A }
+            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.players if player.team == Team.A }
             player_overwrites.update({
                 guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
                 guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
@@ -384,7 +387,11 @@ class Match:
         if check_state(MatchState.A_BANS):
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
-            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
+            add_mention = []
+            for player in self.players:
+                if player.team != Team.A: continue
+                add_mention.append(f"<@{player.user_id}>")
+                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=HOME_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
@@ -416,7 +423,11 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=AWAY_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
-            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.B)
+            add_mention = []
+            for player in self.players:
+                if player.team != Team.B: continue
+                add_mention.append(f"<@{player.user_id}>")
+                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
             await asyncio.sleep(time_to_ban)
@@ -634,7 +645,7 @@ class Match:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
-                    current_round = int(reply['Round'])
+                    current_round = int(reply.get('Round', 0))
 
                     is_new_round = current_round > last_round_number
                     if is_new_round:

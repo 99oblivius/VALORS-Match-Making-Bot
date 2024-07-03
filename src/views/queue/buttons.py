@@ -195,16 +195,16 @@ class QueueButtonsView(nextcord.ui.View):
         embed.add_field(name="Total Deaths", value=summary_stats.total_deaths, inline=True)
         embed.add_field(name="Total Assists", value=summary_stats.total_assists, inline=True)
         embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
-        embed.add_field(name="Average Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
+        embed.add_field(name="Total Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
 
         # Recent performance
         if avg_stats:
-            embed.add_field(name="\u200b", value="Recent Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Avg Kills", value=f"{f'{avg_stats.get('avg_kills', None):.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Deaths", value=f"{f'{avg_stats.get('avg_deaths', None):.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Assists", value=f"{f'{avg_stats.get('avg_assists', None):.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg Score", value=f"{f'{avg_stats.get('avg_score', None):.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Avg MMR Change", value=f"{f'{avg_stats.get('avg_mmr_change', None)}:.2f' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
+            embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
+            embed.add_field(name="Kills", value=f"{f'{avg_stats.get('avg_kills', None):.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Deaths", value=f"{f'{avg_stats.get('avg_deaths', None):.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Assists", value=f"{f'{avg_stats.get('avg_assists', None):.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
+            embed.add_field(name="Score", value=f"{f'{avg_stats.get('avg_score', None):.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
+            embed.add_field(name="MMR Gain", value=f"{f'{avg_stats.get('avg_mmr_change', None):.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
         else:
             embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 

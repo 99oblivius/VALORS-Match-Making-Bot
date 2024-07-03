@@ -55,9 +55,8 @@ def calculate_mmr_change(
     deaths = player_stats.get('deaths', 0)
     assists = player_stats.get('assists', 0)
     
-    if abandoned: base_change = -BASE_MMR_CHANGE * 2  # Double penalty for abandoning
-    elif win: base_change = BASE_MMR_CHANGE
-    else: base_change = -BASE_MMR_CHANGE
+    base_change = BASE_MMR_CHANGE
+    if abandoned: base_change = BASE_MMR_CHANGE * 2  # Double penalty for abandoning
 
     s = 400
     closeness_ratio = 4/9
