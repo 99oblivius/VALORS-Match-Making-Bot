@@ -1,5 +1,5 @@
 import json
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
 from io import BytesIO
 
 from fuzzywuzzy import process
@@ -94,6 +94,8 @@ class Settings(commands.Cog):
             await self.bot.store.remove(BotRegions, guild_id=guild_id, label=label)
         for n, (label, emoji) in enumerate(regions.items()):
             await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji.strip(), index=n)
+        log.debug(f"{interaction.user.display_name} set regions to:")
+        log.pretty(regions)
             
         await interaction.response.send_message(
             f"Regions set\nUse </settings set_register:1257503333674123367> to update", ephemeral=True)
@@ -121,6 +123,7 @@ class Settings(commands.Cog):
         region: str=nextcord.SlashOption(required=True)
     ):
         await self.bot.store.add_server(host, port, password, region)
+        log.debug(f"{interaction.user.display_name} added an rcon server {host}:{port} password:{password} region:{region}")
         await interaction.response.send_message(
             f"`{region}` Server `{host}`:`{port}` added successfully.", ephemeral=True)
 
@@ -140,6 +143,7 @@ class Settings(commands.Cog):
     ):
         host, port = serveraddr.split(':')
         await self.bot.store.remove_server(host, port)
+        log.debug(f"{interaction.user.display_name} added an rcon server {host}:{port} password:{password} region:{region}")
         await interaction.response.send_message(
             f"Server `{host}`:`{port}` removed successfully.", ephemeral=True)
 
@@ -186,6 +190,8 @@ class Settings(commands.Cog):
         
         await self.bot.store.remove(MMBotRanks, guild_id=interaction.guild.id)
         await self.bot.store.set_ranks(interaction.guild.id, ranks)
+        log.debug(f"{interaction.user.display_name} set ranks to:")
+        log.pretty(ranks)
 
         await interaction.response.send_message(
             f"Ranks set successfully. Use </ranks get_ranks:1249109243114557461> to view them.", ephemeral=True)

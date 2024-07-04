@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 import atexit
 import redis
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
+log.set_level(1)
 
 import nextcord
 from nextcord.ext import commands
-
 
 from config import *
 from utils.database import Database

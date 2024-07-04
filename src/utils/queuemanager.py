@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
 
 import nextcord
 

@@ -4,9 +4,8 @@ import nextcord
 
 from nextcord.ext import commands
 
-from utils.models import Phase, MMBotUserSidePicks, MMBotMatches
-
-from utils.models import Side
+from utils.models import Phase, MMBotUserSidePicks, MMBotMatches, Side
+from utils.logger import Logger as log
 
 
 class SidePickView(nextcord.ui.View):
@@ -64,6 +63,7 @@ class SidePickView(nextcord.ui.View):
                 user_id=interaction.user.id, 
                 match_id=match.id, 
                 side=pick)
+            log.debug(f"{interaction.user.display_name} voted for {pick.name}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

@@ -6,6 +6,7 @@ from nextcord.ext import commands
 
 from utils.utils import shifted_window
 from utils.models import Phase, MMBotMatches, MMBotUserMapPicks
+from utils.logger import Logger as log
 
 
 class MapPickView(nextcord.ui.View):
@@ -64,6 +65,7 @@ class MapPickView(nextcord.ui.View):
                 user_id=interaction.user.id, 
                 match_id=match.id, 
                 map=pick_maps[slot_id])
+            log.debug(f"{interaction.user.display_name} voted to pick {pick_maps[slot_id]}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

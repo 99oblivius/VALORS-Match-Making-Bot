@@ -3,6 +3,7 @@ import nextcord
 
 from utils.models import *
 from utils.utils import format_mm_attendance
+from utils.logger import Logger as log
 
 from config import MATCH_PLAYER_COUNT
 
@@ -30,6 +31,7 @@ class AcceptView(nextcord.ui.View):
         
         await self.bot.store.update(MMBotMatchPlayers, 
             guild_id=interaction.guild.id, match_id=match.id, user_id=interaction.user.id, accepted=True)
+        log.debug(f"{interaction.user.display_name} accepted match {match.id}")
         players = await self.bot.store.get_players(match.id)
         
         embed = interaction.message.embeds[0]

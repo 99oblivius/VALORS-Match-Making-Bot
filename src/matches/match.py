@@ -1,7 +1,7 @@
 import asyncio
 import traceback
 from functools import wraps
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
 import random
 import copy
 from typing import List

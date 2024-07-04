@@ -5,8 +5,8 @@ import nextcord
 from nextcord.ext import commands
 
 from utils.utils import shifted_window
-
 from utils.models import Phase, MMBotUserBans, MMBotMatches
+from utils.logger import Logger as log
 
 
 class BanView(nextcord.ui.View):
@@ -61,6 +61,7 @@ class BanView(nextcord.ui.View):
                 match_id=match.id, 
                 user_id=interaction.user.id, 
                 map=ban_maps[slot_id])
+            log.debug(f"{interaction.user.display_name} removed ban vote for {ban_maps[slot_id]}")
         else:
             # already voted max times
             if len(user_bans) > 1:
@@ -73,6 +74,7 @@ class BanView(nextcord.ui.View):
                 match_id=match.id, 
                 map=ban_maps[slot_id], 
                 phase=match.phase)
+            log.debug(f"{interaction.user.display_name} wants to ban {ban_maps[slot_id]}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

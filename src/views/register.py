@@ -6,6 +6,7 @@ from nextcord.ext import commands
 
 from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_2
 from utils.utils import generate_auth_url
+from utils.logger import Logger as log
 
 from utils.models import (
     BotRegions,
@@ -24,6 +25,7 @@ class MMHideView(nextcord.ui.View):
     @nextcord.ui.button(label="Hide MM", style=nextcord.ButtonStyle.red)
     async def hide_mm(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         await interaction.response.send_message("You have hidden Match Making.", ephemeral=True)
+        log.debug(f"{interaction.user.display_name} hid MM")
         try: await self.hide_msg.delete()
         except: pass
         await interaction.user.remove_roles(self.verified_role)
@@ -116,6 +118,7 @@ class RegistryButtonView(nextcord.ui.View):
             urls = [generate_auth_url(self.bot.cache, interaction.guild.id, interaction.user.id, platform.value) for platform in Platform]
             view = VerifyView(self.bot, urls, regions)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            log.debug(f"{interaction.user.display_name} pressed register")
         except Exception:
             await interaction.response.send_message("Something went wrong with the region select.", ephemeral=True)
 
@@ -148,6 +151,7 @@ class RegistryButtonView(nextcord.ui.View):
             view.hide_msg = msg
             return
         await interaction.user.add_roles(verified_role)
+        log.debug(f"{interaction.user.display_name} joined MM")
         message = f"Join a match in <#{settings.mm_queue_channel}>\nInteract with others in <#{settings.mm_text_channel}>"
         embed = nextcord.Embed(
             title="Welcome to Match Making!", 

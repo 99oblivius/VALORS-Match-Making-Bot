@@ -1,5 +1,5 @@
 import json
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
 from io import BytesIO
 import asyncio
 from datetime import datetime
@@ -70,8 +70,10 @@ class Matches(commands.Cog):
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):
+            log.debug(f"{interaction.user.display_name} failed to cancel match {match_id}")
             return await interaction.response.send_message(
                 f"Match id `{match_id}` failed to cleanup", ephemeral=True)
+        log.debug(f"{interaction.user.display_name} canceled match {match_id}")
         await interaction.response.send_message(
             f"Match id {match_id} cleaning up", ephemeral=True)
     
@@ -107,6 +109,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         if cooldown == 0:
             return await interaction.response.send_message("This user is not currently in cooldown", ephemeral=True)
         await self.bot.store.ignore_abandon(interaction.guild.id, user.id)
+        log.debug(f"{interaction.user.display_name} revoked {user.display_name}'s abandon")
         await interaction.response.send_message(f"{user.mention} had their cooldown revoked successfully.", ephemeral=True)
 
     @match_making.subcommand(name="settings", description="Match making settings")
@@ -117,6 +120,8 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
         seconds: int=nextcord.SlashOption(min_value=0, max_value=1800)):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_accept_period=seconds)
+        log.debug(f"{interaction.user.display_name} set the accept period to:")
+        log.pretty(seconds)
         await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
     
     @set_mm_accept_period.on_autocomplete("seconds")
@@ -144,6 +149,8 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
+        log.debug(f"{interaction.user.display_name} set the map pool to:")
+        log.pretty(m)
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
     

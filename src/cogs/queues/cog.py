@@ -1,6 +1,6 @@
 import json
 import re
-from utils.logger import ColorLogger as log
+from utils.logger import Logger as log
 from io import BytesIO
 from datetime import datetime, timezone, timedelta
 
@@ -71,6 +71,7 @@ class Queues(commands.Cog):
         
         self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
+        log.debug(f"{interaction.user.display_name} used the ping lfg slash_command")
 
     @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[GUILD_ID])
     async def rating_change(self, interaction: nextcord.Interaction):
@@ -285,6 +286,8 @@ class Queues(commands.Cog):
         
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
+        log.debug(f"{interaction.user.display_name} set queue periods to:")
+        log.pretty(periods_json)
         await interaction.response.send_message(
             f"Queue periods set to `{periods_str}`\nUse </queue settings set_queue:1257503334533828618> to update", ephemeral=True)
 

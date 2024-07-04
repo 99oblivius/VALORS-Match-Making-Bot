@@ -2,6 +2,7 @@ import asyncio
 import nextcord
 
 from utils.models import *
+from utils.logger import Logger as log
 
 from matches import cleanup_match
 
@@ -22,7 +23,9 @@ class AbandonView(nextcord.ui.View):
         loop = asyncio.get_event_loop()
         if match.current_round is None or match.current_round <= 6:
             if not await cleanup_match(loop, match.id):
+                log.debug(f"{interaction.user.display_name} had an issue abandoning match {match.id}")
                 return await interaction.response.send_message("Something went wrong. Try again...", ephemeral=True)
+            log.debug(f"{interaction.user.display_name} abandoned match {match.id}")
             await self.bot.store.add_abandon(interaction.guild.id, interaction.user.id)
             await interaction.guild.get_thread(match.match_thread).send("@here Match Abandoned")
             await interaction.response.send_message(
