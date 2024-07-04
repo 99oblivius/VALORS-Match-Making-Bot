@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
-import logging as log
+from utils.logger import ColorLogger as log
 
 import nextcord
 
@@ -54,7 +54,7 @@ class QueueManager:
             self.tasks.pop(user_id, None)
             self.bot.new_activity_value -= 1
         except Exception as e:
-            log.critical(f"[QueueManager] {repr(e)}")
+            print(f"[QueueManager] {repr(e)}")
 
     def add_user(self, user_id: int, expiry_timestamp: int):
         if user_id in self.tasks:
@@ -75,7 +75,7 @@ class QueueManager:
             queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
             self.bot.new_activity_value = len(queue_users) if queue_users else 0
         except AttributeError:
-            return log.warning("[QueueManager] No GUILDS")
+            return log.warning("No GUILDS")
         for user in queue_users:
             if user.queue_expiry > int(datetime.now(timezone.utc).timestamp()):
                 self.add_user(user.user_id, user.queue_expiry)

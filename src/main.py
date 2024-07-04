@@ -1,16 +1,7 @@
 from datetime import datetime, timezone
 import atexit
 import redis
-import logging as log
-yellow = "\x1b[33;20m"
-red = "\x1b[31;20m"
-reset = "\x1b[0m"
-log.basicConfig(
-    level=log.INFO,
-    format=f'{red}[{reset}{yellow}%(asctime)s{reset}{red}]{reset} %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[log.StreamHandler()]
-)
+from utils.logger import ColorLogger as log
 
 import nextcord
 from nextcord.ext import commands
@@ -50,7 +41,7 @@ def main():
 
     for folder in os.listdir("src/cogs"):
         if os.path.exists(os.path.join("src/cogs", folder, "cog.py")):
-            print(f"LOADING- cogs.{folder}")
+            log.info(f"LOADING- cogs.{folder}")
             bot.load_extension(f"cogs.{folder}.cog")
     
     @bot.event

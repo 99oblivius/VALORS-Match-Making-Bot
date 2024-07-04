@@ -1,5 +1,5 @@
 import json
-import logging as log
+from utils.logger import ColorLogger as log
 from io import BytesIO
 import asyncio
 from datetime import datetime
@@ -45,7 +45,7 @@ class Matches(commands.Cog):
         self.bot.add_view(SidePickView.create_dummy_persistent(self.bot))
         self.rotate_map_pool.start()
         
-        log.info("[Matches] Cog started")
+        log.info("Cog started")
 
         matches = await self.bot.store.get_ongoing_matches()
         loop = asyncio.get_event_loop()

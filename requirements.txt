@@ -10,3 +10,4 @@ numpy
 async-pavlov
 redis
 fuzzywuzzy[speedup]
+pandas

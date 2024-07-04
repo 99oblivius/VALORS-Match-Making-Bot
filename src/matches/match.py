@@ -1,7 +1,7 @@
 import asyncio
 import traceback
 from functools import wraps
-import logging as log
+from utils.logger import ColorLogger as log
 import random
 import copy
 from typing import List
@@ -28,6 +28,7 @@ class Match:
         self.guild_id  = guild_id
         self.match_id  = match_id
         self.state     = state
+        self.current_round = None
 
     async def wait_for_snd_mode(self):
         while True:
@@ -60,7 +61,7 @@ class Match:
                     users_match_stats[user_id]['rounds_played'] += 1
                     disconnection_tracker[user_id] = 0
             else:
-                log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
+                print(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                 await self.bot.rcon_manager.kick_player(self.match.serveraddr, platform_id)
         
         return found_player_ids
@@ -68,7 +69,7 @@ class Match:
     async def ensure_correct_team(self, player, platform_id, player_data):
         teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
         if int(player_data['TeamId']) != int(teamid):
-            log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+            print(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
             await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
 
     def initialize_user_match_stats(self, user_id, player, users_summary_data):
@@ -187,9 +188,9 @@ class Match:
                 old_rank_role = get_rank_role(old_mmr)
                 new_rank_role = get_rank_role(new_mmr)
 
-                if old_rank_role != new_rank_role:
-                    member = guild.get_member(user_id)
-                    if member:
+                member = guild.get_member(user_id)
+                if member:
+                    if old_rank_role != new_rank_role or old_rank_role not in member.roles:
                         if old_rank_role:
                             role_update_tasks.append(member.remove_roles(old_rank_role, reason="Updating MMR rank"))
                         if new_rank_role:
@@ -229,7 +230,7 @@ class Match:
     async def run(self):
         await self.bot.wait_until_ready()
         if self.state > 0: log.info(
-            f"[Match] Loaded ongoing match {self.match_id} state:{self.state}")
+            f"Loaded ongoing match {self.match_id} state:{self.state}")
         
         def check_state(state: MatchState):
             return True if self.state == state else False
@@ -585,14 +586,20 @@ class Match:
             await match_message.edit(embed=embed)
 
             server_players = set()
-            while len(server_players) < MATCH_PLAYER_COUNT:
-                log.info(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
+            expected_player_ids = {
+                platform_id
+                for player in self.players
+                for platform_id in player.user_platform_mappings
+            }
+            while len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+                print(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
-                
                 new_players = current_players - server_players
+                server_players = current_players
+
                 if new_players:
-                    log.info(f"[{self.match_id}] New players joined: {new_players}")
+                    print(f"[{self.match_id}] New players joined: {new_players}")
                     for platform_id in new_players:
                         player = next((
                             player for player in self.players 
@@ -604,13 +611,14 @@ class Match:
                             teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
                             team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
                             if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
-                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                print(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
                                 await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
+                            else:
+                                print(f"[{self.match_id}] Player {platform_id} already in team {teamid}")
                         else:
-                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
+                            print(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
                 
-                server_players = current_players
                 await asyncio.sleep(2)
             await self.increment_state()
         
@@ -619,6 +627,7 @@ class Match:
             server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
             await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
+            await asyncio.sleep(5)
             for m in server_maps.get('MapList', []):
                 await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'])
 
@@ -640,19 +649,21 @@ class Match:
             )
 
             await self.wait_for_snd_mode()
+            await asyncio.sleep(5)
 
             while max(team_scores) < 10:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
-                    current_round = int(reply.get('Round', 0))
+                    self.current_round = int(reply.get('Round', 0))
 
-                    is_new_round = current_round > last_round_number
+                    is_new_round = self.current_round > last_round_number
                     if is_new_round:
-                        last_round_number = current_round
-                        log.info(f"[{self.match_id}] Round {current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+                        last_round_number = self.current_round
+                        print(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
-                    players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr)
+                    players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
+                    if not 'InspectList' in players_data: continue
                     players_dict = {player['UniqueId']: player for player in players_data['InspectList']}
                     
                     found_player_ids = await self.process_players(players_dict, users_match_stats, users_summary_data, disconnection_tracker, is_new_round)
@@ -660,9 +671,15 @@ class Match:
                     if is_new_round:
                         self.check_disconnections(found_player_ids, disconnection_tracker, abandoned_users)
                     
-                    if last_users_match_stats != users_match_stats:
-                        await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, users_match_stats)
-                        last_users_match_stats = copy.deepcopy(users_match_stats)
+                    changed_users = {}
+                    for user_id, current_stats in users_match_stats.items():
+                        if user_id not in last_users_match_stats or current_stats != last_users_match_stats[user_id]:
+                            changed_users[user_id] = current_stats
+
+                    if changed_users:
+                        await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, changed_users)
+                        for user_id, stats in changed_users.items():
+                            last_users_match_stats[user_id] = copy.deepcopy(stats)
 
                     if abandoned_users:
                         await self.handle_abandons(abandoned_users, users_match_stats, users_summary_data, self.match_thread)
@@ -729,12 +746,12 @@ class Match:
             try:
                 if a_vc: await a_vc.delete()
             except nextcord.HTTPException as e:
-                log.warning(f"[Match] a_vc deleting: {repr(e)}")
+                print(f"[Match] a_vc deleting: {repr(e)}")
             # b_vc
             try:
                 if b_vc: await b_vc.delete()
             except nextcord.HTTPException:
-                log.warning(f"[Match] b_vc deleting: {repr(e)}")
+                print(f"[Match] b_vc deleting: {repr(e)}")
             # complete True
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()

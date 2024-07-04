@@ -1,9 +1,6 @@
-import logging
-from logging import getLogger
 from typing import List, Tuple, Dict, Any
-from datetime import timedelta, datetime, timezone
-from asyncio import AbstractEventLoop
-from sqlalchemy import inspect, delete, update, func, or_, text, and_, desc
+from datetime import timedelta, datetime
+from sqlalchemy import inspect, delete, update, func, or_, text, desc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -11,33 +8,9 @@ from sqlalchemy.orm import sessionmaker, joinedload, selectinload
 from sqlalchemy.future import select
 from config import DATABASE_URL
 
-from .models import (
-    BotSettings, 
-    BotRegions,
-    MMBotQueueUsers,
-    MMBotMatchPlayers,
-    MMBotMatches,
-    MMBotUsers,
-    MMBotUserBans,
-    MMBotMaps,
-    Phase,
-    Team,
-    Side,
-    MMBotUserMapPicks,
-    MMBotUserSidePicks,
-    UserPlatformMappings,
-    RconServers,
-    MMBotUserSummaryStats,
-    MMBotUserMatchStats,
-    MMBotUserAbandons,
-    MMBotRanks
-)
-
+from .models import *
 from matches import MatchState
 
-logging.getLogger('sqlalchemy').disabled = True
-
-log = getLogger(__name__)
 
 class Database:
     def __init__(self) -> None:
@@ -834,3 +807,32 @@ class Database:
             if last_match:
                 return last_match.mmr_before, last_match.mmr_change
             return None
+    
+    async def get_last_n_match_stats(self, guild_id: int, user_id: int, n: int) -> List[MMBotUserMatchStats]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMatchStats)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id)
+                .order_by(desc(MMBotUserMatchStats.timestamp))
+                .limit(n))
+            return list(reversed(result.scalars().all()))
+    
+    async def get_performance_by_time(self, guild_id: int, user_id: int) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(
+                    func.extract('hour', MMBotUserMatchStats.timestamp).label('hour'),
+                    func.avg(MMBotUserMatchStats.kills).label('avg_kills'),
+                    func.avg(MMBotUserMatchStats.deaths).label('avg_deaths'),
+                    func.avg(MMBotUserMatchStats.assists).label('avg_assists'),
+                    func.avg(MMBotUserMatchStats.score).label('avg_score'),
+                    func.avg(MMBotUserMatchStats.mmr_change).label('avg_mmr_change'),
+                    func.count(MMBotUserMatchStats.id).label('games_played'))
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id)
+                .group_by(func.extract('hour', MMBotUserMatchStats.timestamp))
+                .order_by(func.extract('hour', MMBotUserMatchStats.timestamp)))
+            return [dict(row) for row in result]

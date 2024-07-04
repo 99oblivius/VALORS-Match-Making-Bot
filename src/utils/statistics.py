@@ -1,49 +1,171 @@
-from typing import List
-from utils.models import MMBotUserMatchStats
+import colorsys
+import nextcord
+from typing import List, Dict
+from utils.models import MMBotUserMatchStats, MMBotRanks
+import pandas as pd
 
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2
 
-def create_stat_graph(graph_type: str, match_stats: List[MMBotUserMatchStats]) -> go.Figure:
-    x = [stat.timestamp for stat in match_stats]
-    
-    if graph_type == "mmr_time":
-        y = [stat.mmr_before + stat.mmr_change for stat in match_stats]
-        title = "MMR over time"
-        y_title = "MMR"
-        fig = go.Figure(go.Scatter(x=x, y=y, mode='lines+markers', line=dict(color=f'#{hex(VALORS_THEME1)[2:]}')))
-    
+def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks: List[Dict[nextcord.Role, MMBotRanks]]) -> go.Figure:
+    df = pd.DataFrame([vars(stat) for stat in match_stats])
+    df['game_number'] = range(1, len(df) + 1)
+    df['cumulative_wins'] = df['win'].cumsum()
+    df['win_rate'] = df['cumulative_wins'] / df['game_number']
+    df['kd_ratio'] = df['kills'] / df['deaths'].replace(0, 1)
+
+    theme_color1 = f'#{hex(VALORS_THEME1)[2:]}'
+    theme_color1_1 = f'#{hex(VALORS_THEME1_1)[2:]}'
+    theme_color1_2 = f'#{hex(VALORS_THEME1_2)[2:]}'
+    theme_color2 = f'#{hex(VALORS_THEME2)[2:]}'
+
+    if graph_type == "mmr_game":
+        mmr_values = df['mmr_before'] + df['mmr_change']
+        fig = go.Figure(go.Scatter(
+            x=df['game_number'], 
+            y=mmr_values, 
+            mode='lines', 
+            line=dict(color=theme_color1),
+            name='MMR'
+        ))
+
+        y_min = mmr_values.min()
+        y_max = mmr_values.max()
+        y_range = y_max - y_min
+        y_padding = y_range * 0.1
+
+        if ranks:
+            for role, rank in sorted(ranks.items(), key=lambda x: x[1].mmr_threshold):
+                if y_min - y_padding <= rank.mmr_threshold <= y_max + y_padding:
+                    color = f'rgb({role.color.r},{role.color.g},{role.color.b})'
+                    fig.add_shape(
+                        type="line",
+                        x0=0,
+                        y0=rank.mmr_threshold,
+                        x1=len(df),
+                        y1=rank.mmr_threshold,
+                        line=dict(color=color, width=3, dash="dash"),
+                    )
+
+                    fig.add_annotation(
+                        x=len(df),
+                        y=rank.mmr_threshold,
+                        xref="x",
+                        yref="y",
+                        text=f"{role.name}",
+                        showarrow=False,
+                        xanchor="right",
+                        yanchor="top",
+                        xshift=-5,
+                        yshift=-2,
+                        font=dict(size=12, color=color),
+                    )
+
+        fig.update_layout(
+            xaxis_title="Games", 
+            yaxis_title="MMR", 
+            showlegend=False, 
+            yaxis=dict(range=[y_min - y_padding, y_max + y_padding])
+        )
+
     elif graph_type == "kills_game":
-        y = [stat.kills for stat in match_stats]
-        title = "Kills per game"
-        y_title = "Kills"
-        fig = go.Figure(go.Scatter(x=x, y=y, mode='markers', marker=dict(color=f'#{hex(VALORS_THEME2)[2:]})')))
-    
-    elif graph_type == "kd_time":
-        y = [stat.kills / stat.deaths if stat.deaths > 0 else stat.kills for stat in match_stats]
-        title = "K/D ratio over time"
-        y_title = "K/D Ratio"
-        fig = go.Figure(go.Scatter(x=x, y=y, mode='lines+markers', line=dict(color=f'#{hex(VALORS_THEME1_1)[2:]}')))
-    
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df['game_number'], 
+            y=df['kills'], 
+            mode='markers', 
+            marker=dict(color=theme_color2)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df['game_number'], 
+            y=df['kills'].rolling(window=10).mean(), 
+            mode='lines', 
+            line=dict(color=theme_color1)
+        ))
+        fig.update_layout(xaxis_title="Games", yaxis_title="Kills", showlegend=False)
+
+    elif graph_type == "kd_game":
+        fig = go.Figure(go.Scatter(
+            x=df['game_number'], 
+            y=df['kd_ratio'], 
+            mode='markers',
+            marker=dict(color=theme_color2)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df['game_number'], 
+            y=df['kd_ratio'].rolling(window=10).mean(), 
+            mode='lines', 
+            line=dict(color=theme_color1)
+        ))
+        fig.update_layout(xaxis_title="Games", yaxis_title="K/D Ratio", showlegend=False)
+
     elif graph_type == "winrate_time":
-        wins = [1 if stat.win else 0 for stat in match_stats]
-        y = [sum(wins[:i+1]) / (i+1) for i in range(len(wins))]
-        title = "Win rate over time"
-        y_title = "Win Rate"
-        fig = go.Figure(go.Scatter(x=x, y=y, mode='lines', line=dict(color=f'#{hex(VALORS_THEME1_2)[2:]}')))
-    
+        fig = go.Figure(go.Scatter(
+            x=df['timestamp'], 
+            y=df['win_rate'], 
+            mode='lines', 
+            line=dict(color=theme_color1)
+        ))
+        fig.update_layout(
+            title="Win rate over time", 
+            xaxis_title="Date", 
+            yaxis_title="Win Rate", 
+            yaxis_range=[0,1], 
+            yaxis_tickformat='.0%', 
+            showlegend=False)
+
     elif graph_type == "score_game":
-        y = [stat.score for stat in match_stats]
-        title = "Score per game"
-        y_title = "Score"
-        fig = go.Figure(go.Scatter(x=x, y=y, mode='markers', marker=dict(color=f'#{hex(VALORS_THEME2)[2:]}')))
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df['game_number'], 
+            y=df['score'], 
+            mode='markers', 
+            marker=dict(color=theme_color2)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df['game_number'], 
+            y=df['score'].rolling(window=10).mean(), 
+            mode='lines', 
+            line=dict(color=theme_color1)
+        ))
+        fig.update_layout(xaxis_title="Games", yaxis_title="Score", showlegend=False)
+
+    elif graph_type == "performance_overview":
+        fig = make_subplots(
+            rows=2, 
+            cols=2, 
+            subplot_titles=("MMR", "K/D Ratio", "Win Rate", "Score"),
+            vertical_spacing=0.1,
+            horizontal_spacing=0.05)
+        
+        fig.add_trace(go.Scatter(x=df['game_number'], y=df['mmr_before'] + df['mmr_change'], mode='lines', line=dict(color=theme_color1)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df['game_number'], y=df['kd_ratio'], mode='lines', line=dict(color=theme_color2)), row=1, col=2)
+        fig.add_trace(go.Scatter(x=df['game_number'], y=df['win_rate'], mode='lines', line=dict(color=theme_color1_1)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df['game_number'], y=df['score'], mode='lines', line=dict(color=theme_color1_2)), row=2, col=2)
+        
+        fig.update_layout(height=800, title_text="Overview", showlegend=False)
+        fig.update_xaxes(title_text="Game Number")
+        fig.update_yaxes(title_text="Value")
+
+    if graph_type == "performance_overview":
+        fig.update_layout(height=700)
+    else: fig.update_layout(height=400)
 
     fig.update_layout(
-        title=title,
-        xaxis_title="Date",
-        yaxis_title=y_title,
+        margin=dict(l=0,r=0,t=0,b=0),
         template="plotly_dark",
-        font=dict(family="Arial", size=14, color="white"),
-        plot_bgcolor=f'#{hex(VALORS_THEME1_2)[2:]}',
-        paper_bgcolor=f'#{hex(VALORS_THEME1_2)[2:]}')
+        font=dict(family="Century Gothic", size=14, color="white"),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)')
+    fig.update_xaxes(
+        title=dict(
+            font=dict(size=16),
+            standoff=6))
+    fig.update_yaxes(
+        title=dict(
+            font=dict(size=16),
+            standoff=6))
+
     return fig
+

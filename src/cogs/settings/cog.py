@@ -1,6 +1,5 @@
 import json
-from typing import List
-import logging as log
+from utils.logger import ColorLogger as log
 from io import BytesIO
 
 from fuzzywuzzy import process
@@ -25,7 +24,7 @@ class Settings(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(RegistryButtonView(self.bot))
         await self.bot.rcon_manager.clear_dangling_servers()
-        log.info("[Queues] Cog started")
+        log.info("Cog started")
     
     @nextcord.slash_command(name="settings", description="Settings", guild_ids=[GUILD_ID])
     async def settings(self, interaction: nextcord.Interaction):
@@ -178,7 +177,7 @@ class Settings(commands.Cog):
             file = await ranks.read()
             ranks = json.loads(file)
         except Exception as e:
-            log.error(f"[Ranks] Error loading json file: {repr(e)}")
+            print(f"[Ranks] Error loading json file: {repr(e)}")
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid JSON string\ne.g. `{\"Bronze\": {\"mmr_threshold\": 1000, \"role_id\": 123456789}}`", ephemeral=True)
 
