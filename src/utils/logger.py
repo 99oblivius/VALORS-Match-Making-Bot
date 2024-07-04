@@ -20,7 +20,7 @@ class Logger:
         'ERROR': '\033[91m',    # Red
         'CRITICAL': '\033[95m', # Magenta
         'RESET': '\033[0m',     # Reset color
-        'BLACK': '\033[0;100m',  # Black
+        'BLACK': '\033[30;44m', # Black
         'GRAY': '\033[0;90m',   # Bold gray
         'PURPLE': '\033[0;35m'  # Purple
     }
@@ -31,24 +31,25 @@ class Logger:
 
     @staticmethod
     def _get_caller_class():
-        stack = inspect.stack()
-        for frame_info in stack[2:]:  # Start from two frames up
-            frame = frame_info[0]
-            if 'self' in frame.f_locals:
-                class_name = frame.f_locals['self'].__class__.__name__
-                if class_name != 'ColorLogger':
-                    return class_name
-            elif 'cls' in frame.f_locals:
-                class_name = frame.f_locals['cls'].__name__
-                if class_name != 'ColorLogger':
-                    return class_name
-            code = frame.f_code
-            if code.co_name != '<module>':  # Skip module-level calls
-                for var in frame.f_locals.values():
-                    if inspect.isclass(var) and code.co_name in var.__dict__:
-                        class_name = var.__name__
-                        if class_name != 'ColorLogger':
-                            return class_name
+        current_frame = inspect.currentframe()
+        try:
+            for _ in range(3):  # Skip Logger frames
+                if current_frame is not None:
+                    current_frame = current_frame.f_back
+            
+            if current_frame is not None:
+                frame_info = inspect.getframeinfo(current_frame)
+                module = inspect.getmodule(current_frame)
+                if module:
+                    for name, obj in module.__dict__.items():
+                        if inspect.isclass(obj):
+                            for attr, value in obj.__dict__.items():
+                                if getattr(value, '__code__', None) is current_frame.f_code:
+                                    return obj.__name__
+                return frame_info.function
+        finally:
+            del current_frame  # Avoid reference cycles
+
         return ''
 
     @classmethod
@@ -60,7 +61,7 @@ class Logger:
         black = cls._COLORS['BLACK']
         gray = cls._COLORS['GRAY']
         purple = cls._COLORS['PURPLE']
-        print(f"{gray}[{black}{timestamp}{gray}][{purple}{caller_class}{gray}]{color}{level} {reset}{message}{reset}", file=sys.stderr)
+        print(f"{gray}[{black}{timestamp}{gray}][{purple}{caller_class}{gray}] {color}|{level}| {reset}{message}{reset}", file=sys.stderr)
     
     @classmethod
     def get_level(cls):

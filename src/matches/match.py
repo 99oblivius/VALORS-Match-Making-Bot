@@ -1,8 +1,6 @@
 import asyncio
-import traceback
 from functools import wraps
 from utils.logger import Logger as log
-import random
 import copy
 from typing import List
 from collections import Counter
@@ -16,6 +14,7 @@ from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
 from utils.utils import format_mm_attendance, format_duration
+from utils.logger import Logger as log
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP, STARTING_MMR
 from .functions import get_preferred_bans, get_preferred_map, get_preferred_side, calculate_mmr_change
@@ -199,6 +198,7 @@ class Match:
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
+        log.debug(f"Match state -> {self.state}")
         await self.bot.store.save_match_state(self.match_id, self.state)
 
     async def load_state(self) -> MatchState:

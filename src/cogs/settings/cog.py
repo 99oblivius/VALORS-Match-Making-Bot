@@ -143,7 +143,7 @@ class Settings(commands.Cog):
     ):
         host, port = serveraddr.split(':')
         await self.bot.store.remove_server(host, port)
-        log.debug(f"{interaction.user.display_name} added an rcon server {host}:{port} password:{password} region:{region}")
+        log.debug(f"{interaction.user.display_name} removed an rcon server {serveraddr}")
         await interaction.response.send_message(
             f"Server `{host}`:`{port}` removed successfully.", ephemeral=True)
 

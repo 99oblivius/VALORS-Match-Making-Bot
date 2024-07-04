@@ -25,10 +25,9 @@ class Database:
             end_time = time.time()
             execution_time = end_time - start_time
 
-            method_name = func.__name__
             return_size = len(result) if result is not None and hasattr(result, '__len__') else None
 
-            log_message = f"DB Operation: {method_name}, Execution Time: {execution_time:.4f}s"
+            log_message = f"{func.__name__} {execution_time*1000:.3f}ms"
             if return_size is not None:
                 log_message += f", Return Size: {return_size}"
 

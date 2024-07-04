@@ -164,10 +164,13 @@ class QueueButtonsView(nextcord.ui.View):
                 self.bot.new_activity_value = 0
 
                 match_id = await self.bot.store.unqueue_add_match_users(settings, interaction.channel.id)
+                self.bot.new_activity_value = total_in_queue
+                await self.update_queue_message(interaction)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
-            self.bot.new_activity_value = total_in_queue
+                return
         
+        self.bot.new_activity_value = total_in_queue
         await self.update_queue_message(interaction)
     
     async def unready_callback(self, interaction: nextcord.Interaction):
