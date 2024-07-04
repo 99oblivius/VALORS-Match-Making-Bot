@@ -1,5 +1,6 @@
 import time
 from functools import wraps
+import asyncio
 from typing import List, Tuple, Dict, Any, Callable
 from datetime import timedelta, datetime
 from sqlalchemy import inspect, delete, update, func, or_, text, desc
@@ -37,11 +38,18 @@ class Database:
         return wrapper
 
     def __init__(self) -> None:
-        self._engine: AsyncEngine = create_async_engine(DATABASE_URL)
+        self._engine: AsyncEngine = create_async_engine(DATABASE_URL, pool_size=20, max_overflow=0)
         self._session_maker: sessionmaker = sessionmaker(bind=self._engine, class_=AsyncSession, expire_on_commit=False)
     
     def __del__(self):
-        self._engine.dispose()
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self.cleanup())
+            else:
+                loop.run_until_complete(self.cleanup())
+        except Exception as e:
+            log.error(f"Error during database cleanup: {repr(e)}")
     
 ###########
 # CLASSIC #

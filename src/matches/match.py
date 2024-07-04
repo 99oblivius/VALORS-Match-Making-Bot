@@ -788,7 +788,6 @@ class Match:
                 users_match_stats, 
                 users_summary_data)
             await self.increment_state()
-
         
         if check_state(MatchState.MATCH_CLEANUP):
             pin = 5
