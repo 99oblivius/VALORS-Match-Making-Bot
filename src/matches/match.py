@@ -4,6 +4,7 @@ from utils.logger import Logger as log
 import copy
 from typing import List
 from collections import Counter
+from datetime import datetime, timezone
 
 import nextcord
 from nextcord.ext import commands
@@ -182,6 +183,14 @@ class Match:
 
                 summary_data = users_summary_data[user_id]
                 users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
+        
+        reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+        side_a_score = int(reply['Team0Score'])
+        side_b_score = int(reply['Team1Score'])
+        team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
+        self.match.a_score = team_a_score
+        self.match.b_score = team_b_score
+        await self.bot.store.update(MMBotMatches, a_score=team_a_score, b_score=team_b_score)
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
@@ -263,7 +272,7 @@ class Match:
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
-        match_map                         = await self.bot.store.get_match_map(self.match_id)
+        match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
         serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
@@ -276,21 +285,24 @@ class Match:
         queue_channel = guild.get_channel(settings.mm_queue_channel)
 
         self.match_thread  = guild.get_thread(self.match.match_thread)
+        log_channel   = guild.get_channel(settings.mm_log_channel)
         a_thread      = guild.get_thread(self.match.a_thread)
         b_thread      = guild.get_thread(self.match.b_thread)
 
         a_vc          = guild.get_channel(self.match.a_vc)
         b_vc          = guild.get_channel(self.match.b_vc)
 
-        
         try:
-            if self.match.match_message: match_message = await self.match_thread.fetch_message(self.match.match_message)
+            if self.match.log_message:    log_message    = await log_channel.fetch_message(self.match.log_message)
         except Exception: pass
         try:
-            if self.match.a_message: a_message = await self.match_thread.fetch_message(self.match.a_message)
+            if self.match.match_message:  match_message  = await self.match_thread.fetch_message(self.match.match_message)
         except Exception: pass
         try:
-            if self.match.b_message: b_message = await self.match_thread.fetch_message(self.match.b_message)
+            if self.match.a_message:      a_message      = await self.match_thread.fetch_message(self.match.a_message)
+        except Exception: pass
+        try:
+            if self.match.b_message:      b_message      = await self.match_thread.fetch_message(self.match.b_message)
         except Exception: pass
 
         if check_state(MatchState.NOT_STARTED):
@@ -341,7 +353,7 @@ class Match:
                 await self.match_thread.send(embed=embed)
             finally: [task.cancel() for task in notify_tasks]
             await self.increment_state()
-        
+
         if check_state(MatchState.MAKE_TEAMS):
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
             a_players, b_players, a_mmr, b_mmr = get_teams(users)
@@ -350,6 +362,20 @@ class Match:
                 user_teams={Team.A: a_players, Team.B: b_players})
             self.players = await self.bot.store.get_players(self.match_id)
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_mmr=a_mmr, b_mmr=b_mmr)
+            await self.increment_state()
+        
+        if check_state(MatchState.LOG_MATCH):
+            embed = nextcord.Embed(
+                title=f"[{self.match_id}] VALORS MM Match",
+                description="Teams created\nInitiating team votes",
+                color=VALORS_THEME1)
+            embed.add_field(name="Team A", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
+            embed.add_field(name="Team B", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+            embed.set_footer(text=f"Match started ")
+            embed.timestamp(datetime.now(timezone.utc))
+            log_message = await log_channel.send(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
@@ -466,6 +492,13 @@ class Match:
             await a_thread.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_bans=bans)
             await self.increment_state()
+        
+        if check_state(MatchState.LOG_BANS):
+            embed = log_message.embeds[0]
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in self.match.a_bans)), inline=True)
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in self.match.b_bans)), inline=True)
+            log_message = await log_message.edit(embed=embed)
+            await self.increment_state()
             
         if check_state(MatchState.PICKING_START):
             embed = nextcord.Embed(title="Team A pick map", description=f"<#{a_thread.id}>", color=HOME_THEME)
@@ -529,6 +562,18 @@ class Match:
             embed = nextcord.Embed(title="You are", color=AWAY_THEME)
             await a_thread.send(embed=embed, view=ChosenSideView(a_side))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
+            await self.increment_state()
+         
+        if check_state(MatchState.LOG_PICKS):
+            embed = log_message.embeds[0]
+            embed.description = "Server setup"
+            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
+            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+            embed.set_image(match_map.media)
+            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
+            log_message = await log_message.edit(embed=embed)
             await self.increment_state()
 
         if check_state(MatchState.MATCH_STARTING):
@@ -660,6 +705,12 @@ class Match:
             await self.match_thread.send(embed=embed)
             await self.increment_state()
         
+        if check_state(MatchState.LOG_MATCH_HAPPENING):
+            embed = log_message.embeds[0]
+            embed.description = "Match in progress"
+            log_message = await log_message.edit(embed=embed)
+            await self.increment_state()
+
         if check_state(MatchState.MATCH_WAIT_FOR_END):
             team_scores = [0, 0]
             users_match_stats = {}
@@ -751,6 +802,16 @@ class Match:
             await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
             await self.bot.rcon_manager.max_players(serveraddr, 10)
+            await self.increment_state()
+        
+        if check_state(MatchState.LOG_END):
+            embed = log_message.embeds[0]
+            embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
+            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'} - {self.match.a_score}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
+            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'} - {self.match.b_score}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+            await log_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):

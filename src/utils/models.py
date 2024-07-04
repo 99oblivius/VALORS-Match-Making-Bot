@@ -239,6 +239,7 @@ class MMBotMatches(Base):
     maps_range       = Column(BigInteger, nullable=False, default=10)
     maps_phase       = Column(BigInteger, nullable=False, default=0)
     phase            = Column(sq_Enum(Phase), nullable=False, default=Phase.NONE)
+    log_message      = Column(BigInteger)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)
     a_vc             = Column(BigInteger)
