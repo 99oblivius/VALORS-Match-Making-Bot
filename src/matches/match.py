@@ -61,7 +61,7 @@ class Match:
                     users_match_stats[user_id]['rounds_played'] += 1
                     disconnection_tracker[user_id] = 0
             else:
-                print(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
+                log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                 await self.bot.rcon_manager.kick_player(self.match.serveraddr, platform_id)
         
         return found_player_ids
@@ -69,7 +69,7 @@ class Match:
     async def ensure_correct_team(self, player, platform_id, player_data):
         teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
         if int(player_data['TeamId']) != int(teamid):
-            print(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+            log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
             await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
 
     def initialize_user_match_stats(self, user_id, player, users_summary_data):
@@ -592,14 +592,14 @@ class Match:
                 for platform_id in player.user_platform_mappings
             }
             while len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
-                print(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
+                log.debug(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
                 new_players = current_players - server_players
                 server_players = current_players
 
                 if new_players:
-                    print(f"[{self.match_id}] New players joined: {new_players}")
+                    log.info(f"[{self.match_id}] New players joined: {new_players}")
                     for platform_id in new_players:
                         player = next((
                             player for player in self.players 
@@ -611,12 +611,12 @@ class Match:
                             teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
                             team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
                             if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
-                                print(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
                                 await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
                             else:
-                                print(f"[{self.match_id}] Player {platform_id} already in team {teamid}")
+                                log.info(f"[{self.match_id}] Player {platform_id} already in team {teamid}")
                         else:
-                            print(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
+                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
                 
                 await asyncio.sleep(2)
@@ -660,7 +660,7 @@ class Match:
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
                         last_round_number = self.current_round
-                        print(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+                        log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
                     players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
                     if not 'InspectList' in players_data: continue
@@ -745,13 +745,11 @@ class Match:
             # a_vc
             try:
                 if a_vc: await a_vc.delete()
-            except nextcord.HTTPException as e:
-                print(f"[Match] a_vc deleting: {repr(e)}")
+            except nextcord.HTTPException: pass
             # b_vc
             try:
                 if b_vc: await b_vc.delete()
-            except nextcord.HTTPException:
-                print(f"[Match] b_vc deleting: {repr(e)}")
+            except nextcord.HTTPException: pass
             # complete True
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()

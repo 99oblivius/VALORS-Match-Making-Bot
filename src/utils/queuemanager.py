@@ -54,7 +54,7 @@ class QueueManager:
             self.tasks.pop(user_id, None)
             self.bot.new_activity_value -= 1
         except Exception as e:
-            print(f"[QueueManager] {repr(e)}")
+            log.error(f"{repr(e)}")
 
     def add_user(self, user_id: int, expiry_timestamp: int):
         if user_id in self.tasks:

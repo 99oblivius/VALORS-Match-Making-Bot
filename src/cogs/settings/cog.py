@@ -177,7 +177,7 @@ class Settings(commands.Cog):
             file = await ranks.read()
             ranks = json.loads(file)
         except Exception as e:
-            print(f"[Ranks] Error loading json file: {repr(e)}")
+            log.error(f"loading json file: {repr(e)}")
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid JSON string\ne.g. `{\"Bronze\": {\"mmr_threshold\": 1000, \"role_id\": 123456789}}`", ephemeral=True)
 

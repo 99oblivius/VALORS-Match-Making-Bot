@@ -24,7 +24,7 @@ class Queues(commands.Cog):
                     activity=nextcord.CustomActivity(
                         name=f"Queue [{self.bot.new_activity_value}/{MATCH_PLAYER_COUNT}]"))
         except Exception as e:
-            print(f"Exception in queue_activity: {repr(e)}")
+            log.critical(f"Exception in queue_activity: {repr(e)}")
 
     @queue_activity.before_loop
     async def wait_queue_activity(self):
@@ -276,7 +276,7 @@ class Queues(commands.Cog):
             file = await periods.read()
             periods_json = json.loads(file)
         except Exception as e:
-            print(f"[Queues] Error loading json file: {repr(e)}")
+            log.error(f"loading json file: {repr(e)}")
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid JSON string\ne.g. `{\"Short\":5,\"Default\":15}`", ephemeral=True)
 

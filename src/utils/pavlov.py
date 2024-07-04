@@ -1,6 +1,7 @@
-from typing import Dict, List
+from typing import Dict
 from functools import wraps
 import json
+from utils.logger import ColorLogger as log
 
 import asyncio
 from pavlov import PavlovRCON
@@ -23,7 +24,7 @@ class RCONManager:
                 while attempts < kwargs.get('retry_attempts', 10):
                     try:
                         result = await func(*args, **kwargs)
-                        print(f"[pavlov] [{func.__name__} n={attempts} addr={serveraddr}] {json.dumps(result, indent=4)}")
+                        log.debug(f"[{func.__name__} n={attempts} addr={serveraddr}]\n{json.dumps(result, indent=4)}")
                         if isinstance(result, str): result = None
                         if result and result.get('Successful', True):
                             async def delay_release():
