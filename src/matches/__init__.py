@@ -43,3 +43,6 @@ async def cleanup_match(loop, match_id) -> bool:
     task.add_done_callback(lambda t: running_matches.pop(match.match_id, None))
     running_matches[match.match_id] = task
     return True
+
+def get_match(match_id) -> Match:
+    return active_matches.get(match_id)

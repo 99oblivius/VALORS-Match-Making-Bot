@@ -76,6 +76,13 @@ class Matches(commands.Cog):
         log.debug(f"{interaction.user.display_name} canceled match {match_id}")
         await interaction.response.send_message(
             f"Match id {match_id} cleaning up", ephemeral=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        log_channel = interaction.guild.get_channel(settings.mm_log_channel)
+        log_message = await log_channel.fetch_message(self.match.log_message)
+        embed = log_message.embeds[0]
+        embed.description = "Match canceled"
+        await log_message.edit(embed=embed)
     
     @nextcord.slash_command(name="abandon", description="Abandon a match")
     async def mm_abandon(self, interaction: nextcord.Interaction):
@@ -92,7 +99,7 @@ class Matches(commands.Cog):
             description=f"""Are you certain you want to abandon this match?
 _You abandoned a total of `{previous_abandons}` times in the last month._
 _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
-        await interaction.response.send_message(embed=embed, view=AbandonView(self.bot), ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match), ephemeral=True)
 
 
     ###########################

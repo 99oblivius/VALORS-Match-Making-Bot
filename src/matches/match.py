@@ -1,5 +1,6 @@
 import asyncio
 from functools import wraps
+import traceback
 from utils.logger import Logger as log
 import copy
 from typing import List
@@ -45,7 +46,6 @@ class Match:
         found_player_ids = {p.user_id: False for p in self.players}
         for platform_id, player_data in players_dict.items():
             player = next((p for p in self.players if any(platform_id == pm.platform_id for pm in p.user_platform_mappings)), None)
-            
             if player:
                 user_id = player.user_id
                 found_player_ids[user_id] = True
@@ -190,7 +190,7 @@ class Match:
         team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
         self.match.a_score = team_a_score
         self.match.b_score = team_b_score
-        await self.bot.store.update(MMBotMatches, a_score=team_a_score, b_score=team_b_score)
+        await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score)
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
@@ -247,7 +247,7 @@ class Match:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
-                log.exception(f"Exception in match {self.match_id}: {e}")
+                log.critical(f"Exception in match {self.match_id}: {traceback.format_exc()}")
                 guild = self.bot.get_guild(self.guild_id)
                 match = await self.bot.store.get_match(self.match_id)
                 if match and match.match_thread:
@@ -374,8 +374,9 @@ class Match:
             embed.add_field(name="Team B", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.set_footer(text=f"Match started ")
-            embed.timestamp(datetime.now(timezone.utc))
+            embed.timestamp = datetime.now(timezone.utc)
             log_message = await log_channel.send(embed=embed)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, log_message=log_message.id)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
@@ -655,13 +656,14 @@ class Match:
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             await match_message.edit(embed=embed)
 
+            current_players = set()
             server_players = set()
             expected_player_ids = {
                 platform_id
                 for player in self.players
                 for platform_id in player.user_platform_mappings
             }
-            while len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+            while len(current_players) != MATCH_PLAYER_COUNT or not current_players.issubset(expected_player_ids):
                 log.debug(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
@@ -696,8 +698,8 @@ class Match:
             m = next((m for m in maps if m.map == self.match.map), maps[0])
             server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
             await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
-            for m in server_maps.get('MapList', []):
-                await self.bot.rcon_manager.remove_map(serveraddr, m['MapId'], m['GameMode'], retry_attempts=1)
+            for ma in server_maps.get('MapList', []):
+                await self.bot.rcon_manager.remove_map(serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=1)
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
             log.info(f"[{self.match_id}] Switching to SND")
 
@@ -748,7 +750,7 @@ class Match:
                         embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
                         embed.set_field_at(0, name=f"Team A - {a_side} - {a_score}", value=a_player_list)
                         embed.set_field_at(1, name=f"Team B - {b_side} - {b_score}", value=b_player_list)
-                        await log_message.edit(embed=embed)
+                        asyncio.create_task(log_message.edit(embed=embed))
                         log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
                     players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
@@ -771,11 +773,13 @@ class Match:
                         users_summary_data, 
                         disconnection_tracker, 
                         is_new_round)
+                    
                     if is_new_round:
                         self.check_disconnections(
                             found_player_ids, 
                             disconnection_tracker, 
                             abandoned_users)
+                    
                     if abandoned_users:
                         await self.handle_abandons(
                             players_dict, 
@@ -804,13 +808,12 @@ class Match:
         if check_state(MatchState.MATCH_CLEANUP):
             pin = 5
             server_name = f"VALORS {server.region} #{server.id}"
-            await self.bot.rcon_manager.kick_all(serveraddr)
             await self.bot.rcon_manager.set_name(serveraddr, server_name)
             await self.bot.rcon_manager.set_pin(serveraddr, pin)
             await self.bot.rcon_manager.add_map(serveraddr, SERVER_DM_MAP, 'TDM')
-            await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
             m = next((m for m in maps if m.map == self.match.map), maps[0])
             await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
+            await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
             await self.bot.rcon_manager.max_players(serveraddr, 10)
             await self.increment_state()
