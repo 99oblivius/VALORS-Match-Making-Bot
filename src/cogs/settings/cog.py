@@ -51,9 +51,16 @@ class Settings(commands.Cog):
         
         embed = nextcord.Embed(
             title="Register for Match Making!", 
+            description="""## Welcome to VALORS's Match Making!
+
+1. Click `Register` to authenticate your Steam account.
+   - We only access your Steam ID for performance tracking.
+   - No personal information is stored or shared.
+
+2. Select your playing region for optimal server matching.
+
+Your privacy is our priority. Steam authentication is secure and limited to essential game data.""",
             color=VALORS_THEME1_2)
-        embed.add_field(name="1.", value="Verify your Steam account", inline=True)
-        embed.add_field(name="2.", value="Choose your region", inline=True)
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
         await self.bot.store.upsert(BotSettings, 
