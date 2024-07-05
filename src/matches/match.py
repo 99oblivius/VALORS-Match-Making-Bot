@@ -725,6 +725,11 @@ class Match:
                 self.guild_id, [p.user_id for p in self.players]
             )
 
+            a_side = 'T' if self.match.b_side == Side.CT else 'CT'
+            b_side = 'CT' if self.match.b_side == Side.CT else 'T'
+            a_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A])
+            b_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B])
+
             await self.wait_for_snd_mode()
             await asyncio.sleep(5)
 
@@ -737,6 +742,13 @@ class Match:
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
                         last_round_number = self.current_round
+                        embed = log_message.embeds[0]
+                        embed.description = "- Game in progress\n- Score updating live"
+                        a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
+                        embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
+                        embed.set_field_at(0, name=f"Team A - {a_side} - {a_score}", value=a_player_list)
+                        embed.set_field_at(1, name=f"Team B - {b_side} - {b_score}", value=b_player_list)
+                        await log_message.edit(embed=embed)
                         log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
                     players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
