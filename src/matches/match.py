@@ -204,29 +204,32 @@ class Match:
 
         rank_roles = sorted(
             [(r.mmr_threshold, guild.get_role(r.role_id)) 
-            for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0], reverse=True)
+            for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0])
         
         def get_rank_role(mmr):
-            return next((role for threshold, role in rank_roles if mmr >= threshold), None)
+            return next((role for threshold, role in reversed(rank_roles) if mmr > threshold), None)
         
-        role_update_tasks = []
         for player in self.players:
             user_id = player.user_id
             if user_id in users_match_stats and user_id in users_summary_data:
                 old_mmr = users_summary_data[user_id].mmr
                 new_mmr = old_mmr + users_match_stats[user_id]['mmr_change']
                 
-                old_rank_role = get_rank_role(old_mmr)
                 new_rank_role = get_rank_role(new_mmr)
 
                 member = guild.get_member(user_id)
                 if member:
-                    if old_rank_role != new_rank_role or old_rank_role not in member.roles:
-                        if old_rank_role:
-                            role_update_tasks.append(member.remove_roles(old_rank_role, reason="Updating MMR rank"))
-                        if new_rank_role:
-                            role_update_tasks.append(member.add_roles(new_rank_role, reason="Updating MMR rank"))
-        await asyncio.gather(*role_update_tasks)
+                    current_rank_roles = set(role for role in member.roles if role in {r for _, r in rank_roles})
+                    
+                    if current_rank_roles != {new_rank_role}:
+                        roles_to_remove = current_rank_roles - {new_rank_role}
+                        roles_to_add = {new_rank_role} - current_rank_roles
+
+                        if roles_to_remove:
+                            asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                        
+                        if roles_to_add:
+                            asyncio.create_task(member.add_roles(*roles_to_add, reason="Updating MMR rank"))
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
@@ -495,9 +498,11 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.LOG_BANS):
+            a_bans = await self.bot.store.get_bans(self.match_id, Team.A)
+            b_bans = await self.bot.store.get_bans(self.match_id, Team.B)
             embed = log_message.embeds[0]
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in self.match.a_bans)), inline=True)
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in self.match.b_bans)), inline=True)
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)), inline=True)
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in b_bans)), inline=True)
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
             
@@ -564,18 +569,6 @@ class Match:
             await a_thread.send(embed=embed, view=ChosenSideView(a_side))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
-         
-        if check_state(MatchState.LOG_PICKS):
-            embed = log_message.embeds[0]
-            embed.description = "Server setup"
-            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
-            embed.set_image(match_map.media)
-            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-            log_message = await log_message.edit(embed=embed)
-            await self.increment_state()
 
         if check_state(MatchState.MATCH_STARTING):
             await self.match_thread.purge(bulk=True)
@@ -597,6 +590,18 @@ class Match:
             await a_thread.send(embed=embed)
             await b_thread.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
+            await self.increment_state()
+         
+        if check_state(MatchState.LOG_PICKS):
+            embed = log_message.embeds[0]
+            embed.description = "Server setup"
+            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
+            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'}", 
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+            embed.set_image(match_map.media)
+            embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
+            log_message = await log_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_FIND_SERVER):
@@ -663,10 +668,15 @@ class Match:
                 for player in self.players
                 for platform_id in player.user_platform_mappings
             }
-            while len(current_players) != MATCH_PLAYER_COUNT or not current_players.issubset(expected_player_ids):
+            
+            while True:
                 log.debug(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
-                current_players = {p['UniqueId'] for p in player_list.get('PlayerList', [])}
+                current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
+
+                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+                    break
+
                 new_players = current_players - server_players
                 server_players = current_players
 
@@ -739,13 +749,13 @@ class Match:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
-                    self.current_round = int(reply.get('Round', 0))
+                    self.current_round = int(reply.get('Round', self.current_round))
 
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
                         last_round_number = self.current_round
                         embed = log_message.embeds[0]
-                        embed.description = "- Game in progress\n- Score updating live"
+                        embed.description = "- Ongoing\n- Scores updating live"
                         a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
                         embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
                         embed.set_field_at(0, name=f"Team A - {a_side} - {a_score}", value=a_player_list)
@@ -790,8 +800,14 @@ class Match:
                         self.state = MatchState.MATCH_CLEANUP - 1
                         break
                 except Exception as e:
-                    log.error(f"[{self.match_id}] Error during match: {repr(e)}")
+                    tb = traceback.extract_tb(e.__traceback__)
+                    _, line_number, func_name, _ = tb[-1]
+                    log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
                 await asyncio.sleep(2)
+            
+            await self.update_rank_roles(
+                users_match_stats, 
+                users_summary_data)
             
             if not abandoned_users:
                 await self.finalize_match(
@@ -800,9 +816,6 @@ class Match:
                     users_summary_data, 
                     team_scores)
 
-            await self.update_rank_roles(
-                users_match_stats, 
-                users_summary_data)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_CLEANUP):

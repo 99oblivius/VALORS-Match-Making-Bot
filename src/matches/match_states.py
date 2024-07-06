@@ -29,9 +29,9 @@ class MatchState(IntEnum):
     PICK_SWAP               = auto()
     B_PICK                  = auto()
 
-    LOG_PICKS               = auto()
-
     MATCH_STARTING          = auto()
+    LOG_PICKS               = auto()
+    
     MATCH_FIND_SERVER       = auto()
     MATCH_WAIT_FOR_PLAYERS  = auto()
     MATCH_START_SND         = auto()
