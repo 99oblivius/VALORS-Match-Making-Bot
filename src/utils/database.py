@@ -321,6 +321,29 @@ class Database:
                     MMBotMatchPlayers.user_id == user_id,
                     MMBotMatchPlayers.match_id == match_id))
             return result.scalars().first()
+    
+    @log_db_operation
+    async def get_leaderboard(self, guild_id: int, limit: int=10) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserSummaryStats)
+                .where(MMBotUserSummaryStats.guild_id == guild_id)
+                .order_by(desc(MMBotUserSummaryStats.mmr))
+                .limit(limit))
+            return [
+                {
+                    "user_id": row.MMBotUserSummaryStats.user_id,
+                    "mmr": row.MMBotUserSummaryStats.mmr,
+                    "games": row.MMBotUserSummaryStats.games,
+                    "wins": row.MMBotUserSummaryStats.wins,
+                    "win_rate": row.MMBotUserSummaryStats.wins / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_kills": row.MMBotUserSummaryStats.total_kills / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_deaths": row.MMBotUserSummaryStats.total_deaths / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_assists": row.MMBotUserSummaryStats.total_assists / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_score": row.MMBotUserSummaryStats.total_score / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                }
+                for row in result
+            ]
 
 
 ############

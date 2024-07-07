@@ -4,6 +4,29 @@ from datetime import datetime
 from pprint import pprint
 
 
+class VariableLog:
+    variables_to_value = {}
+
+    @classmethod
+    def debug(cls, value, message: str=""):
+        if Logger.get_level() > Logger.DEBUG: return
+        
+        frame = inspect.currentframe().f_back
+        variable_name = None
+        for name, val in frame.f_locals.items():
+            if val is value:
+                variable_name = name
+                break
+        
+        if variable_name is None:
+            Logger.debug(f"{message}{' ' if message else ''}Value => {value}")
+            return
+
+        if variable_name not in cls.variables_to_value or cls.variables_to_value[variable_name] != value:
+            cls.variables_to_value[variable_name] = value
+            Logger.debug(f"{message}{' ' if message else ''}{variable_name} => {value}")
+
+
 class Logger:
     _log_level = 2
 

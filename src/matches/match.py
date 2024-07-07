@@ -16,7 +16,7 @@ from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
 from utils.utils import format_mm_attendance, format_duration
-from utils.logger import Logger as log
+from utils.logger import Logger as log, VariableLog
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP, STARTING_MMR
 from .functions import get_preferred_bans, get_preferred_map, get_preferred_side, calculate_mmr_change
@@ -97,6 +97,7 @@ class Match:
         for pid, found in found_player_ids.items():
             if not found:
                 disconnection_tracker[pid] += 1
+                VariableLog.debug(disconnection_tracker[pid], message=f"[{self.match_id}] Disconnect {pid}")
                 if disconnection_tracker[pid] >= 5:
                     abandoned_users.append(pid)
 
@@ -227,9 +228,11 @@ class Match:
 
                         if roles_to_remove:
                             asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                            log.info(f"{roles_to_add} role(s) removed from {member.display_name}")
                         
                         if roles_to_add:
                             asyncio.create_task(member.add_roles(*roles_to_add, reason="Updating MMR rank"))
+                            log.info(f"{roles_to_add} role(s) added to {member.display_name}")
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
@@ -296,16 +299,20 @@ class Match:
         b_vc          = guild.get_channel(self.match.b_vc)
 
         try:
-            if self.match.log_message:    log_message    = await log_channel.fetch_message(self.match.log_message)
+            if self.match.log_message:
+                log_message    = await log_channel.fetch_message(self.match.log_message)
         except Exception: pass
         try:
-            if self.match.match_message:  match_message  = await self.match_thread.fetch_message(self.match.match_message)
+            if self.match.match_message: 
+                match_message  = await self.match_thread.fetch_message(self.match.match_message)
         except Exception: pass
         try:
-            if self.match.a_message:      a_message      = await self.match_thread.fetch_message(self.match.a_message)
+            if self.match.a_message: 
+                a_message      = await self.match_thread.fetch_message(self.match.a_message)
         except Exception: pass
         try:
-            if self.match.b_message:      b_message      = await self.match_thread.fetch_message(self.match.b_message)
+            if self.match.b_message: 
+                b_message      = await self.match_thread.fetch_message(self.match.b_message)
         except Exception: pass
 
         if check_state(MatchState.NOT_STARTED):
@@ -745,11 +752,18 @@ class Match:
             await self.wait_for_snd_mode()
             await asyncio.sleep(5)
 
-            while max(team_scores) < 10:
+            ready_to_continue = False
+            max_score = 0
+            while ready_to_continue:
+                if max_score >= 10:
+                    ready_to_continue = True
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
+                    max_score = max(team_scores)
                     self.current_round = int(reply.get('Round', self.current_round))
+                    VariableLog.debug(last_round_number, message=f"[{self.match_id}] Last")
+                    VariableLog.debug(self.current_round, message=f"[{self.match_id}]")
 
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:

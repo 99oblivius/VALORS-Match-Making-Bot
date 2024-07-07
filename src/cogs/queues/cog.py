@@ -117,7 +117,16 @@ class Queues(commands.Cog):
         recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
 
-        embed = nextcord.Embed(title=f"Stats for {user.display_name}", color=VALORS_THEME1)
+        data = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
+        
+        ranked_players = 0
+        ranked_position = None
+        for player in data:
+            if player['games'] > 0 and interaction.guild.get_member(player['user_id']):
+                ranked_players += 1
+            if player['user_id'] == interaction.user.id:
+                ranked_position = ranked_players
+        embed = nextcord.Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", color=VALORS_THEME1)
         embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
         embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)

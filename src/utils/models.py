@@ -104,6 +104,8 @@ class BotSettings(Base):
 
     register_channel     = Column(BigInteger)
     register_message     = Column(BigInteger)
+    leaderboard_channel  = Column(BigInteger)
+    leaderboard_message  = Column(BigInteger)
 
 class BotRegions(Base):
     __tablename__ = 'bot_regions'

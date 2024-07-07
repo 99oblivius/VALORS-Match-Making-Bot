@@ -24,7 +24,7 @@ class RCONManager:
                 while attempts < kwargs.get('retry_attempts', 10):
                     try:
                         result = await func(*args, **kwargs)
-                        log.debug(f"[{func.__name__} n={attempts} addr={serveraddr}]")
+                        log.debug(f"[{func.__name__} n={attempts} addr={serveraddr}] {str(result)[:19 if len(str(result)) > 22 else 22]}{'...' if len(str(result)) > 22 else ''}")
                         if isinstance(result, str): result = None
                         if result and result.get('Successful', True):
                             async def delay_release():
