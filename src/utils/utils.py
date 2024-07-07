@@ -2,10 +2,12 @@ from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from nextcord import Embed, Guild
+from nextcord import Embed, Guild, User, Member
 from math import floor
 
 from utils.models import MMBotMatchPlayers, MMBotRanks
+
+from config import VALORS_THEME1
 
 def format_duration(seconds):
     intervals = (
@@ -145,6 +147,43 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
     
     return embed
 
+def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches) -> Embed:
+    ranked_players = 0
+    ranked_position = None
+    for player in leaderboard_data:
+        if player['games'] > 0 and guild.get_member(player['user_id']):
+            ranked_players += 1
+        if player['user_id'] == user.id:
+            ranked_position = ranked_players
+    embed = Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", color=VALORS_THEME1)
+    embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+
+    embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
+    embed.add_field(name="Total Games", value=summary_data.games, inline=True)
+    embed.add_field(name="Win Rate", value=f"{(summary_data.wins / summary_data.games * 100):.2f}%" if summary_data.games > 0 else "N/A", inline=True)
+    embed.add_field(name="Total Kills", value=summary_data.total_kills, inline=True)
+    embed.add_field(name="Total Deaths", value=summary_data.total_deaths, inline=True)
+    embed.add_field(name="Total Assists", value=summary_data.total_assists, inline=True)
+    embed.add_field(name="K/D Ratio", value=f"{(summary_data.total_kills / summary_data.total_deaths):.2f}" if summary_data.total_deaths > 0 else "N/A", inline=True)
+    embed.add_field(name="Total Score", value=f"{(summary_data.total_score / summary_data.games):.2f}" if summary_data.games > 0 else "N/A", inline=True)
+
+    if avg_stats:
+        embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
+        embed.add_field(name="Kills", value=f"{f'{avg_stats['avg_kills']:.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
+        embed.add_field(name="Deaths", value=f"{f'{avg_stats['avg_deaths']:.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
+        embed.add_field(name="Assists", value=f"{f'{avg_stats['avg_assists']:.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
+        embed.add_field(name="Score", value=f"{f'{avg_stats['avg_score']:.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
+        embed.add_field(name="MMR Gain", value=f"{f'{avg_stats['avg_mmr_change']:.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
+    else:
+        embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
+
+    if recent_matches:
+        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
+        embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
+    else:
+        embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
+    
+    return embed
 
 
 ANSI_TARGET_COLORS = {

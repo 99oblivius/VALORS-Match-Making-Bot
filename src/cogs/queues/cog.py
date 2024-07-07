@@ -10,7 +10,7 @@ from nextcord.ext import commands, tasks
 from config import *
 from views.queue.buttons import QueueButtonsView
 from utils.models import BotSettings
-from utils.utils import format_duration
+from utils.utils import format_duration, create_stats_embed
 from utils.statistics import create_graph
 
 
@@ -116,43 +116,8 @@ class Queues(commands.Cog):
 
         recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
-
         data = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
-        
-        ranked_players = 0
-        ranked_position = None
-        for player in data:
-            if player['games'] > 0 and interaction.guild.get_member(player['user_id']):
-                ranked_players += 1
-            if player['user_id'] == interaction.user.id:
-                ranked_position = ranked_players
-        embed = nextcord.Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", color=VALORS_THEME1)
-        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
-
-        embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)
-        embed.add_field(name="Total Games", value=summary_stats.games, inline=True)
-        embed.add_field(name="Win Rate", value=f"{(summary_stats.wins / summary_stats.games * 100):.2f}%" if summary_stats.games > 0 else "N/A", inline=True)
-        embed.add_field(name="Total Kills", value=summary_stats.total_kills, inline=True)
-        embed.add_field(name="Total Deaths", value=summary_stats.total_deaths, inline=True)
-        embed.add_field(name="Total Assists", value=summary_stats.total_assists, inline=True)
-        embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
-        embed.add_field(name="Total Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
-
-        if avg_stats:
-            embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Kills", value=f"{f'{avg_stats['avg_kills']:.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Deaths", value=f"{f'{avg_stats['avg_deaths']:.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Assists", value=f"{f'{avg_stats['avg_assists']:.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Score", value=f"{f'{avg_stats['avg_score']:.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-            embed.add_field(name="MMR Gain", value=f"{f'{avg_stats['avg_mmr_change']:.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
-        else:
-            embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
-
-        if recent_matches:
-            recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
-            embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
-        else:
-            embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
+        embed = create_stats_embed(interaction.guild, interaction.user, data, summary_stats, avg_stats, recent_matches)
 
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)

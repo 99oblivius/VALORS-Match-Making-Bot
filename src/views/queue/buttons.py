@@ -9,7 +9,7 @@ from nextcord.ext import commands
 
 from matches import make_match
 from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT, VALORS_THEME1_2, LFG_PING_DELAY
-from utils.utils import format_duration, abandon_cooldown
+from utils.utils import format_duration, abandon_cooldown, create_stats_embed
 
 
 class QueueButtonsView(nextcord.ui.View):
@@ -190,37 +190,9 @@ class QueueButtonsView(nextcord.ui.View):
 
         recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
-
-        embed = nextcord.Embed(title=f"Stats for {user.display_name}", color=VALORS_THEME1)
-        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
-
-        # Summary stats
-        embed.add_field(name="MMR", value=f"{summary_stats.mmr:.2f}", inline=True)
-        embed.add_field(name="Total Games", value=summary_stats.games, inline=True)
-        embed.add_field(name="Win Rate", value=f"{(summary_stats.wins / summary_stats.games * 100):.2f}%" if summary_stats.games > 0 else "N/A", inline=True)
-        embed.add_field(name="Total Kills", value=summary_stats.total_kills, inline=True)
-        embed.add_field(name="Total Deaths", value=summary_stats.total_deaths, inline=True)
-        embed.add_field(name="Total Assists", value=summary_stats.total_assists, inline=True)
-        embed.add_field(name="K/D Ratio", value=f"{(summary_stats.total_kills / summary_stats.total_deaths):.2f}" if summary_stats.total_deaths > 0 else "N/A", inline=True)
-        embed.add_field(name="Total Score", value=f"{(summary_stats.total_score / summary_stats.games):.2f}" if summary_stats.games > 0 else "N/A", inline=True)
-
-        # Recent performance
-        if avg_stats:
-            embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
-            embed.add_field(name="Kills", value=f"{f'{avg_stats.get('avg_kills', None):.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Deaths", value=f"{f'{avg_stats.get('avg_deaths', None):.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Assists", value=f"{f'{avg_stats.get('avg_assists', None):.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-            embed.add_field(name="Score", value=f"{f'{avg_stats.get('avg_score', None):.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-            embed.add_field(name="MMR Gain", value=f"{f'{avg_stats.get('avg_mmr_change', None):.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
-        else:
-            embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
-
-        # Recent matches
-        if recent_matches:
-            recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
-            embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
-        else:
-            embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
+        leaderboard = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
+        embed = create_stats_embed(interaction.guild, interaction.user, leaderboard, summary_stats, avg_stats, recent_matches)
+        
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def lfg_callback(self, interaction: nextcord.Interaction):
