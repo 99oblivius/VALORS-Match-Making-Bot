@@ -116,7 +116,7 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
         score = floor(player['avg_score'])
         
         # Color coding
-        rank_color = get_rank_color(float(mmr), ranks)
+        rank_color = get_rank_color(guild, float(mmr), ranks)
         win_rate_color = "\u001b[32m" if win_rate > 60 else "\u001b[31m" if win_rate < 40 else "\u001b[0m"
         score_color = "\u001b[32m" if score > avg_score else "\u001b[31m"
         
