@@ -15,7 +15,7 @@ from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import MapPickView, ChosenMapView
 from views.match.side_pick import SidePickView, ChosenSideView
-from utils.utils import format_mm_attendance, format_duration
+from utils.utils import format_mm_attendance, format_duration, create_leaderboard_embed
 from utils.logger import Logger as log, VariableLog
 
 from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP, STARTING_MMR
@@ -104,7 +104,7 @@ class Match:
                     abandoned_users.append(pid)
 
     async def handle_abandons(self, players_dict, abandoned_users, users_match_stats, users_summary_data):
-        await self.bot.store.set_match_abandons(self.match_id, abandoned_users)
+        await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandonee_id)
         abandonee_match_update = {}
         abandonee_summary_update = {}
 
@@ -118,7 +118,6 @@ class Match:
         for abandonee_id in abandoned_users:
             player = next((p for p in self.players if p.user_id == abandonee_id), None)
             if player:
-                await self.bot.store.add_abandon(self.guild_id, self.match_id, abandonee_id)
                 await self.match_thread.send(f"<@{player.user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
@@ -861,10 +860,21 @@ class Match:
                 await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
                 await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
+            
+            channel = guild.get_channel(settings.leaderboard_channel)
             try:
                 await self.match_thread.send(embed=embed)
             except AttributeError:
                 pass
+            
+            guild = self.bot.get_guild(self.guild_id)
+            message = await channel.fetch_message(settings.leaderboard_message)
+            ranks = await self.bot.store.get_ranks(guild.id)
+            
+            data = await self.bot.store.get_leaderboard(guild.id, limit=100)
+            previous_data = await self.bot.store.get_last_mmr_for_users(guild.id)
+            embed = create_leaderboard_embed(guild, data, previous_data, ranks)
+            asyncio.create_task(message.edit(embed=embed))
             await asyncio.sleep(10)
             # match_thread
             try:

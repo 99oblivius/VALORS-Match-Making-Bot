@@ -93,7 +93,7 @@ class Matches(commands.Cog):
                 "You must use this command in a match thread", ephemeral=True)
 
         previous_abandons, _ = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)       
-        cooldown = abandon_cooldown(previous_abandons + 1, datetime.now(timezone.utc))
+        cooldown = abandon_cooldown(previous_abandons + 1)
 
         match_instance = get_match(match.id)
         player = next((player for player in match_instance.players if player.user_id == interaction.user.id), None)

@@ -1,8 +1,11 @@
-from typing import List
+from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timedelta, timezone
+from functools import partial
+from nextcord import Embed, Guild
+from math import floor
 
-from utils.models import MMBotMatchPlayers
+from utils.models import MMBotMatchPlayers, MMBotRanks
 
 def format_duration(seconds):
     intervals = (
@@ -53,6 +56,94 @@ def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
 
     cooldown_seconds = (cooldown_end - datetime.now(timezone.utc)).total_seconds()
     return max(0, int(cooldown_seconds))
+
+def get_rank_color(guild: Guild, mmr: int, ranks: List[MMBotRanks]) -> str:
+    def to_rgb(color):
+        return ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)
+
+    def euclidean(c1, c2):
+        r1, g1, b1 = to_rgb(c1)
+        r2, g2, b2 = to_rgb(c2)
+        return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2
+
+    def closest_color_code(color, target_colors=ANSI_TARGET_COLORS, dist=euclidean):
+        return target_colors[min(target_colors, key=partial(dist, color))]
+
+    sorted_ranks = sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True)
+
+    for rank in sorted_ranks:
+        if mmr >= rank.mmr_threshold:
+            role = guild.get_role(rank.role_id)
+            if role and role.color:
+                color_code = closest_color_code(role.color.value)
+                return f"\u001b[1;{color_code}m"
+    
+    return "\u001b[1;30m"
+
+def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]], last_mmr: Dict[int, int], ranks: List[MMBotRanks]) -> Embed:
+    field_count = 0
+
+    valid_scores = [player['avg_score'] for player in leaderboard_data if player['games'] > 0 and guild.get_member(player['user_id'])]
+    avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
+    embed = Embed(title="Match Making Leaderboard", description=f"{len(valid_scores)} ranking players\nK/D/A and Score are mean averages")
+
+    previous_positions = { user_id: i for i, (user_id, _) in enumerate(last_mmr.items(), 1) }
+
+    ranking_position = 0
+    for player in leaderboard_data:
+        if field_count > 25: break
+        if player['games'] == 0: continue
+
+        member = guild.get_member(player['user_id'])
+        if member is None: continue
+        
+        ranking_position += 1
+
+        previous_position = previous_positions.get(player['user_id'], None)
+        if previous_position is None:               rank_change = "\u001b[35m·"
+        elif ranking_position < previous_position:  rank_change = "\u001b[32m↑"
+        elif ranking_position > previous_position:  rank_change = "\u001b[31m↓"
+        else:                                       rank_change = "\u001b[36m|"
+
+        name = member.display_name[:11] + '…' if len(member.display_name) > 12 else member.display_name
+        name = name.ljust(12)
+        mmr = f"{floor(player['mmr'])}".rjust(4)
+        games = f"{player['games']}".rjust(3)
+        win_rate = floor(player['win_rate']*100)
+        k = floor(player['avg_kills'])
+        d = floor(player['avg_deaths'])
+        a = floor(player['avg_assists'])
+        score = floor(player['avg_score'])
+        
+        # Color coding
+        rank_color = get_rank_color(float(mmr), ranks)
+        win_rate_color = "\u001b[32m" if win_rate > 60 else "\u001b[31m" if win_rate < 40 else "\u001b[0m"
+        score_color = "\u001b[32m" if score > avg_score else "\u001b[31m"
+        
+        kda = f"{k}/{d}/{a}".rjust(8)
+        if k < d:
+            kda_formatted = kda.replace(str(d), f"\u001b[31m{d}\u001b[0m", 1)
+        else:
+            kda_formatted = kda
+
+        row = f"{ranking_position:3} {rank_change}\u001b[0m {name} | {rank_color}{mmr}\u001b[0m | {games} | {win_rate_color}{win_rate:3}%\u001b[0m | {kda_formatted} | {score_color}{score:2}\u001b[0m\n"
+        
+        if ranking_position % 5 == 1:
+            if ranking_position == 1:
+                header = "  R | Player       |  MMR |   G |  W%  |   K/D/A  | S  "
+                field_content = f"```ansi\n\u001b[1m{header}\u001b[0m\n{'─' * len(header)}\n{row}"
+            else:
+                field_content += "```"
+                embed.add_field(name="\u200b", value=field_content, inline=False)
+                field_content = f"```ansi\n{row}"
+            field_count += 1
+        else:
+            field_content += row
+    if field_content:
+        field_content += "```"
+        embed.add_field(name="\u200b", value=field_content, inline=False)
+    
+    return embed
 
 
 

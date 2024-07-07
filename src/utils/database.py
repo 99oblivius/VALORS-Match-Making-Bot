@@ -344,20 +344,37 @@ class Database:
                 }
                 for row in result
             ]
+        
+    @log_db_operation
+    async def get_last_mmr_for_users(self, guild_id: int) -> Dict[int, int]:
+        async with self._session_maker() as session:
+            subquery = (
+                select(
+                    MMBotUserMatchStats.user_id,
+                    func.max(MMBotUserMatchStats.match_id).label('latest_match_id'))
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.abandoned == False)
+                .group_by(MMBotUserMatchStats.user_id)
+                .subquery())
+
+            query = (
+                select(
+                    MMBotUserMatchStats.user_id,
+                    MMBotUserMatchStats.mmr_before)
+                .join(
+                    subquery,
+                    (MMBotUserMatchStats.user_id == subquery.c.user_id) &
+                    (MMBotUserMatchStats.match_id == subquery.c.latest_match_id))
+                .where(MMBotUserMatchStats.guild_id == guild_id))
+
+            result = await session.execute(query)
+            return {row.user_id: row.mmr_before for row in result}
 
 
 ############
 # ABANDONS #
 ############
-    @log_db_operation
-    async def add_abandon(self, guild_id: int, match_id: int, user_id: int):
-        async with self._session_maker() as session:
-            session.add(MMBotUserAbandons(
-                guild_id=guild_id,
-                user_id=user_id,
-                match_id=match_id))
-            await session.commit()
-    
     @log_db_operation
     async def ignore_abandon(self, guild_id: int, user_id: int):
         async with self._session_maker() as session:
@@ -407,7 +424,7 @@ class Database:
             return count, last_abandon
 
     @log_db_operation
-    async def set_match_abandons(self, match_id: int, guild_id: int, abandoned_user_ids: List[int]) -> None:
+    async def add_match_abandons(self, match_id: int, guild_id: int, abandoned_user_ids: List[int]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 abandons = [
@@ -421,7 +438,9 @@ class Database:
                 await session.execute(insert(MMBotUserAbandons).values(abandons))
                 await session.execute(
                     update(MMBotUserMatchStats)
-                    .where(MMBotUserMatchStats.match_id == match_id)
+                    .where(
+                        MMBotUserMatchStats.match_id == match_id,
+                        MMBotUserMatchStats.user_id.not_in(abandoned_user_ids))
                     .values(abandoned=True))
             await session.commit()
 
