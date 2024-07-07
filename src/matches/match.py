@@ -190,11 +190,10 @@ class Match:
         team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
         self.match.a_score = team_a_score
         self.match.b_score = team_b_score
-        await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score)
+        await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score, end_timestamp=datetime.now(timezone.utc))
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
-
 
     async def update_rank_roles(self, users_match_stats, users_summary_data):
         guild = self.bot.get_guild(self.guild_id)
