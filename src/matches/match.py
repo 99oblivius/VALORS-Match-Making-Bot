@@ -29,6 +29,8 @@ class Match:
         self.guild_id  = guild_id
         self.match_id  = match_id
         self.state     = state
+
+        self.players       = []
         self.current_round = None
 
     async def wait_for_snd_mode(self):
@@ -116,20 +118,18 @@ class Match:
         for abandonee_id in abandoned_users:
             player = next((p for p in self.players if p.user_id == abandonee_id), None)
             if player:
-                await self.bot.store.add_abandon(self.guild_id, abandonee_id)
+                await self.bot.store.add_abandon(self.guild_id, self.match_id, abandonee_id)
                 await self.match_thread.send(f"<@{player.user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
                 stats = users_match_stats.get(abandonee_id, self.initialize_user_match_stats(abandonee_id, player, users_summary_data))
-                mmr_change = calculate_mmr_change(stats, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
                 
                 player_data = players_dict.get(user_to_platform.get(abandonee_id, None), None)
                 ping = int(float(player_data['Ping'])) if player_data else -1
+                mmr_change = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
                 stats.update({"mmr_change": mmr_change, "ping": ping})
                 
                 abandonee_match_update[abandonee_id] = stats
-
-
                 abandonee_summary_update[abandonee_id] = {"mmr": users_summary_data[abandonee_id].mmr + stats['mmr_change']}
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, abandonee_match_update)

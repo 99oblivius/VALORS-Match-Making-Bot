@@ -210,6 +210,7 @@ class MMBotUserAbandons(Base):
     id         = Column(Integer, primary_key=True, nullable=False)
     guild_id   = Column(BigInteger, nullable=False)
     user_id    = Column(BigInteger, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
     ignored    = Column(Boolean, nullable=False, default=False)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -261,7 +262,6 @@ class MMBotMatches(Base):
     state            = Column(SmallInteger, nullable=False, default=1)
     b_side           = Column(sq_Enum(Side))
     serveraddr       = Column(String(51))
-    abandoned_by     = Column(ARRAY(BigInteger), default=None)
 
 class MMBotUserBans(Base):
     __tablename__ = 'mm_bot_user_bans'

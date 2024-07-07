@@ -38,16 +38,18 @@ def generate_auth_url(cache, guild_id: int, user_id: int, platform: str) -> str:
 def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
     if last_abandon is None:
         last_abandon = datetime.now(timezone.utc)
+    
+    cooldown_end = last_abandon
     if count == 0:
         return 0
     elif count == 1:
-        cooldown_end = last_abandon + timedelta(hours=2)
+        cooldown_end += timedelta(hours=2)
     elif count == 2:
-        cooldown_end = last_abandon + timedelta(hours=6)
+        cooldown_end += timedelta(hours=6)
     elif count == 3:
-        cooldown_end = last_abandon + timedelta(days=1)
+        cooldown_end += timedelta(days=1)
     else:
-        cooldown_end = last_abandon + timedelta(days=3)
+        cooldown_end += timedelta(days=3)
 
     cooldown_seconds = (cooldown_end - datetime.now(timezone.utc)).total_seconds()
     return max(0, int(cooldown_seconds))

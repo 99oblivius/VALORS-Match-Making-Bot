@@ -350,11 +350,12 @@ class Database:
 # ABANDONS #
 ############
     @log_db_operation
-    async def add_abandon(self, guild_id: int, user_id: int):
+    async def add_abandon(self, guild_id: int, match_id: int, user_id: int):
         async with self._session_maker() as session:
             session.add(MMBotUserAbandons(
                 guild_id=guild_id,
-                user_id=user_id))
+                user_id=user_id,
+                match_id=match_id))
             await session.commit()
     
     @log_db_operation
@@ -406,16 +407,22 @@ class Database:
             return count, last_abandon
 
     @log_db_operation
-    async def set_match_abandons(self, match_id: int, abandoned_user_ids: List[int]) -> None:
+    async def set_match_abandons(self, match_id: int, guild_id: int, abandoned_user_ids: List[int]) -> None:
         async with self._session_maker() as session:
-            await session.execute(
-                update(MMBotUserMatchStats)
-                .where(MMBotUserMatchStats.match_id == match_id)
-                .values(abandoned=True))
-            await session.execute(
-                update(MMBotMatches)
-                .where(MMBotMatches.id == match_id)
-                .values(abandoned_by=abandoned_user_ids))
+            async with session.begin():
+                abandons = [
+                    {
+                        'guild_id': guild_id,
+                        'user_id': user_id,
+                        'match_id': match_id,
+                    }
+                    for user_id in abandoned_user_ids
+                ]
+                await session.execute(insert(MMBotUserAbandons).values(abandons))
+                await session.execute(
+                    update(MMBotUserMatchStats)
+                    .where(MMBotUserMatchStats.match_id == match_id)
+                    .values(abandoned=True))
             await session.commit()
 
 #########
@@ -871,7 +878,8 @@ class Database:
                 select(MMBotUserMatchStats)
                 .where(
                     MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.user_id == user_id)
+                    MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.abandoned == False)
                 .order_by(desc(MMBotUserMatchStats.timestamp))
                 .limit(limit))
             return result.scalars().all()
@@ -884,6 +892,7 @@ class Database:
                 .where(
                     MMBotUserMatchStats.guild_id == guild_id,
                     MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.abandoned == False,
                     MMBotUserMatchStats.timestamp.between(start_date, end_date))
                 .order_by(MMBotUserMatchStats.timestamp))
             return result.scalars().all()
@@ -893,7 +902,8 @@ class Database:
         async with self._session_maker() as session:
             subquery = select(MMBotUserMatchStats).where(
                 MMBotUserMatchStats.guild_id == guild_id,
-                MMBotUserMatchStats.user_id == user_id
+                MMBotUserMatchStats.user_id == user_id,
+                MMBotUserMatchStats.abandoned == False
             ).order_by(desc(MMBotUserMatchStats.timestamp)).limit(n).subquery()
 
             result = await session.execute(
@@ -935,7 +945,8 @@ class Database:
                 select(MMBotUserMatchStats)
                 .where(
                     MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.user_id == user_id)
+                    MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.abandoned == False)
                 .order_by(desc(MMBotUserMatchStats.timestamp))
                 .limit(n))
             return list(reversed(result.scalars().all()))
@@ -954,7 +965,8 @@ class Database:
                     func.count(MMBotUserMatchStats.id).label('games_played'))
                 .where(
                     MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.user_id == user_id)
+                    MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.abandoned == False)
                 .group_by(func.extract('hour', MMBotUserMatchStats.timestamp))
                 .order_by(func.extract('hour', MMBotUserMatchStats.timestamp)))
             return [dict(row) for row in result]

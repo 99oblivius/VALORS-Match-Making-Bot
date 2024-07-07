@@ -21,13 +21,13 @@ class AbandonView(nextcord.ui.View):
         custom_id="mm_accept_abandon_button")
     async def abandon(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         loop = asyncio.get_event_loop()
-        match = get_match(self.match.id)
-        if match.current_round is None or match.current_round <= 6:
-            if not await cleanup_match(loop, match.match_id):
-                log.debug(f"{interaction.user.display_name} had an issue abandoning match {match.match_id}")
+        match_instance = get_match(self.match.id)
+        if match_instance.current_round is None or match_instance.current_round <= 6:
+            if not await cleanup_match(loop, self.match.id):
+                log.debug(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
                 return await interaction.response.send_message("Something went wrong. Try again...", ephemeral=True)
-            log.debug(f"{interaction.user.display_name} abandoned match {match.match_id}")
-            await self.bot.store.add_abandon(interaction.guild.id, interaction.user.id)
+            log.debug(f"{interaction.user.display_name} abandoned match {self.match.id}")
+            await self.bot.store.add_abandon(interaction.guild.id, self.match.id, interaction.user.id)
             await interaction.guild.get_thread(self.match.match_thread).send("@here Match Abandoned")
             await interaction.response.send_message(
                 f"Match abandoned", ephemeral=True)

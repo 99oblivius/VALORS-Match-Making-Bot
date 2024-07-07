@@ -2,22 +2,23 @@ import json
 from utils.logger import Logger as log
 from io import BytesIO
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 
 import nextcord
 from nextcord.ext import commands, tasks
 
 from config import *
-from utils.models import BotSettings
+from utils.models import BotSettings, Team
 from utils.utils import format_duration, abandon_cooldown
-from matches import load_ongoing_matches, cleanup_match
+from matches import load_ongoing_matches, cleanup_match, get_match
 
 from views.match.accept import AcceptView
 from views.match.banning import BanView
 from views.match.map_pick import MapPickView
 from views.match.side_pick import SidePickView
 from views.match.abandon import AbandonView
+from matches.functions import calculate_mmr_change
 
 class Matches(commands.Cog):
     @tasks.loop(seconds=60)
@@ -91,13 +92,20 @@ class Matches(commands.Cog):
             return await interaction.response.send_message(
                 "You must use this command in a match thread", ephemeral=True)
 
-        previous_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)       
-        cooldown = abandon_cooldown(previous_abandons + 1, last_abandon)
-        mmr_loss = 0
+        previous_abandons, _ = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)       
+        cooldown = abandon_cooldown(previous_abandons + 1, datetime.now(timezone.utc))
+
+        match_instance = get_match(match.id)
+        player = next((player for player in match_instance.players if player.user_id == interaction.user.id), None)
+        if not player:
+            return await interaction.response.send_message("You cannot abandon if you are not in a match", ephemeral=True)
+        ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
+        enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
+        mmr_loss = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
         embed = nextcord.Embed(
             title="Abandon", 
             description=f"""Are you certain you want to abandon this match?
-_You abandoned a total of `{previous_abandons}` times in the last month._
+_You abandoned a total of `{previous_abandons}` times in the last 2 months._
 _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
         await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match), ephemeral=True)
 
