@@ -27,6 +27,7 @@ from plotly.subplots import make_subplots
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2
 from utils.models import MMBotRanks, MMBotUserMatchStats
 
+
 def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks: List[Dict[nextcord.Role, MMBotRanks]]) -> go.Figure:
     df = pd.DataFrame([vars(stat) for stat in match_stats])
     df['game_number'] = range(1, len(df) + 1)

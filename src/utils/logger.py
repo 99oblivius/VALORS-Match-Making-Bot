@@ -103,7 +103,8 @@ class Logger:
         black = cls._COLORS['BLACK']
         gray = cls._COLORS['GRAY']
         purple = cls._COLORS['PURPLE']
-        print(f"{gray}[{black}{timestamp}{gray}][{purple}{caller_class}{gray}] {color}|{level}| {reset}{message}{reset}", file=sys.stderr)
+        print(f"{gray}[{purple}{caller_class}{gray}] {color}|{level}| {reset}{message}{reset}", file=sys.stderr)
+        # print(f"{gray}[{black}{timestamp}{gray}][{purple}{caller_class}{gray}] {color}|{level}| {reset}{message}{reset}", file=sys.stderr)
     
     @classmethod
     def get_level(cls):

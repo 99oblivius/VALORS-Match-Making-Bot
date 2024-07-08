@@ -25,6 +25,7 @@ import numpy as np
 
 from utils.models import MMBotUsers
 
+
 def preparing_user_data(users: List[MMBotUsers]) -> Tuple[int, np.ndarray, np.ndarray]:
     num_players = len(users)
     mmr_results = np.array([user.summary_stats.mmr for user in users], dtype=np.int32)
