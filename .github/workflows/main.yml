@@ -1,3 +1,5 @@
+name: Update Application
+
 on:
   push:
     branches:
@@ -24,22 +26,24 @@ jobs:
       - name: Schema Update
         if: steps.check_schema.outputs.schema_changed != '0'
         run: |
-          RESPONSE=$(curl -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
           -H "Authorization: ${{ secrets.SCHEMA_UPDATE_API_KEY }}")
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "Error: $BODY"
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          if [ "$http_code" != "200" ]; then
+            echo "Error: $body"
             exit 1
           fi
+          echo "Schema update successful: $body"
 
       - name: Regular Update
         run: |
-          RESPONSE=$(curl -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
           -H "Authorization: ${{ secrets.UPDATE_API_KEY }}")
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "Error: $BODY"
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          if [ "$http_code" != "200" ]; then
+            echo "Error: $body"
             exit 1
           fi
+          echo "Regular update successful: $body"
