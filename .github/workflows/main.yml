@@ -4,11 +4,27 @@ on:
       - main
 
 jobs:
-  run_pull:
-    name: run pull
+  run_update:
+    name: Run Update
     runs-on: ubuntu-latest
 
     steps:
-      - name: update
+      - name: Check for schema changes
+        id: check_schema
         run: |
-          curl -X POST https://valorsbotapi.oblivius.dev/update -H "API-Key: ${{ secrets.UPDATE_API_KEY }}"
+          git fetch origin main
+          SCHEMA_CHANGED=$(git diff origin/main..HEAD -- src/utils/models.py alembic/ | wc -l)
+          echo "schema_changed=$SCHEMA_CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Schema Update
+        if: steps.check_schema.outputs.schema_changed != '0'
+        run: |
+          curl -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
+          -H "Authorization: Bearer ${{ secrets.UPDATE_API_KEY }}" \
+          -H "Content-Type: application/json"
+
+      - name: Regular Update
+        run: |
+          curl -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
+          -H "Authorization: Bearer ${{ secrets.UPDATE_API_KEY }}" \
+          -H "Content-Type: application/json"
