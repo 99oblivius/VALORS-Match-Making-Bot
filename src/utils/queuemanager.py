@@ -19,12 +19,13 @@
 
 import asyncio
 from datetime import datetime, timezone
-from utils.logger import Logger as log
 
 import nextcord
 
-from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_1, VALORS_THEME1
+from config import GUILD_ID, VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME2
+from utils.logger import Logger as log
 from utils.utils import format_duration
+
 
 class QueueManager:
     def __init__(self, bot):

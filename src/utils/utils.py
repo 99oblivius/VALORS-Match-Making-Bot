@@ -17,16 +17,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from nextcord import Embed, Guild, User, Member
 from math import floor
+from typing import Any, Dict, List
 
-from utils.models import MMBotMatchPlayers, MMBotRanks
+from nextcord import Embed, Guild, Member, User
 
 from config import VALORS_THEME1
+from utils.models import MMBotMatchPlayers, MMBotRanks
 
 def format_duration(seconds):
     intervals = (

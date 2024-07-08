@@ -17,27 +17,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import json
-from utils.logger import Logger as log
-from io import BytesIO
 import asyncio
+import json
 from datetime import datetime
-import pytz
+from io import BytesIO
 
 import nextcord
+import pytz
 from nextcord.ext import commands, tasks
 
 from config import *
+from matches import cleanup_match, get_match, load_ongoing_matches
+from matches.functions import calculate_mmr_change
+from utils.logger import Logger as log
 from utils.models import BotSettings, Team
-from utils.utils import format_duration, abandon_cooldown
-from matches import load_ongoing_matches, cleanup_match, get_match
-
+from utils.utils import abandon_cooldown, format_duration
+from views.match.abandon import AbandonView
 from views.match.accept import AcceptView
 from views.match.banning import BanView
 from views.match.map_pick import MapPickView
 from views.match.side_pick import SidePickView
-from views.match.abandon import AbandonView
-from matches.functions import calculate_mmr_change
 
 
 class Matches(commands.Cog):

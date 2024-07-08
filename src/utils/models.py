@@ -18,26 +18,26 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from enum import Enum
-from sqlalchemy import (
-    Column, 
-    BigInteger, 
-    Integer, 
-    String, 
-    Boolean,
-    SmallInteger, 
-    Text, 
-    TIMESTAMP, 
-    ARRAY, 
-    Enum as sq_Enum,
-    ForeignKey, 
-    ForeignKeyConstraint,
-    UniqueConstraint,
-    func,
-    Float
-)
-from sqlalchemy.orm import relationship
 
+from sqlalchemy import (
+   ARRAY,
+   TIMESTAMP,
+   BigInteger,
+   Boolean,
+   Column,
+   Enum as sq_Enum,
+   Float,
+   ForeignKey,
+   ForeignKeyConstraint,
+   Integer,
+   SmallInteger,
+   String,
+   Text,
+   UniqueConstraint,
+   func,
+)
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 

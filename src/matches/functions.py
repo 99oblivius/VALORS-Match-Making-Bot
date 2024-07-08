@@ -19,9 +19,9 @@
 
 import random
 from typing import List
-from utils.models import MMBotMaps, MMBotUserMapPicks
-from utils.models import Side
-from config import STARTING_MMR, BASE_MMR_CHANGE
+
+from config import BASE_MMR_CHANGE, STARTING_MMR
+from utils.models import MMBotMaps, MMBotUserMapPicks, Side
 
 def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:
     map_options = { m.map: 0 for m in maps }

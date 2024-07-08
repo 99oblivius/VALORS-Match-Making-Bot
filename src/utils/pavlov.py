@@ -17,13 +17,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import Dict
-from functools import wraps
-
 import asyncio
-from pavlov import PavlovRCON
+from functools import wraps
+from typing import Dict
 
 from nextcord.ext import commands
+from pavlov import PavlovRCON
 
 from utils.models import Team
 

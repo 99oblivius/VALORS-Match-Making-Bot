@@ -17,10 +17,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import List, Tuple
-from itertools import combinations
-import numpy as np
 import random
+from itertools import combinations
+from typing import List, Tuple
+
+import numpy as np
 
 from utils.models import MMBotUsers
 

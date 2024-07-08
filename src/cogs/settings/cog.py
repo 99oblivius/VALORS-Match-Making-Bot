@@ -18,22 +18,17 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
-from utils.logger import Logger as log
 from io import BytesIO
 
-from fuzzywuzzy import process
-
 import nextcord
+from fuzzywuzzy import process
 from nextcord.ext import commands
 
 from config import *
-from utils.models import BotSettings, MMBotRanks
-
-from config import *
-from views.register import RegistryButtonView
-
-from utils.models import BotRegions, BotSettings
+from utils.logger import Logger as log
+from utils.models import BotRegions, BotSettings, MMBotRanks
 from utils.utils import create_leaderboard_embed
+from views.register import RegistryButtonView
 
 
 class Settings(commands.Cog):

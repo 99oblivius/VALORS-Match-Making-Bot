@@ -18,27 +18,35 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-from functools import wraps
-import traceback
-from utils.logger import Logger as log
 import copy
-from typing import List
+import traceback
 from collections import Counter
 from datetime import datetime, timezone
+from functools import wraps
+from typing import List
 
 import nextcord
 from nextcord.ext import commands
+
+from config import (
+   AWAY_THEME,
+   HOME_THEME,
+   MATCH_PLAYER_COUNT,
+   SERVER_DM_MAP,
+   STARTING_MMR,
+   VALORS_THEME1,
+   VALORS_THEME1_2,
+   VALORS_THEME2,
+)
+from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from .match_states import MatchState
+from utils.utils import create_leaderboard_embed, format_duration, format_mm_attendance
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
-from views.match.map_pick import MapPickView, ChosenMapView
-from views.match.side_pick import SidePickView, ChosenSideView
-from utils.utils import format_mm_attendance, format_duration, create_leaderboard_embed
-from utils.logger import Logger as log, VariableLog
-
-from config import VALORS_THEME2, VALORS_THEME1_2, VALORS_THEME1, HOME_THEME, AWAY_THEME, MATCH_PLAYER_COUNT, SERVER_DM_MAP, STARTING_MMR
-from .functions import get_preferred_bans, get_preferred_map, get_preferred_side, calculate_mmr_change
+from views.match.map_pick import ChosenMapView, MapPickView
+from views.match.side_pick import ChosenSideView, SidePickView
+from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side
+from .match_states import MatchState
 from .ranked_teams import get_teams
 
 

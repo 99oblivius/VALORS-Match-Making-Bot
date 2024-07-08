@@ -18,12 +18,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+
 import nextcord
 
-from utils.models import *
-from utils.logger import Logger as log
-
 from matches import cleanup_match, get_match
+from utils.logger import Logger as log
+from utils.models import *
 
 
 class AbandonView(nextcord.ui.View):

@@ -19,6 +19,7 @@
 
 from enum import IntEnum, auto
 
+
 class MatchState(IntEnum):
     def __str__(self):
         return self.name

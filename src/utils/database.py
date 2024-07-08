@@ -17,22 +17,23 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import time
-from functools import wraps
 import asyncio
-from typing import List, Tuple, Dict, Any, Callable
-from datetime import timedelta, datetime
-from sqlalchemy import inspect, delete, update, func, or_, text, desc
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
-from sqlalchemy.ext.declarative import DeclarativeMeta
-from sqlalchemy.orm import sessionmaker, joinedload, selectinload
-from sqlalchemy.future import select
-from config import DATABASE_URL
+import time
+from datetime import datetime, timedelta
+from functools import wraps
+from typing import Any, Callable, Dict, List, Tuple
 
-from .models import *
+from sqlalchemy import delete, desc, func, inspect, or_, text, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.declarative import DeclarativeMeta
+from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload, selectinload, sessionmaker
+
+from config import DATABASE_URL
 from matches import MatchState
 from utils.logger import Logger as log
+from .models import *
 
 
 class Database:

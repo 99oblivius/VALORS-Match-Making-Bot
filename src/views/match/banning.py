@@ -23,9 +23,9 @@ from typing import List
 import nextcord
 from nextcord.ext import commands
 
-from utils.utils import shifted_window
-from utils.models import Phase, MMBotUserBans, MMBotMatches
 from utils.logger import Logger as log
+from utils.models import MMBotMatches, MMBotUserBans, Phase
+from utils.utils import shifted_window
 
 
 class BanView(nextcord.ui.View):

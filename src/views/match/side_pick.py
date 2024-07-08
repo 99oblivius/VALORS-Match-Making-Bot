@@ -17,14 +17,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from functools import partial
-
 import nextcord
-
+from functools import partial
 from nextcord.ext import commands
 
-from utils.models import Phase, MMBotUserSidePicks, MMBotMatches, Side
 from utils.logger import Logger as log
+from utils.models import MMBotMatches, MMBotUserSidePicks, Phase, Side
 
 
 class SidePickView(nextcord.ui.View):

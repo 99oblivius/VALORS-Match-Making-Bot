@@ -17,18 +17,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import asyncio
 import json
 from datetime import datetime, timezone
-import asyncio
 from typing import Dict
-from utils.logger import Logger as log
 
 import nextcord
 from nextcord.ext import commands
 
+from config import GUILD_ID, LFG_PING_DELAY, MATCH_PLAYER_COUNT, VALORS_THEME1, VALORS_THEME1_2
 from matches import make_match
-from config import GUILD_ID, VALORS_THEME1, MATCH_PLAYER_COUNT, VALORS_THEME1_2, LFG_PING_DELAY
-from utils.utils import format_duration, abandon_cooldown, create_stats_embed
+from utils.logger import Logger as log
+from utils.utils import abandon_cooldown, create_stats_embed, format_duration
 
 
 class QueueButtonsView(nextcord.ui.View):

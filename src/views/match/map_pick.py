@@ -17,14 +17,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from functools import partial
-
 import nextcord
+from functools import partial
 from nextcord.ext import commands
 
-from utils.utils import shifted_window
-from utils.models import Phase, MMBotMatches, MMBotUserMapPicks
 from utils.logger import Logger as log
+from utils.models import MMBotMatches, MMBotUserMapPicks, Phase
+from utils.utils import shifted_window
 
 
 class MapPickView(nextcord.ui.View):

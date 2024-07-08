@@ -18,13 +18,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+
 import nextcord
 
+from config import MATCH_PLAYER_COUNT
+from utils.logger import Logger as log
 from utils.models import *
 from utils.utils import format_mm_attendance
-from utils.logger import Logger as log
 
-from config import MATCH_PLAYER_COUNT
 
 class AcceptView(nextcord.ui.View):
     def __init__(self, bot, done_event=None, *args, **kwargs):

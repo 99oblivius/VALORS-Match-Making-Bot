@@ -17,22 +17,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import List
 import asyncio
+from typing import List
 
 import nextcord
 from nextcord.ext import commands
 
-from config import GUILD_ID, VALORS_THEME2, VALORS_THEME1_2
-from utils.utils import generate_auth_url
+from config import GUILD_ID, VALORS_THEME1_2, VALORS_THEME2
 from utils.logger import Logger as log
-
 from utils.models import (
     BotRegions,
     MMBotUsers,
+    MMBotUserSummaryStats,
     Platform,
-    MMBotUserSummaryStats
 )
+from utils.utils import generate_auth_url
 
 
 class MMHideView(nextcord.ui.View):

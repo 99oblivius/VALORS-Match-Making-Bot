@@ -17,14 +17,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import nextcord
-from typing import List, Dict
-from utils.models import MMBotUserMatchStats, MMBotRanks
-import pandas as pd
+from typing import Dict, List
 
+import nextcord
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2
+from utils.models import MMBotRanks, MMBotUserMatchStats
 
 def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks: List[Dict[nextcord.Role, MMBotRanks]]) -> go.Figure:
     df = pd.DataFrame([vars(stat) for stat in match_stats])

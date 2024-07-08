@@ -19,18 +19,18 @@
 
 import json
 import re
-from utils.logger import Logger as log
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
-from datetime import datetime, timezone, timedelta
 
 import nextcord
 from nextcord.ext import commands, tasks
 
 from config import *
-from views.queue.buttons import QueueButtonsView
+from utils.logger import Logger as log
 from utils.models import BotSettings
-from utils.utils import format_duration, create_stats_embed
 from utils.statistics import create_graph
+from utils.utils import create_stats_embed, format_duration
+from views.queue.buttons import QueueButtonsView
 
 
 class Queues(commands.Cog):
