@@ -97,6 +97,7 @@ class BanView(nextcord.ui.View):
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 
+
 class ChosenBansView(nextcord.ui.View):
     def __init__(self, bans: List[str]):
         super().__init__(timeout=0)
