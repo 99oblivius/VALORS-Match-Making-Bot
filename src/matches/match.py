@@ -2,7 +2,7 @@
 # VALORS Match Making Bot is a discord based match making automation and management service #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # 
-# Copyright (C) 2024  Julian von Virag, <projects@oblivius.dev>
+# Copyright (C) 2024 99oblivius, <projects@oblivius.dev>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -178,7 +178,10 @@ class Match:
             "total_assists": summary_data.total_assists + match_stats['assists']
         }
     
-    async def finalize_match(self, players_dict, users_match_stats, users_summary_data, team_scores):
+    async def finalize_match(self, players_dict, users_match_stats, users_summary_data, team_scores, last_reply: dict | None):
+        if last_reply is None:
+            last_reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+        
         final_updates = {}
         users_summary_stats = {}
 
@@ -241,9 +244,8 @@ class Match:
                 users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
                 final_updates[user_id] = current_stats
         
-        reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
-        side_a_score = int(reply['Team0Score'])
-        side_b_score = int(reply['Team1Score'])
+        side_a_score = int(last_reply['Team0Score'])
+        side_b_score = int(last_reply['Team1Score'])
         team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
         self.match.a_score = team_a_score
         self.match.b_score = team_b_score
@@ -772,6 +774,7 @@ class Match:
 
             ready_to_continue = False
             max_score = 0
+            reply = None
             while not ready_to_continue:
                 if max_score >= 10:
                     ready_to_continue = True
@@ -841,7 +844,8 @@ class Match:
                     players_dict, 
                     users_match_stats, 
                     users_summary_data, 
-                    team_scores)
+                    team_scores,
+                    reply)
 
             await self.increment_state()
         

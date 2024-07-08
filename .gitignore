@@ -67,6 +67,7 @@ instance/
 
 # Visual Studio stuff:
 .vs
+.vscode
 
 # Scrapy stuff:
 .scrapy
