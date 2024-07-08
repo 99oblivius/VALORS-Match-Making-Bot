@@ -1,1 +1,1 @@
-# discord_ValorsBot
+# VALORS Match Making Bot
