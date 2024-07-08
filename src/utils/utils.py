@@ -28,6 +28,7 @@ from nextcord import Embed, Guild, Member, User
 from config import VALORS_THEME1
 from utils.models import MMBotMatchPlayers, MMBotRanks
 
+
 def format_duration(seconds):
     intervals = (
         ('days', 86400),
