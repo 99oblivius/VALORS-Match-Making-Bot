@@ -499,7 +499,7 @@ class Match:
             a_bans = await self.bot.store.get_bans(self.match_id, Team.A)
             b_bans = await self.bot.store.get_bans(self.match_id, Team.B)
             embed = log_message.embeds[0]
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)), inline=True)
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)), inline=False)
             embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in b_bans)), inline=True)
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
@@ -668,11 +668,12 @@ class Match:
             }
             
             while True:
-                log.debug(f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}")
+                player_log = f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}"
+                VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
 
-                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
@@ -750,19 +751,17 @@ class Match:
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
-                    log.debug(f"TEAM SCORES {team_scores[0]} : {team_scores[1]}")
                     max_score = max(team_scores)
                     self.current_round = int(reply.get('Round', self.current_round))
-                    VariableLog.debug(last_round_number, message=f"[{self.match_id}] Last")
-                    VariableLog.debug(self.current_round, message=f"[{self.match_id}]")
-
+                    
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
                         last_round_number = self.current_round
                         embed = log_message.embeds[0]
                         embed.description = "- Ongoing\n- Scores updating live"
                         a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
-                        embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
+                        asyncio.create_task(self.bot.store.update(MMBotMatches, id=self.match_id, a_score=a_score, b_score=b_score))
+                        if max_score >= 10: embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
                         embed.set_field_at(0, name=f"Team A - {a_side} - {a_score}", value=a_player_list)
                         embed.set_field_at(1, name=f"Team B - {b_side} - {b_score}", value=b_player_list)
                         asyncio.create_task(log_message.edit(embed=embed))
