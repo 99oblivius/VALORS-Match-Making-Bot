@@ -35,6 +35,7 @@ def exit_cleanup(a: list):
     for b in a:
         del b
 
+
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
