@@ -1,3 +1,22 @@
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# VALORS Match Making Bot is a discord based match making automation and management service #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# 
+# Copyright (C) 2024  Julian von Virag, <projects@oblivius.dev>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import asyncio
 from functools import wraps
 import traceback
@@ -753,7 +772,7 @@ class Match:
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
                     max_score = max(team_scores)
                     self.current_round = int(reply.get('Round', self.current_round))
-                    
+
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
                         last_round_number = self.current_round
@@ -762,10 +781,10 @@ class Match:
                         a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
                         asyncio.create_task(self.bot.store.update(MMBotMatches, id=self.match_id, a_score=a_score, b_score=b_score))
                         if max_score >= 10: embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-                        embed.set_field_at(0, name=f"Team A - {a_side} - {a_score}", value=a_player_list)
-                        embed.set_field_at(1, name=f"Team B - {b_side} - {b_score}", value=b_player_list)
+                        embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
+                        embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
                         asyncio.create_task(log_message.edit(embed=embed))
-                        log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+                        log.debug(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
                     players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
                     if not 'InspectList' in players_data: continue

@@ -1,3 +1,22 @@
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# VALORS Match Making Bot is a discord based match making automation and management service #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# 
+# Copyright (C) 2024  Julian von Virag, <projects@oblivius.dev>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import json
 import re
 from utils.logger import Logger as log
@@ -116,8 +135,8 @@ class Queues(commands.Cog):
 
         recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
-        data = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
-        embed = create_stats_embed(interaction.guild, interaction.user, data, summary_stats, avg_stats, recent_matches)
+        leaderboard = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
+        embed = create_stats_embed(interaction.guild, interaction.user, leaderboard, summary_stats, avg_stats, recent_matches)
 
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)

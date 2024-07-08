@@ -1,8 +1,27 @@
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# VALORS Match Making Bot is a discord based match making automation and management service #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# 
+# Copyright (C) 2024  Julian von Virag, <projects@oblivius.dev>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import json
 from utils.logger import Logger as log
 from io import BytesIO
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 import pytz
 
 import nextcord
@@ -19,6 +38,7 @@ from views.match.map_pick import MapPickView
 from views.match.side_pick import SidePickView
 from views.match.abandon import AbandonView
 from matches.functions import calculate_mmr_change
+
 
 class Matches(commands.Cog):
     @tasks.loop(seconds=60)
