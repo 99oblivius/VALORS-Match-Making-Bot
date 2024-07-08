@@ -37,9 +37,10 @@ class Match:
         while True:
             try:
                 reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+                log.debug(f"WAITING FOR SND {reply}")
                 if reply['GameMode'] == 'SND':
                     break
-                await asyncio.sleep(2)
+                await asyncio.sleep(5)
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
                 await asyncio.sleep(5)
@@ -104,7 +105,7 @@ class Match:
                     abandoned_users.append(pid)
 
     async def handle_abandons(self, players_dict, abandoned_users, users_match_stats, users_summary_data):
-        await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandonee_id)
+        await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandoned_users)
         abandonee_match_update = {}
         abandonee_summary_update = {}
 
@@ -161,6 +162,18 @@ class Match:
             for player in self.players
         }
 
+        guild = self.bot.get_guild(self.guild_id)
+        if not guild:
+            log.error(f"Could not find guild with id {self.guild_id}")
+            return
+
+        rank_roles = sorted(
+            [(r.mmr_threshold, guild.get_role(r.role_id)) 
+            for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0])
+        
+        def get_rank_role(mmr):
+            return next((role for threshold, role in reversed(rank_roles) if mmr > threshold), None)
+
         for player in self.players:
             user_id = player.user_id
             if user_id in users_match_stats:
@@ -179,10 +192,27 @@ class Match:
                 player_data = players_dict[user_to_platform[user_id]]
                 ping = int(float(player_data['Ping'])) if player_data else -1
                 current_stats.update({"win": win, "mmr_change": mmr_change, "ping": ping})
-                final_updates[user_id] = current_stats
 
                 summary_data = users_summary_data[user_id]
+
+                new_rank_role = get_rank_role(summary_data.mmr + current_stats['mmr_change'])
+                member = guild.get_member(user_id)
+                current_rank_roles = set(role for role in member.roles if role in {r for _, r in rank_roles})
+                if current_rank_roles != {new_rank_role}:
+                    roles_to_remove = current_rank_roles - {new_rank_role}
+                    roles_to_add = {new_rank_role} - current_rank_roles
+
+                    if roles_to_remove:
+                        asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                        log.info(f"{roles_to_add} role(s) removed from {member.display_name}")
+                    
+                    if roles_to_add:
+                        asyncio.create_task(member.add_roles(*roles_to_add, reason="Updating MMR rank"))
+                        log.info(f"{roles_to_add} role(s) added to {member.display_name}")
+
+
                 users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
+                final_updates[user_id] = current_stats
         
         reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
         side_a_score = int(reply['Team0Score'])
@@ -194,43 +224,6 @@ class Match:
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
-
-    async def update_rank_roles(self, users_match_stats, users_summary_data):
-        guild = self.bot.get_guild(self.guild_id)
-        if not guild:
-            log.error(f"Could not find guild with id {self.guild_id}")
-            return
-
-        rank_roles = sorted(
-            [(r.mmr_threshold, guild.get_role(r.role_id)) 
-            for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0])
-        
-        def get_rank_role(mmr):
-            return next((role for threshold, role in reversed(rank_roles) if mmr > threshold), None)
-        
-        for player in self.players:
-            user_id = player.user_id
-            if user_id in users_match_stats and user_id in users_summary_data:
-                old_mmr = users_summary_data[user_id].mmr
-                new_mmr = old_mmr + users_match_stats[user_id]['mmr_change']
-                
-                new_rank_role = get_rank_role(new_mmr)
-
-                member = guild.get_member(user_id)
-                if member:
-                    current_rank_roles = set(role for role in member.roles if role in {r for _, r in rank_roles})
-                    
-                    if current_rank_roles != {new_rank_role}:
-                        roles_to_remove = current_rank_roles - {new_rank_role}
-                        roles_to_add = {new_rank_role} - current_rank_roles
-
-                        if roles_to_remove:
-                            asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
-                            log.info(f"{roles_to_add} role(s) removed from {member.display_name}")
-                        
-                        if roles_to_add:
-                            asyncio.create_task(member.add_roles(*roles_to_add, reason="Updating MMR rank"))
-                            log.info(f"{roles_to_add} role(s) added to {member.display_name}")
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
@@ -669,7 +662,7 @@ class Match:
             current_players = set()
             server_players = set()
             expected_player_ids = {
-                platform_id
+                str(platform_id)
                 for player in self.players
                 for platform_id in player.user_platform_mappings
             }
@@ -679,7 +672,7 @@ class Match:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
 
-                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
@@ -748,16 +741,16 @@ class Match:
             b_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B])
 
             await self.wait_for_snd_mode()
-            await asyncio.sleep(5)
 
             ready_to_continue = False
             max_score = 0
-            while ready_to_continue:
+            while not ready_to_continue:
                 if max_score >= 10:
                     ready_to_continue = True
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
+                    log.debug(f"TEAM SCORES {team_scores[0]} : {team_scores[1]}")
                     max_score = max(team_scores)
                     self.current_round = int(reply.get('Round', self.current_round))
                     VariableLog.debug(last_round_number, message=f"[{self.match_id}] Last")
@@ -816,10 +809,6 @@ class Match:
                     _, line_number, func_name, _ = tb[-1]
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
                 await asyncio.sleep(2)
-            
-            await self.update_rank_roles(
-                users_match_stats, 
-                users_summary_data)
             
             if not abandoned_users:
                 await self.finalize_match(
