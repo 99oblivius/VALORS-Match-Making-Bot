@@ -24,12 +24,24 @@ jobs:
       - name: Schema Update
         if: steps.check_schema.outputs.schema_changed != '0'
         run: |
-          curl -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
           -H "Authorization: Bearer ${{ secrets.SCHEMA_UPDATE_API_KEY }}" \
-          -H "Content-Type: application/json"
+          -H "Content-Type: application/json")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Error: $BODY"
+            exit 1
+          fi
 
       - name: Regular Update
         run: |
-          curl -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
           -H "Authorization: Bearer ${{ secrets.UPDATE_API_KEY }}" \
-          -H "Content-Type: application/json"
+          -H "Content-Type: application/json")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Error: $BODY"
+            exit 1
+          fi
