@@ -31,7 +31,6 @@ from utils.models import (
     MMBotUserSummaryStats,
     Platform,
 )
-
 from utils.utils import generate_auth_url
 
 
