@@ -136,7 +136,7 @@ class Queues(commands.Cog):
         recent_matches = await self.bot.store.get_recent_match_stats(interaction.guild.id, user.id, 10)
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
         leaderboard = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
-        embed = create_stats_embed(interaction.guild, interaction.user, leaderboard, summary_stats, avg_stats, recent_matches)
+        embed = create_stats_embed(interaction.guild, user, leaderboard, summary_stats, avg_stats, recent_matches)
 
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)

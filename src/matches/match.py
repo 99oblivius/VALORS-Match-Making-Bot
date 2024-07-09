@@ -62,12 +62,12 @@ class Match:
 
     async def wait_for_snd_mode(self):
         while True:
+            await asyncio.sleep(3)
             try:
                 reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                 log.debug(f"WAITING FOR SND {reply}")
                 if reply['GameMode'] == 'SND':
                     break
-                await asyncio.sleep(5)
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
                 await asyncio.sleep(5)
@@ -528,8 +528,9 @@ class Match:
             a_bans = await self.bot.store.get_bans(self.match_id, Team.A)
             b_bans = await self.bot.store.get_bans(self.match_id, Team.B)
             embed = log_message.embeds[0]
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)), inline=False)
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in b_bans)), inline=True)
+            embed.add_field(name="\u200b", value='\u200b')
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)))
+            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in b_bans)))
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
             
@@ -771,6 +772,7 @@ class Match:
             b_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B])
 
             await self.wait_for_snd_mode()
+            await asyncio.sleep(5)
 
             ready_to_continue = False
             max_score = 0

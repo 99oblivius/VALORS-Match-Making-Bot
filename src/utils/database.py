@@ -444,7 +444,7 @@ class Database:
             return count, last_abandon
 
     @log_db_operation
-    async def add_match_abandons(self, match_id: int, guild_id: int, abandoned_user_ids: List[int]) -> None:
+    async def add_match_abandons(self, guild_id: int, match_id: int, abandoned_user_ids: List[int]) -> None:
         async with self._session_maker() as session:
             async with session.begin():
                 abandons = [

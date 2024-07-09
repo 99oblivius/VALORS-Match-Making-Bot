@@ -36,9 +36,10 @@ from utils.utils import generate_auth_url
 
 
 class MMHideView(nextcord.ui.View):
-    def __init__(self, verified_role: nextcord.Role):
+    def __init__(self, bot, verified_role: nextcord.Role):
         super().__init__(timeout=60)
         self.verified_role = verified_role
+        self.bot = bot
         self.hide_msg = None
 
     @nextcord.ui.button(label="Hide MM", style=nextcord.ButtonStyle.red)
@@ -165,7 +166,7 @@ class RegistryButtonView(nextcord.ui.View):
         if verified_role in interaction.user.roles:
             embed = nextcord.Embed(title="Hide Match Making?", color=VALORS_THEME1_2)
             embed.set_footer(text="You will be removed from queue")
-            view = MMHideView(verified_role)
+            view = MMHideView(self.bot, verified_role)
             msg = await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
             view.hide_msg = msg
             return
