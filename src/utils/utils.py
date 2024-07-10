@@ -108,7 +108,7 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
     avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
     embed = Embed(title="Match Making Leaderboard", description=f"{len(valid_scores)} ranking players\nK/D/A and Score are mean averages")
 
-    ranked_mmr = ((n, user_id) for n, user_id in enumerate(sorted(last_mmr.items(), key=lambda x: x[1], reverse=True), 1))
+    ranked_mmr = ((n, user_id) for n, (user_id, _) in enumerate(sorted(last_mmr.items(), key=lambda x: x[1], reverse=True), 1))
     previous_positions = { user_id: n for n, user_id in ranked_mmr if guild.get_member(user_id) }
 
     ranking_position = 0
