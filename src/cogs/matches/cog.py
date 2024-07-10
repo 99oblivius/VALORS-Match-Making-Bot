@@ -29,8 +29,8 @@ from config import *
 from matches import cleanup_match, get_match, load_ongoing_matches
 from matches.functions import calculate_mmr_change
 from utils.logger import Logger as log
-from utils.models import BotSettings, Team
-from utils.utils import abandon_cooldown, format_duration
+from utils.models import BotSettings, Team, Side
+from utils.utils import abandon_cooldown, format_duration, generate_score_image
 from views.match.abandon import AbandonView
 from views.match.accept import AcceptView
 from views.match.banning import BanView
@@ -126,6 +126,41 @@ class Matches(commands.Cog):
 _You abandoned a total of `{previous_abandons}` times in the last 2 months._
 _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
         await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match), ephemeral=True)
+
+    @nextcord.slash_command(name="last_match", description="Display stats from the last match")
+    async def display_last_match(self, interaction: nextcord.Interaction):
+        await interaction.response.defer()
+
+        last_match = await self.bot.store.get_last_match()
+        if not last_match:
+            return await interaction.followup.send("No completed matches found.", ephemeral=True)
+
+        match_stats = await self.bot.store.get_match_stats(interaction.guild.id, last_match.id)
+        if not match_stats:
+            return await interaction.followup.send("No stats found for the last match.", ephemeral=True)
+
+        try:
+            leaderboard_image = await generate_score_image(interaction.guild, last_match, match_stats)
+
+            embed = nextcord.Embed(title=f"Match {last_match.id} Results", color=nextcord.Color.blue())
+            embed.add_field(name=f"Team A - {'T' if last_match.b_side == Side.CT else 'CT'} - {last_match.a_score}", 
+                value='\n'.join([f"<@{stat.user_id}>: K/D/A: {stat.kills}/{stat.deaths}/{stat.assists}, Score: {stat.score}" 
+                                for stat in match_stats if stat.ct_start == (last_match.b_side != Side.CT)]))
+            embed.add_field(name=f"Team B - {'CT' if last_match.b_side == Side.CT else 'T'} - {last_match.b_score}", 
+                value='\n'.join([f"<@{stat.user_id}>: K/D/A: {stat.kills}/{stat.deaths}/{stat.assists}, Score: {stat.score}" 
+                                for stat in match_stats if stat.ct_start == (last_match.b_side == Side.CT)]))
+            
+            embed.set_footer(text=f"Match duration: {format_duration((last_match.end_timestamp - last_match.start_timestamp).total_seconds())}")
+            
+            settings = await self.bot.store.get_settings(interaction.guild.id)
+            await interaction.followup.send(
+                embed=embed,
+                ephemeral=interaction.channel.id != settings.mm_text_channel,
+                file=nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{last_match.id}_leaderboard.png"))
+
+        except Exception as e:
+            log.error(f"Error in displaying last match stats: {repr(e)}")
+            await interaction.followup.send("An error occurred while generating the match stats.", ephemeral=True)
 
 
     ###########################
