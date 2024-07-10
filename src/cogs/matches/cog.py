@@ -154,10 +154,8 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
             
             embed.set_footer(text=f"Match duration: {format_duration((last_match.end_timestamp - last_match.start_timestamp).total_seconds())}")
             
-            await interaction.followup.send(
-                embed=embed,
-                ephemeral=ephemeral,
-                file=nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{last_match.id}_leaderboard.png"))
+            file = nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{last_match.id}_leaderboard.png")
+            await interaction.followup.send(embed=embed, ephemeral=ephemeral, file=file)
 
         except Exception as e:
             log.error(f"Error in displaying last match stats: {repr(e)}")
