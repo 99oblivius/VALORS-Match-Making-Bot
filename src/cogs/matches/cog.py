@@ -74,7 +74,7 @@ class Matches(commands.Cog):
     # MM SLASH COMMANDS #
     #####################
 
-    @nextcord.slash_command(name="cancel", description="Cancel a match")
+    @nextcord.slash_command(name="cancel", description="Cancel a match", guild_ids=[GUILD_ID])
     async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
@@ -103,7 +103,7 @@ class Matches(commands.Cog):
         embed.description = "Match canceled"
         await log_message.edit(embed=embed)
     
-    @nextcord.slash_command(name="abandon", description="Abandon a match")
+    @nextcord.slash_command(name="abandon", description="Abandon a match", guild_ids=[GUILD_ID])
     async def mm_abandon(self, interaction: nextcord.Interaction):
         match = await self.bot.store.get_thread_match(interaction.channel.id)
         if not match:
@@ -127,7 +127,7 @@ _You abandoned a total of `{previous_abandons}` times in the last 2 months._
 _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
         await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match), ephemeral=True)
 
-    @nextcord.slash_command(name="last_match", description="Display stats from the last match")
+    @nextcord.slash_command(name="last_match", description="Display stats from the last match", guild_ids=[GUILD_ID])
     async def display_last_match(self, interaction: nextcord.Interaction):
         await interaction.response.defer()
 
