@@ -594,12 +594,15 @@ class Database:
             return result.scalars().first()
     
     @log_db_operation
-    async def get_last_match(self) -> MMBotMatches:
+    async def get_last_match(self, guild_id: int) -> MMBotMatches:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches)
-                .where(MMBotMatches.end_timestamp != False)
-                .order_by(MMBotMatches.id)
+                .join(BotSettings, MMBotMatches.queue_channel == BotSettings.mm_queue_channel)
+                .where(
+                    MMBotMatches.end_timestamp.isnot(None),
+                    BotSettings.guild_id == guild_id)
+                .order_by(desc(MMBotMatches.id))
                 .limit(1))
             return result.scalars().first()
     

@@ -129,9 +129,11 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
 
     @nextcord.slash_command(name="last_match", description="Display stats from the last match", guild_ids=[GUILD_ID])
     async def display_last_match(self, interaction: nextcord.Interaction):
-        await interaction.response.defer()
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        ephemeral = interaction.channel.id != settings.mm_text_channel
+        await interaction.response.defer(ephemeral=ephemeral)
 
-        last_match = await self.bot.store.get_last_match()
+        last_match = await self.bot.store.get_last_match(interaction.guild.id)
         if not last_match:
             return await interaction.followup.send("No completed matches found.", ephemeral=True)
 
@@ -152,10 +154,9 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
             
             embed.set_footer(text=f"Match duration: {format_duration((last_match.end_timestamp - last_match.start_timestamp).total_seconds())}")
             
-            settings = await self.bot.store.get_settings(interaction.guild.id)
             await interaction.followup.send(
                 embed=embed,
-                ephemeral=interaction.channel.id != settings.mm_text_channel,
+                ephemeral=ephemeral,
                 file=nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{last_match.id}_leaderboard.png"))
 
         except Exception as e:
