@@ -180,7 +180,7 @@ async def generate_score_image(guild: Guild, match: MMBotMatches, match_stats: L
     draw = ImageDraw.Draw(img)
     font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 20)
 
-    if match.b_side == Side.A:
+    if match.b_side == Side.T:
         left_score, right_score = match.b_score, match.a_score
     else:
         left_score, right_score = match.a_score, match.b_score
