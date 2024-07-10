@@ -936,14 +936,12 @@ class Database:
             return result.scalars().first()
 
     @log_db_operation
-    async def get_match_stats(self, guild_id: int, match_id: int) -> MMBotUserMatchStats:
+    async def get_match_stats(self, match_id: int) -> List[MMBotUserMatchStats]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserMatchStats)
-                .where(
-                    MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.match_id == match_id))
-            return result.scalars().first()
+                .where(MMBotUserMatchStats.match_id == match_id))
+            return result.scalars().all()
 
     @log_db_operation
     async def get_recent_match_stats(self, guild_id: int, user_id: int, limit: int = 10) -> List[MMBotUserMatchStats]:

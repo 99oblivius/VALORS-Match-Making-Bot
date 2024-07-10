@@ -137,7 +137,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         if not last_match:
             return await interaction.followup.send("No completed matches found.", ephemeral=True)
 
-        match_stats = await self.bot.store.get_match_stats(interaction.guild.id, last_match.id)
+        match_stats = await self.bot.store.get_match_stats(last_match.id)
         if not match_stats:
             return await interaction.followup.send("No stats found for the last match.", ephemeral=True)
 
