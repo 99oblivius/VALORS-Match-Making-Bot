@@ -594,6 +594,16 @@ class Database:
             return result.scalars().first()
     
     @log_db_operation
+    async def get_last_match(self) -> MMBotMatches:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches)
+                .where(MMBotMatches.end_timestamp != False)
+                .order_by(MMBotMatches.id)
+                .limit(1))
+            return result.scalars().first()
+    
+    @log_db_operation
     async def get_thread_match(self, thread_id: int) -> MMBotMatches:
         async with self._session_maker() as session:
             result = await session.execute(
@@ -825,6 +835,19 @@ class Database:
             a_side = Side.CT if b_side == Side.T else Side.T
             return (a_side, b_side)
 
+    @log_db_operation
+    async def get_last_players(self, guild_id: int) -> List[MMBotMatchPlayers]:
+        async with self._session_maker() as session:
+            subquery = select(func.max(MMBotMatches.id)).where(MMBotMatches.complete == True).scalar_subquery()
+            result = await session.execute(
+                select(MMBotMatchPlayers)
+                .options(selectinload(MMBotMatchPlayers.user_platform_mappings))
+                .join(MMBotMatches, MMBotMatchPlayers.match_id == MMBotMatches.id)
+                .where(
+                    MMBotMatchPlayers.guild_id == guild_id,
+                    MMBotMatches.id == subquery))
+            return result.scalars().all()
+
 ########
 # MAPS #
 ########
@@ -907,6 +930,16 @@ class Database:
                 .where(
                     MMBotUserSummaryStats.guild_id == guild_id,
                     MMBotUserSummaryStats.user_id == user_id))
+            return result.scalars().first()
+
+    @log_db_operation
+    async def get_match_stats(self, guild_id: int, match_id: int) -> MMBotUserMatchStats:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserMatchStats)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.match_id == match_id))
             return result.scalars().first()
 
     @log_db_operation
@@ -1008,3 +1041,15 @@ class Database:
                 .group_by(func.extract('hour', MMBotUserMatchStats.timestamp))
                 .order_by(func.extract('hour', MMBotUserMatchStats.timestamp)))
             return [dict(row) for row in result]
+
+    @log_db_operation
+    async def get_last_match_stats(self, guild_id: int) -> List[MMBotUserMatchStats]:
+        async with self._session_maker() as session:
+            subquery = select(func.max(MMBotMatches.id)).where(MMBotMatches.complete == True).scalar_subquery()
+            result = await session.execute(
+                select(MMBotUserMatchStats)
+                .join(MMBotMatches, MMBotUserMatchStats.match_id == MMBotMatches.id)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotMatches.id == subquery))
+            return result.scalars().all()

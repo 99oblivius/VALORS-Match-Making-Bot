@@ -22,10 +22,14 @@ from functools import partial
 from math import floor
 from typing import Any, Dict, List
 
+import io
+from PIL import Image, ImageDraw, ImageFont
+import aiohttp
+
 from nextcord import Embed, Guild, Member, User
 
 from config import VALORS_THEME1
-from utils.models import MMBotMatchPlayers, MMBotRanks
+from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side
 
 
 def format_duration(seconds):
@@ -166,6 +170,63 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
         embed.add_field(name="\u200b", value=field_content, inline=False)
     
     return embed
+
+async def generate_score_image(guild: Guild, match: MMBotMatches, match_stats: List[MMBotUserMatchStats]):
+    width, height = 800, 600
+    background_color = (20, 20, 20, 200)
+    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    overlay = Image.new('RGBA', (width, height), background_color)
+    img = Image.alpha_composite(img, overlay)
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype("path/to/your/font.ttf", 20)
+
+    if match.b_side == Side.A:
+        left_score, right_score = match.b_score, match.a_score
+    else:
+        left_score, right_score = match.a_score, match.b_score
+    
+    draw.text((width // 4, 10), str(left_score), fill=(100, 200, 255, 255), font=font, anchor="mt")
+    draw.text((3 * width // 4, 10), str(right_score), fill=(255, 100, 100, 255), font=font, anchor="mt")
+
+    draw.line([(width // 2, 0), (width // 2, height)], fill=(200, 200, 200, 255), width=2)
+
+    if match.end_timestamp:
+        duration = match.end_timestamp - match.start_timestamp
+        minutes, seconds = divmod(duration.seconds, 60)
+        timer_text = f"{minutes:02d}:{seconds:02d}"
+        draw.text((width // 2, 10), timer_text, fill=(255, 255, 255, 255), font=font, anchor="mt")
+
+    match_stats.sort(key=lambda x: x.score, reverse=True)
+
+    async def draw_player(stats, x, y, is_red_team):
+        member = guild.get_member(stats.user_id)
+        if member:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(str(member.display_avatar)) as resp:
+                    if resp.status == 200:
+                        avatar_data = await resp.read()
+                        avatar = Image.open(io.BytesIO(avatar_data)).resize((40, 40)).convert('RGBA')
+                        img.paste(avatar, (x, y), avatar)
+
+            name = member.display_name
+            color = (255, 100, 100, 255) if is_red_team else (100, 200, 255, 255)
+            draw.text((x + 50, y), name, fill=color, font=font)
+            stats_text = f"{stats.score} {stats.kills} {stats.deaths} {stats.assists}"
+            draw.text((x + 250, y), stats_text, fill=(255, 255, 255, 255), font=font)
+
+    y_offset = 50
+    for stats in match_stats:
+        if stats.ct_start:
+            await draw_player(stats, width // 2 + 10, y_offset, True)
+        else:
+            await draw_player(stats, 10, y_offset, False)
+        y_offset += 50
+
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')
+    img_byte_arr = img_byte_arr.getvalue()
+
+    return img_byte_arr
 
 def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches) -> Embed:
     ranked_players = 0

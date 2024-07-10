@@ -11,3 +11,4 @@ async-pavlov
 redis
 fuzzywuzzy[speedup]
 pandas
+pillow

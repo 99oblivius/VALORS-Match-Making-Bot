@@ -23,6 +23,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from functools import wraps
 from typing import List
+from io import BytesIO
 
 import nextcord
 from nextcord.ext import commands
@@ -39,7 +40,7 @@ from config import (
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import create_leaderboard_embed, format_duration, format_mm_attendance
+from utils.utils import create_leaderboard_embed, format_duration, format_mm_attendance, generate_score_image
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import ChosenMapView, MapPickView
@@ -870,7 +871,15 @@ class Match:
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'} - {self.match.b_score}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
-            await log_message.edit(embed=embed)
+            
+            match = await self.bot.store.get_match(self.match_id)
+            match_stats = await self.bot.store.get_match_stats(self.guild_id, self.match_id)
+            try:
+                leaderboard_image = await generate_score_image(match, match_stats, guild)
+                await log_message.edit(embed=embed, file=nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{self.match_id}_leaderboard.png"))
+            except Exception as e:
+                log.error(f"[{self.match_id}] Error in creating score leaderboard image: {repr(e)}")
+                await log_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
