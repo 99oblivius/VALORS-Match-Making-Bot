@@ -286,7 +286,7 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
     map_name = f'[{match.id}] {match.map}'
     map_rect = draw.textbbox((header_height // 2 + 5, header_height // 2), map_name, font=font, anchor="mm")
     draw.rectangle((map_rect[0]-5, map_rect[1]-3, map_rect[2]+5, map_rect[3]+3), fill=(0, 0, 0, 128))    
-    draw.text((width // 2 + 30, header_height // 2 + 3), map_name, fill=(255, 255, 255, 255), font=font, anchor="lm")
+    draw.text((header_height // 2, header_height // 2), map_name, fill=(255, 255, 255, 255), font=font, anchor="lm")
 
     # Draw timer
     if match.end_timestamp:
