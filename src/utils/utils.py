@@ -282,14 +282,20 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
     draw.text((width // 2 - 30, header_height // 2 + 3), str(left_score), fill=(255, 255, 255, 255), font=score_font, anchor="rm")
     draw.text((width // 2 + 30, header_height // 2 + 3), str(right_score), fill=(255, 255, 255, 255), font=score_font, anchor="lm")
 
+    # Draw match_id and map
+    map_name = f'[{match.id}] {match.map}'
+    map_rect = draw.textbbox((header_height // 2 + 5, header_height // 2), map_name, font=font, anchor="mm")
+    draw.rectangle((map_rect[0]-5, map_rect[1]-3, map_rect[2]+5, map_rect[3]+3), fill=(0, 0, 0, 128))    
+    draw.text((width // 2 + 30, header_height // 2 + 3), map_name, fill=(255, 255, 255, 255), font=font, anchor="lm")
+
     # Draw timer
     if match.end_timestamp:
         duration = match.end_timestamp - match.start_timestamp
         minutes, seconds = divmod(duration.seconds, 60)
         timer_text = f"{minutes:02d}:{seconds:02d}"
-        time_rect = draw.textbbox((header_height // 2 + 5, header_height // 2), timer_text, font=time_font, anchor="mm")
+        time_rect = draw.textbbox((width - header_height // 2 + 5, header_height // 2), timer_text, font=time_font, anchor="mm")
         draw.rectangle((time_rect[0]-5, time_rect[1]-3, time_rect[2]+5, time_rect[3]+3), fill=(0, 0, 0, 128))
-        draw.text((header_height // 2 + 5, header_height // 2), timer_text, fill=(255, 255, 255, 255), font=time_font, anchor="mm")
+        draw.text((width - header_height // 2 + 5, header_height // 2), timer_text, fill=(255, 255, 255, 255), font=time_font, anchor="mm")
 
     # Draw legend row
     legend_y = header_height
@@ -329,8 +335,8 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
 
             # Draw thin colored lines
             line_color = right_color if is_right_aligned else left_color
-            draw.line([(start_x + (width//2 + 2 if is_right_aligned else width//2 - 2), y), 
-                       (start_x + (width//2 + 2 if is_right_aligned else width//2 - 2), y + row_height)], 
+            draw.line([(start_x + (2 if is_right_aligned else width//2 - 2), y), 
+                       (start_x + (2 if is_right_aligned else width//2 - 2), y + row_height)], 
                        fill=line_color, width=2)
             draw.line([(start_x, y), (start_x + width//2, y)], fill=line_color, width=1)
             draw.line([(start_x, y + row_height), (start_x + width//2, y + row_height)], fill=line_color, width=1)

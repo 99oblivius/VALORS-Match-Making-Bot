@@ -703,7 +703,7 @@ class Match:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
 
-                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
