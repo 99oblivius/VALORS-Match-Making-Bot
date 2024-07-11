@@ -31,13 +31,14 @@ from utils.statistics import create_graph
 from utils.utils import create_stats_embed, format_duration
 from views.queue.buttons import QueueButtonsView
 
+last_activity_value = -1
 
 class Queues(commands.Cog):
     @tasks.loop(seconds=5)
     async def queue_activity(self):
         try:
-            if self.bot.last_activity_value != self.bot.new_activity_value:
-                self.bot.last_activity_value = self.bot.new_activity_value
+            if last_activity_value != self.bot.new_activity_value:
+                last_activity_value = self.bot.new_activity_value
                 await self.bot.change_presence(
                     activity=nextcord.CustomActivity(
                         name=f"Queue [{self.bot.new_activity_value}/{MATCH_PLAYER_COUNT}]"))

@@ -115,6 +115,7 @@ class QueueButtonsView(nextcord.ui.View):
 
     async def update_queue_message(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        self.new_activity_value = len(queue_users)
         embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
         message_lines = []
         for n, item in enumerate(queue_users, 1):
@@ -179,16 +180,12 @@ class QueueButtonsView(nextcord.ui.View):
             if total_in_queue == MATCH_PLAYER_COUNT:
                 self.bot.queue_manager.remove_user(interaction.user.id)
                 for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
-                self.bot.new_activity_value = 0
 
                 match_id = await self.bot.store.unqueue_add_match_users(settings, interaction.channel.id)
-                self.bot.new_activity_value = total_in_queue
                 await self.update_queue_message(interaction)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
                 return
-        
-        self.bot.new_activity_value = total_in_queue
         await self.update_queue_message(interaction)
     
     async def unready_callback(self, interaction: nextcord.Interaction):
@@ -197,7 +194,6 @@ class QueueButtonsView(nextcord.ui.View):
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
         log.debug(f"{interaction.user.display_name} has left queue")
-        self.bot.new_activity_value -= 1
         await self.update_queue_message(interaction)
     
     async def stats_callback(self, interaction: nextcord.Interaction):

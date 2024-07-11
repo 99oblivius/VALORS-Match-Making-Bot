@@ -39,7 +39,6 @@ class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
         self.last_lfg_ping = {}
-        self.last_activity_value = -1
         self.new_activity_value = 0
 
         self.store: Database              = Database()

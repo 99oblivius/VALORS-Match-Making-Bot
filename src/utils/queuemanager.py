@@ -71,7 +71,6 @@ class QueueManager:
             await message.edit(embeds=[message.embeds[0], embed])
             self.active_users.pop(user_id, None)
             self.tasks.pop(user_id, None)
-            self.bot.new_activity_value -= 1
         except Exception as e:
             log.error(f"{repr(e)}")
 
