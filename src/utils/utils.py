@@ -244,7 +244,7 @@ def create_ping_bars(ping):
     return img
 
 async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_stats: List[MMBotUserMatchStats]):
-    width, height = 800, 222
+    width, height = 800, 221
     img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     try:
@@ -335,9 +335,6 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
 
             # Draw thin colored lines
             line_color = right_color if is_right_aligned else left_color
-            draw.line([(start_x + (2 if is_right_aligned else width//2 - 2), y), 
-                       (start_x + (2 if is_right_aligned else width//2 - 2), y + row_height)], 
-                       fill=line_color, width=2)
             draw.line([(start_x, y), (start_x + width//2, y)], fill=line_color, width=1)
             draw.line([(start_x, y + row_height), (start_x + width//2, y + row_height)], fill=line_color, width=1)
 
@@ -366,8 +363,9 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
     draw_team(team_a, team_a_avatars, 0, False)
     draw_team(team_b, team_b_avatars, width // 2, True)
 
-    # Draw center line
-    draw.line([(width // 2, header_height), (width // 2, height)], fill=(255, 255, 255, 100), width=1)
+    # Draw color center lines
+    draw.line([(width // 2 - 2, header_height), (width // 2 - 2, height)], fill=left_color, width=2)
+    draw.line([(width // 2, header_height), (width // 2, height)], fill=right_color, width=2)
 
     img_byte_arr = BytesIO()
     img.save(img_byte_arr, format='PNG')
