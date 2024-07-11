@@ -21,8 +21,10 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from math import floor
 from typing import Any, Dict, List
+import asyncio
+import base64
 
-import io
+from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 
@@ -30,6 +32,7 @@ from nextcord import Embed, Guild, Member, User
 
 from config import VALORS_THEME1
 from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side
+from utils.logger import Logger as log
 
 
 def format_duration(seconds):
@@ -171,62 +174,198 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
     
     return embed
 
-async def generate_score_image(guild: Guild, match: MMBotMatches, match_stats: List[MMBotUserMatchStats]):
-    width, height = 800, 600
-    background_color = (20, 20, 20, 200)
-    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    overlay = Image.new('RGBA', (width, height), background_color)
-    img = Image.alpha_composite(img, overlay)
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 20)
+async def fetch_avatar(session: aiohttp.ClientSession, cache, url: str, size: tuple):
+    cache_key = f"discord_avatar:{url}:{size[0]}x{size[1]}"
+    cached_avatar = cache.get(cache_key)
+    if cached_avatar:
+        try:
+            avatar_data = base64.b64decode(cached_avatar)
+            img = Image.open(BytesIO(avatar_data))
+            img.verify()
+            return img.copy()
+        except Exception as e:
+            log.warning(f"Invalid cached avatar for {url}: {repr(e)}")
+            cache.delete(cache_key)
+    
+    try:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                avatar_data = await resp.read()
+                try:
+                    avatar = Image.open(BytesIO(avatar_data))
+                    avatar = avatar.convert('RGBA').resize(size, Image.LANCZOS)
+                    
+                    buffer = BytesIO()
+                    avatar.save(buffer, format="PNG")
+                    encoded_avatar = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                    cache.set(cache_key, encoded_avatar, ex=86400)  # Cache for 1 day
+                    
+                    return avatar
+                except Exception as e:
+                    log.error(f"Failed to process avatar from {url}: {e}")
+            else:
+                log.error(f"Failed to fetch avatar from {url}. Status: {resp.status}")
+    except Exception as e:
+        log.error(f"Error fetching avatar from {url}: {e}")
+    raise ValueError(f"Failed to fetch avatar from {url}")
 
-    if match.b_side == Side.T:
+async def fetch_all_avatars(cache, guild, players, size):
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for player in players:
+            member = guild.get_member(player.user_id)
+            if member:
+                task = fetch_avatar(session, cache, str(member.display_avatar), size)
+                tasks.append(task)
+        return await asyncio.gather(*tasks)
+
+def create_gradient(width, height, start_color, end_color, horizontal=True):
+    base = Image.new('RGBA', (width, height), start_color)
+    top = Image.new('RGBA', (width, height), end_color)
+    mask = Image.new('L', (width, height))
+    mask_data = []
+    for y in range(height):
+        for x in range(width):
+            if horizontal:
+                distance = abs(x - width/2) / (width/2)
+            else:
+                distance = y / height
+            mask_data.append(int(255 * distance))
+    mask.putdata(mask_data)
+    return Image.composite(base, top, mask)
+
+def create_ping_bars(ping):
+    img = Image.new('RGBA', (15, 15), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    bar_color = (0, 255, 0, 255) if ping < 50 else (255, 255, 0, 255) if ping < 100 else (255, 0, 0, 255)
+    bar_count = 3 if ping < 50 else 2 if ping < 100 else 1
+    for i in range(bar_count):
+        draw.rectangle([i*5, 15-i*5-5, i*5+3, 15], fill=bar_color)
+    return img
+
+async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_stats: List[MMBotUserMatchStats]):
+    width, height = 800, 222
+    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 18)
+        score_font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 32)
+        time_font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 14)
+        legend_font = ImageFont.truetype("assets/fonts/Prime Regular.otf", 14)
+    except IOError:
+        font = ImageFont.load_default()
+        score_font = ImageFont.load_default()
+        time_font = ImageFont.load_default()
+        legend_font = ImageFont.load_default()
+
+    header_height = 50
+    legend_height = 20  # Height for the legend row
+    row_height = 30
+
+    # Create header gradients (emanating from center outwards)
+    left_color, right_color = (0, 100, 200, 255), (200, 75, 75, 255)
+    header_gradient = create_gradient(width, header_height, (0, 0, 0, 15), (0, 0, 0, 250), horizontal=True)
+    img.paste(header_gradient, (0, 0), header_gradient)
+    
+    # Add color overlays for team colors
+    left_overlay = Image.new('RGBA', (width // 2, header_height), left_color[:3] + (100,))
+    right_overlay = Image.new('RGBA', (width // 2, header_height), right_color[:3] + (100,))
+    img.paste(left_overlay, (0, 0), left_overlay)
+    img.paste(right_overlay, (width // 2, 0), right_overlay)
+
+    if match.b_side == Side.CT:
         left_score, right_score = match.b_score, match.a_score
     else:
         left_score, right_score = match.a_score, match.b_score
     
-    draw.text((width // 4, 10), str(left_score), fill=(100, 200, 255, 255), font=font, anchor="mt")
-    draw.text((3 * width // 4, 10), str(right_score), fill=(255, 100, 100, 255), font=font, anchor="mt")
+    # Draw scores (spread out from the center)
+    draw.text((width // 2 - 30, header_height // 2 + 3), str(left_score), fill=(255, 255, 255, 255), font=score_font, anchor="rm")
+    draw.text((width // 2 + 30, header_height // 2 + 3), str(right_score), fill=(255, 255, 255, 255), font=score_font, anchor="lm")
 
-    draw.line([(width // 2, 0), (width // 2, height)], fill=(200, 200, 200, 255), width=2)
-
+    # Draw timer
     if match.end_timestamp:
         duration = match.end_timestamp - match.start_timestamp
         minutes, seconds = divmod(duration.seconds, 60)
         timer_text = f"{minutes:02d}:{seconds:02d}"
-        draw.text((width // 2, 10), timer_text, fill=(255, 255, 255, 255), font=font, anchor="mt")
+        time_rect = draw.textbbox((header_height // 2 + 5, header_height // 2), timer_text, font=time_font, anchor="mm")
+        draw.rectangle((time_rect[0]-5, time_rect[1]-3, time_rect[2]+5, time_rect[3]+3), fill=(0, 0, 0, 128))
+        draw.text((header_height // 2 + 5, header_height // 2), timer_text, fill=(255, 255, 255, 255), font=time_font, anchor="mm")
 
-    match_stats.sort(key=lambda x: x.score, reverse=True)
+    # Draw legend row
+    legend_y = header_height
+    legend_color = (0, 0, 0, 200)  # Semi-transparent black
+    draw.rectangle([(0, legend_y), (width, legend_y + legend_height)], fill=legend_color)
 
-    async def draw_player(stats, x, y, is_red_team):
-        member = guild.get_member(stats.user_id)
-        if member:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(str(member.display_avatar)) as resp:
-                    if resp.status == 200:
-                        avatar_data = await resp.read()
-                        avatar = Image.open(io.BytesIO(avatar_data)).resize((40, 40)).convert('RGBA')
-                        img.paste(avatar, (x, y), avatar)
+    # Draw legend text
+    legend_texts = ["S", "D", "K"]
+    for side in range(2):  # 0 for left side, 1 for right side
+        x = width // 2 - 45 if side == 0 else width - 45
+        for text in legend_texts:
+            draw.text((x, legend_y + legend_height // 2), text, fill=(200, 200, 200, 255), font=legend_font, anchor="rm")
+            x -= 40
 
-            name = member.display_name
-            color = (255, 100, 100, 255) if is_red_team else (100, 200, 255, 255)
-            draw.text((x + 50, y), name, fill=color, font=font)
-            stats_text = f"{stats.score} {stats.kills} {stats.deaths} {stats.assists}"
-            draw.text((x + 250, y), stats_text, fill=(255, 255, 255, 255), font=font)
+    # Sort players by score
+    team_a = sorted([s for s in match_stats if s.ct_start == (match.b_side != Side.CT)], key=lambda x: x.score, reverse=True)
+    team_b = sorted([s for s in match_stats if s.ct_start == (match.b_side == Side.CT)], key=lambda x: x.score, reverse=True)
 
-    y_offset = 50
-    for stats in match_stats:
-        if stats.ct_start:
-            await draw_player(stats, width // 2 + 10, y_offset, True)
-        else:
-            await draw_player(stats, 10, y_offset, False)
-        y_offset += 50
+    # Fetch all avatars concurrently
+    avatar_size = (row_height - 2, row_height - 2)
+    team_a_avatars = await fetch_all_avatars(cache, guild, team_a, avatar_size)
+    team_b_avatars = await fetch_all_avatars(cache, guild, team_b, avatar_size)
 
-    img_byte_arr = io.BytesIO()
+    # Create large gradients for rows
+    left_gradient = create_gradient(width, height, (*left_color[:3], 220), (*left_color[:3], 5))
+    right_gradient = create_gradient(width, height, (*right_color[:3], 220), (*right_color[:3], 5))
+
+    def draw_team(team, avatars, start_x, is_right_aligned):
+        y = header_height + legend_height  # Start below the legend row
+        gradient = right_gradient if is_right_aligned else left_gradient
+        for i, (stats, avatar) in enumerate(zip(team, avatars)):
+            # Draw row background
+            row_mask = Image.new('L', (width // 2, row_height), 255)
+            img.paste(gradient.crop(
+                (0, y - header_height, width // 2, y - header_height + row_height)), 
+                      (start_x, y), row_mask)
+
+            # Draw thin colored lines
+            line_color = right_color if is_right_aligned else left_color
+            draw.line([(start_x + (width//2 + 2 if is_right_aligned else width//2 - 2), y), 
+                       (start_x + (width//2 + 2 if is_right_aligned else width//2 - 2), y + row_height)], 
+                       fill=line_color, width=2)
+            draw.line([(start_x, y), (start_x + width//2, y)], fill=line_color, width=1)
+            draw.line([(start_x, y + row_height), (start_x + width//2, y + row_height)], fill=line_color, width=1)
+
+            member = guild.get_member(stats.user_id)
+            if member:
+                if avatar:
+                    avatar_x = start_x + (2 if is_right_aligned else 5)
+                    img.paste(avatar, (avatar_x, y + 2), avatar)
+
+                text_color = (255, 255, 255, 255)
+                name_x = start_x + row_height + 6
+                draw.text((name_x, y + row_height // 2), member.display_name[:16], fill=text_color, font=font, anchor="lm")
+
+                stats_x = start_x + width // 2 - 45
+                for stat_text in (stats.score, stats.deaths, stats.kills):
+                    draw.text((stats_x, y + row_height // 2), f'{stat_text}', fill=text_color, font=font, anchor="rm")
+                    stats_x -= 40
+
+                # Draw ping bars
+                ping_bars = create_ping_bars(stats.ping)
+                ping_x = start_x + (width // 2 - 20 if is_right_aligned else width // 2 - 20)
+                img.paste(ping_bars, (ping_x, y + row_height // 2 - 7), ping_bars)
+
+            y += row_height
+
+    draw_team(team_a, team_a_avatars, 0, False)
+    draw_team(team_b, team_b_avatars, width // 2, True)
+
+    # Draw center line
+    draw.line([(width // 2, header_height), (width // 2, height)], fill=(255, 255, 255, 100), width=1)
+
+    img_byte_arr = BytesIO()
     img.save(img_byte_arr, format='PNG')
-    img_byte_arr = img_byte_arr.getvalue()
-
-    return img_byte_arr
+    return img_byte_arr.getvalue()
 
 def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches) -> Embed:
     ranked_players = 0

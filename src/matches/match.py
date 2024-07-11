@@ -875,8 +875,9 @@ class Match:
             match = await self.bot.store.get_match(self.match_id)
             match_stats = await self.bot.store.get_match_stats(self.match_id)
             try:
-                leaderboard_image = await generate_score_image(guild, match, match_stats)
-                await log_message.edit(embed=embed, file=nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{self.match_id}_leaderboard.png"))
+                leaderboard_image = await generate_score_image(self.bot.cache, guild, match, match_stats)
+                file = nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{self.match_id}_leaderboard.png")
+                await log_message.edit(embed=embed, file=file)
             except Exception as e:
                 log.error(f"[{self.match_id}] Error in creating score leaderboard image: {repr(e)}")
                 await log_message.edit(embed=embed)
