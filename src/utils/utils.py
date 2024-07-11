@@ -23,6 +23,7 @@ from math import floor
 from typing import Any, Dict, List
 import asyncio
 import base64
+import re
 
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
@@ -175,20 +176,22 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
     return embed
 
 async def fetch_avatar(session: aiohttp.ClientSession, cache, url: str, size: tuple):
-    cache_key = f"discord_avatar:{url}:{size[0]}x{size[1]}"
+    cache_key = f'discord_avatar:{sanitize_url_for_redis(url)}'
     cached_avatar = cache.get(cache_key)
     if cached_avatar:
         try:
-            avatar_data = base64.b64decode(cached_avatar)
-            img = Image.open(BytesIO(avatar_data))
-            img.verify()
-            return img.copy()
+            image_data = base64.b64decode(cached_avatar)
+            image_buffer = BytesIO(image_data)
+            image_buffer.seek(0)
+            img = Image.open(image_buffer)
+            img.load()
+            return img
         except Exception as e:
             log.warning(f"Invalid cached avatar for {url}: {repr(e)}")
             cache.delete(cache_key)
     
     try:
-        async with session.get(url) as resp:
+        async with session.get(url.split('?')[0]) as resp:
             if resp.status == 200:
                 avatar_data = await resp.read()
                 try:
@@ -197,8 +200,8 @@ async def fetch_avatar(session: aiohttp.ClientSession, cache, url: str, size: tu
                     
                     buffer = BytesIO()
                     avatar.save(buffer, format="PNG")
-                    encoded_avatar = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                    cache.set(cache_key, encoded_avatar, ex=86400)  # Cache for 1 day
+                    buffer.seek(0)
+                    cache.set(cache_key, base64.b64encode(buffer.getvalue()), ex=86400)  # Cache for 1 day
                     
                     return avatar
                 except Exception as e:
@@ -208,6 +211,12 @@ async def fetch_avatar(session: aiohttp.ClientSession, cache, url: str, size: tu
     except Exception as e:
         log.error(f"Error fetching avatar from {url}: {e}")
     raise ValueError(f"Failed to fetch avatar from {url}")
+
+def sanitize_url_for_redis(url):
+    match = re.search(r'/(\d+)/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)', url)
+    if match:
+        return f"{match.group(1)}:{match.group(2)}"
+    return url
 
 async def fetch_all_avatars(cache, guild, players, size):
     async with aiohttp.ClientSession() as session:
