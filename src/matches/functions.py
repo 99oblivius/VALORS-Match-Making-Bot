@@ -65,8 +65,8 @@ def calculate_mmr_change(
     player_stats: dict,
     ally_team_score: int=0,
     enemy_team_score: int=0,
-    ally_team_avg_mmr: int=STARTING_MMR,
-    enemy_team_avg_mmr: int=STARTING_MMR,
+    ally_team_avg_mmr: int=0,
+    enemy_team_avg_mmr: int=0,
     win: bool=False,
     abandoned: bool=False
 ) -> int:
@@ -81,7 +81,7 @@ def calculate_mmr_change(
     closeness_ratio = 4/9
 
     kd_rate = BASE_MMR_CHANGE / 5 * ((kills+assists/5) - deaths) / 10
-
+    
     r_ab = ally_team_avg_mmr - enemy_team_avg_mmr
     pr_a = 1 / (1 + pow(10, -r_ab/s))
 

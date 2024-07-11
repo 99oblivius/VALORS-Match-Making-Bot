@@ -86,6 +86,11 @@ class Matches(commands.Cog):
         if match_id == -1:
             match = await self.bot.store.get_thread_match(interaction.channel.id)
             if match: match_id = match.id
+        else:
+            match = await self.bot.store.get_match(match_id)
+            if not match:
+                return await interaction.response.send_message(f"There is no match #{match_id}", ephemeral=True)
+
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):
@@ -98,7 +103,9 @@ class Matches(commands.Cog):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         log_channel = interaction.guild.get_channel(settings.mm_log_channel)
-        log_message = await log_channel.fetch_message(self.match.log_message)
+        if not log_channel: return
+        log_message = await log_channel.fetch_message(match.log_message)
+        if not log_message: return
         embed = log_message.embeds[0]
         embed.description = "Match canceled"
         await log_message.edit(embed=embed)
@@ -119,7 +126,7 @@ class Matches(commands.Cog):
             return await interaction.response.send_message("You cannot abandon if you are not in a match", ephemeral=True)
         ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
         enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
-        mmr_loss = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
+        mmr_loss = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr if ally_mmr else 0, enemy_team_avg_mmr=enemy_mmr if enemy_mmr else 0)
         embed = nextcord.Embed(
             title="Abandon", 
             description=f"""Are you certain you want to abandon this match?
