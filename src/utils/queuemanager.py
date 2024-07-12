@@ -18,10 +18,11 @@
 
 import asyncio
 from datetime import datetime, timezone
+from collections import deque
 
 import nextcord
 
-from config import GUILD_ID, VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME2
+from config import GUILD_ID, VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME2, MATCH_PLAYER_COUNT
 from utils.logger import Logger as log
 from utils.utils import format_duration
 
@@ -31,6 +32,34 @@ class QueueManager:
         self.bot = bot
         self.active_users = {}
         self.tasks = {}
+
+        self.queue = deque()
+        self.last_update = 0
+        self.lock = asyncio.Lock()
+        self.update_task = None
+
+    async def update_presence(self, count: int=0):
+        self.queue.append(count)
+        if self.update_task is None or self.update_task.done():
+            self.update_task = asyncio.create_task(self._process_updates())
+    
+    async def _process_updates(self):
+        while True:
+            async with self.lock:
+                if not self.queue: return
+                current_time = asyncio.get_event_loop().time()
+                if current_time - self.last_update < 4:
+                    await asyncio.sleep(4 - (current_time - self.last_update))
+                
+                count = self.queue.pop()
+                self.queue.clear()
+
+                await self.bot.change_presence(
+                    activity=nextcord.CustomActivity(
+                        name=f"Queue [{count}/{MATCH_PLAYER_COUNT}]"))
+
+                self.last_update = asyncio.get_event_loop().time()
+            await asyncio.sleep(4)
 
     async def reminder_and_kick(self, user_id: int, expiry: int):
         try:
@@ -91,7 +120,8 @@ class QueueManager:
         settings = await self.bot.store.get_settings(GUILD_ID)
         try:
             queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
-            self.bot.new_activity_value = len(queue_users) if queue_users else 0
+            count = len(queue_users) if queue_users else 0
+            asyncio.create_task(self.update_presence(count))
         except AttributeError:
             return log.warning("No GUILDS")
         for user in queue_users:

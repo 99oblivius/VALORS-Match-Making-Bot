@@ -20,6 +20,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+import asyncio
 
 import nextcord
 from nextcord.ext import commands, tasks
@@ -31,27 +32,10 @@ from utils.statistics import create_graph
 from utils.utils import create_stats_embed, format_duration
 from views.queue.buttons import QueueButtonsView
 
-last_activity_value = -1
 
 class Queues(commands.Cog):
-    @tasks.loop(seconds=5)
-    async def queue_activity(self):
-        try:
-            if last_activity_value != self.bot.new_activity_value:
-                last_activity_value = self.bot.new_activity_value
-                await self.bot.change_presence(
-                    activity=nextcord.CustomActivity(
-                        name=f"Queue [{self.bot.new_activity_value}/{MATCH_PLAYER_COUNT}]"))
-        except Exception as e:
-            log.critical(f"Exception in queue_activity: {repr(e)}")
-
-    @queue_activity.before_loop
-    async def wait_queue_activity(self):
-        await self.bot.wait_until_ready()
-    
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.queue_activity.start()
     
     @commands.Cog.listener()
     async def on_ready(self):
