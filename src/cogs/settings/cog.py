@@ -19,15 +19,29 @@
 import json
 from io import BytesIO
 
+import aiohttp
 import nextcord
 from fuzzywuzzy import process
 from nextcord.ext import commands
 
 from config import *
 from utils.logger import Logger as log
-from utils.models import BotRegions, BotSettings, MMBotRanks
+from utils.models import BotRegions, BotSettings, MMBotRanks, Platform, UserPlatformMappings, MMBotUsers, MMBotUserSummaryStats
 from utils.utils import create_leaderboard_embed
 from views.register import RegistryButtonView
+
+
+async def validate_steam_id(platform_id: str) -> bool:
+    if not platform_id.isdigit() or len(platform_id) != 17:
+        return False
+    
+    async with aiohttp.ClientSession() as session:
+        url = f"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={platform_id}"
+        async with session.get(url) as response:
+            if response.status != 200:
+                return False
+            data = await response.json()
+            return bool(data['response']['players'])
 
 
 class Settings(commands.Cog):
@@ -238,6 +252,121 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
             leaderboard_message=msg.id)
         await interaction.response.send_message(
             f"Match Making Leaderboard set", ephemeral=True)
+
+    @nextcord.slash_command(name="change_mmr", description="Change a member's Match Making Rating", guild_ids=[GUILD_ID])
+    async def change_mmr(self, interaction: nextcord.Interaction, 
+        user: nextcord.User = nextcord.SlashOption(
+            description="The user or member to change the MMR of."),
+        add_remove: str = nextcord.SlashOption(
+            name="add_remove", 
+            description="Add or remove a set amount of MMR. Use negative values to remove.", 
+            required=False),
+        set_mmr: str = nextcord.SlashOption(
+            name="set",
+            description="Set the MMR to a specific value.", 
+            required=False)
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+
+        summary_stats = await self.bot.store.get_user_summary_stats(interaction.guild.id, user.id)
+        if not summary_stats:
+            return await interaction.response.send_message(f"No MMR data found for {user.mention}.", ephemeral=True)
+
+        old_mmr = summary_stats.mmr
+
+        if add_remove is not None and set_mmr is not None:
+            return await interaction.response.send_message("Please use either 'add_remove' or 'set', not both.", ephemeral=True)
+        
+        if add_remove is None and set_mmr is None:
+            return await interaction.response.send_message("Please provide either 'add_remove' or 'set' value.", ephemeral=True)
+
+        try:
+            if add_remove is not None:
+                add_remove_value = float(add_remove)
+                new_mmr = old_mmr + add_remove_value
+                action = "adjusted to"
+            else:  # set_mmr is not None
+                new_mmr = float(set_mmr)
+                action = "changed to"
+        except ValueError:
+            return await interaction.response.send_message("Invalid input. Please provide a valid number.", ephemeral=True)
+        
+        new_mmr = max(0, new_mmr)
+
+        await self.bot.store.update(MMBotUserSummaryStats, guild_id=interaction.guild.id, user_id=user.id, mmr=new_mmr)
+
+        await interaction.response.send_message(
+            f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.", ephemeral=True)
+        log.info(f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.")
+    
+    @nextcord.slash_command(name="manual_register", description="Manually register a guild member with a platform ID", guild_ids=[GUILD_ID])
+    async def manual_register(self,
+        interaction: nextcord.Interaction,
+        user: nextcord.Member = nextcord.SlashOption(description="The user to register"),
+        platform: str = nextcord.SlashOption(description="The platform to register for"),
+        platform_id: str = nextcord.SlashOption(description="The platform ID to register")
+    ):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        verified_role = interaction.guild.get_role(settings.mm_verified_role)
+        try:
+            platform_enum = Platform[platform.upper()]
+        except KeyError:
+            return await interaction.response.send_message(f"Invalid platform: {platform}", ephemeral=True)
+
+        try:
+            if platform_enum == Platform.STEAM:
+                if not await validate_steam_id(platform_id):
+                    return await interaction.response.send_message("The provided Steam ID is invalid.", ephemeral=True)
+            else: return await interaction.resposne.send_message("This platform option does not yet exist", ephemeral=True)
+            
+            await self.bot.store.upsert(MMBotUsers,
+                guild_id=interaction.guild.id,
+                user_id=user.id)
+            await self.bot.store.set_user_platform(
+                guild_id=interaction.guild.id,
+                user_id=user.id,
+                platform=platform_enum,
+                platform_id=platform_id)
+            await self.bot.store.upsert(MMBotUserSummaryStats,
+                guild_id=interaction.guild.id,
+                user_id=user.id)
+            
+            if verified_role: await user.add_roles(verified_role)
+            log.info(f"Registered {user.id} manually for {platform} with ID: {platform_id}")
+            await interaction.response.send_message(f"Successfully registered {user.mention} for `{platform}` with ID: `{platform_id}`", ephemeral=True)
+        except Exception as e:
+            log.error(f"An error occurred while registering the user: {repr(e)}")
+            await interaction.response.send_message(f"An error occurred while registering the user.", ephemeral=True)
+
+    @manual_register.on_autocomplete("platform")
+    async def autocomplete_platform(self, interaction: nextcord.Interaction, platform: str):
+        platforms = [p.name.lower() for p in Platform]
+        return [p for p in platforms if platform.lower() in p.lower()]
+
+    @manual_register.on_autocomplete("platform_id")
+    async def autocomplete_platform_id(self, interaction: nextcord.Interaction, platform_id: str, platform: str):
+        if not platform:
+            return ["Please select a platform first"]
+        
+        try:
+            platform_enum = Platform(platform)
+        except KeyError:
+            return ["Invalid platform selected"]
+
+        if platform_enum == Platform.STEAM:
+            if platform_id.isdigit() and len(platform_id) == 17:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={platform_id}") as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if data['response']['players']:
+                                return {f'{data['response']['players'][0]['personaname']}': platform_id}
+                        return ["Invalid Steam ID"]
+            else:
+                return ["Invalid Steam ID format"]
+        else:
+            return ["Unsupported platform for ID validation"]
 
 
 def setup(bot):

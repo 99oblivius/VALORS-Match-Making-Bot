@@ -61,7 +61,6 @@ class Side(Enum):
 
 class Platform(Enum):
     STEAM = "steam"
-    PLAYSTATION = "playstation"
 
 
 class UserPlatformMappings(Base):

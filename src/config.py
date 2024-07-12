@@ -28,6 +28,7 @@ REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "")
+STEAM_API_KEY = os.getenv("STEAM_API_KEY", "")
 
 BOT_PREFIX = ">"
 

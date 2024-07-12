@@ -227,6 +227,16 @@ class Database:
                 insert(MMBotRanks)
                 .values(ranks_list))
             await session.commit()
+    
+    @log_db_operation
+    async def set_user_platform(self, user_id: int, platform: str, platform_id: str, guild_id: int) -> None:
+        async with self._session_maker() as session:
+            await session.execute(
+                insert(UserPlatformMappings)
+                .values({"user_id": user_id, "guild_id": guild_id, "platform": platform, "platform_id": platform_id})
+                .on_conflict_do_update(index_elements=["user_id", "platform", "guild_id"], set_={"platform": platform, "platform_id": platform_id}))
+            await session.commit()
+
 
 ########
 # USER #
