@@ -115,6 +115,7 @@ class QueueButtonsView(nextcord.ui.View):
 
     async def update_queue_message(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        if queue_users: queue_users.sort(key=lambda u: u.queue_expiry)
         asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
         embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
         message_lines = []
