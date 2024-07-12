@@ -98,7 +98,22 @@ class VerifyView(nextcord.ui.View):
             url=urls[0])
         self.add_item(button)
 
+        button = nextcord.ui.Button(
+            label="Manually Register", 
+            style=nextcord.ButtonStyle.green)
+        button.callback = self.guide_to_manually_register
+        self.add_item(button)
+
         self.add_item(RegionSelect(bot, regions))
+    
+    async def guide_to_manually_register(self, interaction: nextcord.Interaction):
+        embed = nextcord.Embed(
+            title="How to manually register",
+            description="""
+Please open a ticket with staff in <#1231700573087334400>, state that you wish to register for match making, and provide your identifier.
+In the case of Steam, you may follow this guide to find it [How can I find my SteamID?](<https://help.steampowered.com/en/faqs/view/2816-BE67-5B69-0FEC>)""",
+            color=VALORS_THEME2)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class RegistryButtonView(nextcord.ui.View):
