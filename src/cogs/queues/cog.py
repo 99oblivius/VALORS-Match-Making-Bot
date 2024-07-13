@@ -47,6 +47,40 @@ class Queues(commands.Cog):
     ########################
     # QUEUE SLASH COMMANDS #
     ########################
+    @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[GUILD_ID])
+    async def remove_from_queue(self, interaction: nextcord.Interaction, 
+        user: str=nextcord.SlashOption(required=False, description="Remove a user or userid from the queue")
+    ):
+        if not user:
+            return await interaction.response.send_message(f"You must mention a user or userid to use this command.", ephemeral=True)
+
+        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        match = re.search(r'\d+', user)
+        if not match:
+            return await interaction.response.send_message(f"`{user}` was not found as a queued user.", ephemeral=True)
+        user_id = int(match.group(0))
+        if user_id not in (user.user_id for user in queue_users):
+            return await interaction.response.send_message(f"`{user}` was not found as a queued user.", ephemeral=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await self.bot.store.unqueue_user(settings.mm_queue_channel, user_id)
+        self.bot.queue_manager.remove_user(user_id)
+        log.debug(f"{user_id} was manually removed from queue")
+
+        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        if queue_users: queue_users.sort(key=lambda u: u.queue_expiry)
+        asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
+        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
+        message_lines = []
+        for n, item in enumerate(queue_users, 1):
+            message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
+        embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+        channel = interaction.guild.get_channel(settings.mm_queue_channel)
+        message = await channel.fetch_message(settings.mm_queue_message)
+        await message.edit(embeds=[message.embeds[0], embed])
+
+        await interaction.response.send_message(f"<@{user_id}> was manually removed from queue", ephemeral=True)
+
     @nextcord.slash_command(name="queue", description="Queue settings", guild_ids=[GUILD_ID])
     async def queue(self, interaction: nextcord.Interaction):
         pass
