@@ -75,7 +75,9 @@ class QueueManager:
                         title="Queue", 
                         description=f"`{format_duration(settings.mm_queue_reminder)}` left in \n<#{settings.mm_queue_channel}>!", 
                         color=VALORS_THEME2)
-                    reminder_msg = await user.send(embed=embed)
+                    try:
+                        reminder_msg = await user.send(embed=embed)
+                    except (nextcord.Forbidden, nextcord.HTTPException): pass
             
             await asyncio.sleep(max(0, expiry - int(datetime.now(timezone.utc).timestamp())))
             await self.bot.store.unqueue_user(settings.mm_queue_channel, user_id)
@@ -87,7 +89,9 @@ class QueueManager:
                     title="Queue", 
                     description=f"You were removed from the queue in \n<#{settings.mm_queue_channel}>.", 
                     color=VALORS_THEME1_1)
-                await user.send(embed=embed)
+                try:
+                    await user.send(embed=embed)
+                except (nextcord.Forbidden, nextcord.HTTPException): pass
 
             channel = guild.get_channel(settings.mm_queue_channel)
             message = await channel.fetch_message(settings.mm_queue_message)
