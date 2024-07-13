@@ -219,7 +219,7 @@ class Match:
                     ally_team_score=ally_score, enemy_team_score=enemy_score, 
                     ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win)
                 
-                player_data = players_dict[user_to_platform[user_id]]
+                player_data = players_dict.get(user_to_platform[user_id], None)
                 ping = int(float(player_data['Ping'])) if player_data else -1
                 current_stats.update({"win": win, "mmr_change": mmr_change, "ping": ping})
 
