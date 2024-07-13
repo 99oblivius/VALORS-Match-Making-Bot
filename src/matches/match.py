@@ -678,7 +678,7 @@ class Match:
             server_name = f"VALORS MM - {self.match_id}"
             await self.bot.rcon_manager.set_name(serveraddr, server_name)
 
-            embed = nextcord.Embed(title="Match", description=f"Server ready!", color=VALORS_THEME1)
+            embed = nextcord.Embed(title=f"Match [0/{MATCH_PLAYER_COUNT}]", description=f"Server ready!", color=VALORS_THEME1)
             embed.set_image(match_map.media)
             embed.add_field(name=f"Team A - {match_sides[0].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
@@ -703,13 +703,15 @@ class Match:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
 
-                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
                 server_players = current_players
 
                 if new_players:
+                    embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
+                    asyncio.create_task(match_message.edit(embed=embed))
                     log.info(f"[{self.match_id}] New players joined: {new_players}")
                     for platform_id in new_players:
                         player = next((
