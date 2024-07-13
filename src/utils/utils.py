@@ -329,8 +329,8 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
             x -= 40
 
     # Sort players by score
-    team_a = sorted([s for s in match_stats if s.ct_start == (match.b_side != Side.CT)], key=lambda x: x.score, reverse=True)
-    team_b = sorted([s for s in match_stats if s.ct_start == (match.b_side == Side.CT)], key=lambda x: x.score, reverse=True)
+    team_a = sorted([s for s in match_stats if s.ct_start], key=lambda x: x.score, reverse=True)
+    team_b = sorted([s for s in match_stats if not s.ct_start], key=lambda x: x.score, reverse=True)
 
     # Fetch all avatars concurrently
     avatar_size = (row_height - 2, row_height - 2)

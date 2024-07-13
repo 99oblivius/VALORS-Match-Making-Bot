@@ -349,9 +349,9 @@ class Match:
         
         if check_state(MatchState.ACCEPT_PLAYERS):
             add_mention = []
-            for player in self.players:
-                add_mention.append(f"<@{player.user_id}>")
-                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
+            # for player in self.players:
+            #     add_mention.append(f"<@{player.user_id}>")
+            #     await self.match_thread.add_user(nextcord.Object(id=player.user_id))
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
@@ -528,8 +528,7 @@ class Match:
             a_bans = await self.bot.store.get_bans(self.match_id, Team.A)
             b_bans = await self.bot.store.get_bans(self.match_id, Team.B)
             embed = log_message.embeds[0]
-            embed.add_field(name="\u200b", value='\u200b')
-            embed.add_field(name="Bans", value=f"A: {', '.join(a_bans)}\nB: {', '.join(b_bans)}")
+            embed.add_field(name="Bans", value=f"A: {', '.join(a_bans)}\nB: {', '.join(b_bans)}", inline=False)
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
             
