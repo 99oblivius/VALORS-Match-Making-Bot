@@ -60,6 +60,6 @@ class MatchState(IntEnum):
     MATCH_WAIT_FOR_END      = auto()
     MATCH_CLEANUP           = auto()
 
-    CLEANUP                 = auto()
     LOG_END                 = auto()
+    CLEANUP                 = auto()
     FINISHED                = auto()
