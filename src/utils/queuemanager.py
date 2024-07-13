@@ -92,6 +92,7 @@ class QueueManager:
             channel = guild.get_channel(settings.mm_queue_channel)
             message = await channel.fetch_message(settings.mm_queue_message)
             queue_users = await self.bot.store.get_queue_users(channel.id)
+            asyncio.create_task(self.update_presence(len(queue_users)))
             embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
             message_lines = []
             for n, item in enumerate(queue_users, 1):
