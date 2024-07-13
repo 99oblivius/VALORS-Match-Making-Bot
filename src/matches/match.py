@@ -349,9 +349,6 @@ class Match:
         
         if check_state(MatchState.ACCEPT_PLAYERS):
             add_mention = []
-            # for player in self.players:
-            #     add_mention.append(f"<@{player.user_id}>")
-            #     await self.match_thread.add_user(nextcord.Object(id=player.user_id))
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
@@ -699,15 +696,14 @@ class Match:
                 player_log = f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}"
                 VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
-                current_players = {str(p['UniqueId']) for p in player_list.get('PlayerList', [])}
+                current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
 
                 if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
-                server_players = current_players
 
-                if new_players:
+                if current_players != server_players:
                     embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
                     asyncio.create_task(match_message.edit(embed=embed))
                     log.info(f"[{self.match_id}] New players joined: {new_players}")
@@ -730,6 +726,7 @@ class Match:
                             log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
                 
+                server_players = current_players
                 await asyncio.sleep(2)
             await self.increment_state()
         
