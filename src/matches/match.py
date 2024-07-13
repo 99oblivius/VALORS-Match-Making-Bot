@@ -529,8 +529,7 @@ class Match:
             b_bans = await self.bot.store.get_bans(self.match_id, Team.B)
             embed = log_message.embeds[0]
             embed.add_field(name="\u200b", value='\u200b')
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in a_bans)))
-            embed.add_field(name="Bans", value='\n'.join((f'- {ban}' for ban in b_bans)))
+            embed.add_field(name="Bans", value=f"A: {', '.join(a_bans)}\nB: {', '.join(b_bans)}")
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
             
