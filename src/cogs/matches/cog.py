@@ -220,7 +220,10 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     @mm_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
     async def get_map_pool(self, interaction: nextcord.Interaction):
         maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
-        map_dict = {m.map: m.media for m in maps}
+        map_dict = {
+            m.map: {"media": m.media, "resource_id": m.resource_id}
+            for m in maps
+        }
         
         json_str = json.dumps(map_dict, indent=4)
         json_bytes = json_str.encode('utf-8')
