@@ -29,7 +29,7 @@ from config import *
 from utils.logger import Logger as log
 from utils.models import BotSettings
 from utils.statistics import create_graph
-from utils.utils import create_stats_embed, format_duration
+from utils.utils import create_stats_embed, format_duration, create_queue_embed
 from views.queue.buttons import QueueButtonsView
 
 
@@ -68,13 +68,8 @@ class Queues(commands.Cog):
         log.debug(f"{user_id} was manually removed from queue")
 
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-        if queue_users: queue_users.sort(key=lambda u: u.queue_expiry)
         asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
-        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
-        message_lines = []
-        for n, item in enumerate(queue_users, 1):
-            message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
-        embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+        embed = create_queue_embed(queue_users)
         channel = interaction.guild.get_channel(settings.mm_queue_channel)
         message = await channel.fetch_message(settings.mm_queue_message)
         await message.edit(embeds=[message.embeds[0], embed])

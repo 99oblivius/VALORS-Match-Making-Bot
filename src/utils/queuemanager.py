@@ -24,7 +24,7 @@ import nextcord
 
 from config import GUILD_ID, VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME2, MATCH_PLAYER_COUNT
 from utils.logger import Logger as log
-from utils.utils import format_duration
+from utils.utils import format_duration, create_queue_embed
 
 
 class QueueManager:
@@ -97,11 +97,7 @@ class QueueManager:
             message = await channel.fetch_message(settings.mm_queue_message)
             queue_users = await self.bot.store.get_queue_users(channel.id)
             asyncio.create_task(self.update_presence(len(queue_users)))
-            embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
-            message_lines = []
-            for n, item in enumerate(queue_users, 1):
-                message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
-            embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+            embed = create_queue_embed(queue_users)
             await message.edit(embeds=[message.embeds[0], embed])
             self.active_users.pop(user_id, None)
             self.tasks.pop(user_id, None)

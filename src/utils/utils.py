@@ -32,7 +32,7 @@ import aiohttp
 from nextcord import Embed, Guild, Member, User
 
 from config import VALORS_THEME1
-from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side
+from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
 from utils.logger import Logger as log
 
 
@@ -173,6 +173,15 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
         field_content += "```"
         embed.add_field(name="\u200b", value=field_content, inline=False)
     
+    return embed
+
+def create_queue_embed(queue_users: List[MMBotQueueUsers]) -> Embed:
+    queue_users.sort(key=lambda u: u.queue_expiry)
+    embed = Embed(title="Queue", color=VALORS_THEME1)
+    message_lines = []
+    for n, item in enumerate(queue_users, 1):
+        message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
+    embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
     return embed
 
 async def fetch_avatar(session: aiohttp.ClientSession, cache, url: str, size: tuple):

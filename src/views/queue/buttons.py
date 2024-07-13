@@ -27,7 +27,7 @@ from nextcord.ext import commands
 from config import GUILD_ID, LFG_PING_DELAY, MATCH_PLAYER_COUNT, VALORS_THEME1, VALORS_THEME1_2
 from matches import make_match
 from utils.logger import Logger as log
-from utils.utils import abandon_cooldown, create_stats_embed, format_duration
+from utils.utils import abandon_cooldown, create_stats_embed, format_duration, create_queue_embed
 
 
 class QueueButtonsView(nextcord.ui.View):
@@ -115,13 +115,8 @@ class QueueButtonsView(nextcord.ui.View):
 
     async def update_queue_message(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-        if queue_users: queue_users.sort(key=lambda u: u.queue_expiry)
         asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
-        embed = nextcord.Embed(title="Queue", color=VALORS_THEME1)
-        message_lines = []
-        for n, item in enumerate(queue_users, 1):
-            message_lines.append(f"{n}. <@{item.user_id}> `expires `<t:{item.queue_expiry}:R>")
-        embed.add_field(name=f"{len(queue_users)} in queue", value=f"{'\n'.join(message_lines)}\u2800")
+        embed = create_queue_embed(queue_users)
         await interaction.edit(embeds=[interaction.message.embeds[0], embed])
 
     async def ready_callback(self, interaction: nextcord.Interaction):
