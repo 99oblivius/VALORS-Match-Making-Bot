@@ -469,7 +469,7 @@ class Database:
                     update(MMBotUserMatchStats)
                     .where(
                         MMBotUserMatchStats.match_id == match_id,
-                        MMBotUserMatchStats.user_id.not_in(abandoned_user_ids))
+                        MMBotUserMatchStats.user_id)
                     .values(abandoned=True))
             await session.commit()
 

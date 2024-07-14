@@ -695,13 +695,12 @@ class Match:
             }
             
             while True:
-                log.debug(f"server_players: {len(server_players)}")
                 player_log = f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}"
                 VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
 
-                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
