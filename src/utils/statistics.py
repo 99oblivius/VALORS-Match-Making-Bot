@@ -168,7 +168,11 @@ def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks:
         
         fig.update_layout(height=800, title_text="Overview", showlegend=False)
         fig.update_xaxes(title_text="Game Number")
-        fig.update_yaxes(title_text="Value")
+        
+        fig.update_yaxes(title_text="MMR", row=1, col=1)
+        fig.update_yaxes(title_text="K/D Ratio", row=1, col=2, side="right")
+        fig.update_yaxes(title_text="Win Rate", row=2, col=1)
+        fig.update_yaxes(title_text="Score", row=2, col=2, side="right")
 
     if graph_type == "performance_overview":
         fig.update_layout(height=700)
