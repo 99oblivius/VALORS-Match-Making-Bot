@@ -349,6 +349,8 @@ class Match:
         
         if check_state(MatchState.ACCEPT_PLAYERS):
             add_mention = []
+            for player in self.players:
+                add_mention.append(f"<@{player.user_id}>")
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
@@ -693,12 +695,13 @@ class Match:
             }
             
             while True:
+                log.debug(f"server_players: {len(server_players)}")
                 player_log = f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}"
                 VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
 
-                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
+                if len(current_players) == MATCH_PLAYER_COUNT and current_players.issubset(expected_player_ids):
                     break
 
                 new_players = current_players - server_players
@@ -862,13 +865,6 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.LOG_END):
-            embed = log_message.embeds[0]
-            embed.description = f"{'A' if self.match.a_score > self.match.b_score else 'B'} Wins!"
-            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'} - {self.match.a_score}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'} - {self.match.b_score}", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
-            
             match = await self.bot.store.get_match(self.match_id)
             match_stats = await self.bot.store.get_match_stats(self.match_id)
             try:
@@ -877,7 +873,6 @@ class Match:
                 await log_message.edit(embed=embed, file=file)
             except Exception as e:
                 log.error(f"[{self.match_id}] Error in creating score leaderboard image: {repr(e)}")
-                await log_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
