@@ -467,9 +467,7 @@ class Database:
                 await session.execute(insert(MMBotUserAbandons).values(abandons))
                 await session.execute(
                     update(MMBotUserMatchStats)
-                    .where(
-                        MMBotUserMatchStats.match_id == match_id,
-                        MMBotUserMatchStats.user_id)
+                    .where(MMBotUserMatchStats.match_id == match_id)
                     .values(abandoned=True))
             await session.commit()
 
