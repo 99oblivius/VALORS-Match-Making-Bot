@@ -23,13 +23,13 @@ from io import BytesIO
 import asyncio
 
 import nextcord
-from nextcord.ext import commands, tasks
+from nextcord.ext import commands
 
 from config import *
 from utils.logger import Logger as log
 from utils.models import BotSettings
-from utils.statistics import create_graph
-from utils.utils import create_stats_embed, format_duration, create_queue_embed
+from utils.statistics import create_graph, create_stats_embed
+from utils.utils import format_duration, create_queue_embed
 from views.queue.buttons import QueueButtonsView
 
 

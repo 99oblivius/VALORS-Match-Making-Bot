@@ -40,7 +40,8 @@ from config import (
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import create_leaderboard_embed, format_duration, format_mm_attendance, generate_score_image
+from utils.utils import format_duration, format_mm_attendance, generate_score_image
+from utils.statistics import create_leaderboard_embed
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import ChosenMapView, MapPickView
@@ -838,6 +839,7 @@ class Match:
                     tb = traceback.extract_tb(e.__traceback__)
                     _, line_number, func_name, _ = tb[-1]
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
+                    print("[Reply] ", reply)
                 await asyncio.sleep(2)
             
             if not abandoned_users:

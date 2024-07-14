@@ -27,7 +27,8 @@ from nextcord.ext import commands
 from config import GUILD_ID, LFG_PING_DELAY, MATCH_PLAYER_COUNT, VALORS_THEME1, VALORS_THEME1_2
 from matches import make_match
 from utils.logger import Logger as log
-from utils.utils import abandon_cooldown, create_stats_embed, format_duration, create_queue_embed
+from utils.utils import abandon_cooldown, format_duration, create_queue_embed
+from utils.statistics import create_stats_embed
 
 
 class QueueButtonsView(nextcord.ui.View):

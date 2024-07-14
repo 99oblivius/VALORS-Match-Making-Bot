@@ -19,8 +19,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from math import floor
-from typing import Any, Dict, List
+from typing import List
 import asyncio
 import base64
 import re
@@ -29,7 +28,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 
-from nextcord import Embed, Guild, Member, User
+from nextcord import Embed, Guild
 
 from config import VALORS_THEME1
 from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
@@ -108,72 +107,6 @@ def get_rank_color(guild: Guild, mmr: int, ranks: List[MMBotRanks]) -> str:
                 return f"\u001b[1;{color_code}m"
     
     return "\u001b[1;30m"
-
-def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]], last_mmr: Dict[int, int], ranks: List[MMBotRanks]) -> Embed:
-    field_count = 0
-
-    valid_scores = [player['avg_score'] for player in leaderboard_data if player['games'] > 0 and guild.get_member(player['user_id'])]
-    avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
-    embed = Embed(title="Match Making Leaderboard", description=f"{len(valid_scores)} ranking players\nK/D/A and Score are mean averages")
-
-    ranked_mmr = ((n, user_id) for n, (user_id, _) in enumerate(sorted(last_mmr.items(), key=lambda x: x[1], reverse=True), 1))
-    previous_positions = { user_id: n for n, user_id in ranked_mmr if guild.get_member(user_id) }
-
-    ranking_position = 0
-    for player in leaderboard_data:
-        if field_count > 25: break
-        if player['games'] == 0: continue
-
-        member = guild.get_member(player['user_id'])
-        if member is None: continue
-        
-        ranking_position += 1
-
-        previous_position = previous_positions.get(player['user_id'], None)
-        if previous_position is None:               rank_change = "\u001b[35m·"
-        elif ranking_position < previous_position:  rank_change = "\u001b[32m↑"
-        elif ranking_position > previous_position:  rank_change = "\u001b[31m↓"
-        else:                                       rank_change = "\u001b[36m|"
-
-        name = member.display_name[:11] + '…' if len(member.display_name) > 12 else member.display_name
-        name = name.ljust(12)
-        mmr = f"{floor(player['mmr'])}".rjust(4)
-        games = f"{player['games']}".rjust(3)
-        win_rate = floor(player['win_rate']*100)
-        k = floor(player['avg_kills'])
-        d = floor(player['avg_deaths'])
-        a = floor(player['avg_assists'])
-        score = floor(player['avg_score'])
-        
-        # Color coding
-        rank_color = get_rank_color(guild, float(mmr), ranks)
-        win_rate_color = "\u001b[32m" if win_rate > 60 else "\u001b[31m" if win_rate < 40 else "\u001b[0m"
-        score_color = "\u001b[32m" if score > avg_score else "\u001b[31m"
-        
-        kda = f"{k}/{d}/{a}".rjust(8)
-        if k < d:
-            kda_formatted = kda.replace(str(d), f"\u001b[31m{d}\u001b[0m", 1)
-        else:
-            kda_formatted = kda
-
-        row = f"{ranking_position:3} {rank_change}\u001b[0m {name} | {rank_color}{mmr}\u001b[0m | {games} | {win_rate_color}{win_rate:3}%\u001b[0m | {kda_formatted} | {score_color}{score:2}\u001b[0m\n"
-        
-        if ranking_position % 5 == 1:
-            if ranking_position == 1:
-                header = "  R | Player       |  MMR |   G |  W%  |   K/D/A  | S  "
-                field_content = f"```ansi\n\u001b[1m{header}\u001b[0m\n{'─' * len(header)}\n{row}"
-            else:
-                field_content += "```"
-                embed.add_field(name="\u200b", value=field_content, inline=False)
-                field_content = f"```ansi\n{row}"
-            field_count += 1
-        else:
-            field_content += row
-    if field_content:
-        field_content += "```"
-        embed.add_field(name="\u200b", value=field_content, inline=False)
-    
-    return embed
 
 def create_queue_embed(queue_users: List[MMBotQueueUsers]) -> Embed:
     queue_users.sort(key=lambda u: u.queue_expiry)
@@ -388,44 +321,6 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
     img_byte_arr = BytesIO()
     img.save(img_byte_arr, format='PNG')
     return img_byte_arr.getvalue()
-
-def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches) -> Embed:
-    ranked_players = 0
-    ranked_position = None
-    for player in leaderboard_data:
-        if player['games'] > 0 and guild.get_member(player['user_id']):
-            ranked_players += 1
-        if player['user_id'] == user.id:
-            ranked_position = ranked_players
-    embed = Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", color=VALORS_THEME1)
-    embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
-
-    embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
-    embed.add_field(name="Total Games", value=summary_data.games, inline=True)
-    embed.add_field(name="Win Rate", value=f"{(summary_data.wins / summary_data.games * 100):.2f}%" if summary_data.games > 0 else "N/A", inline=True)
-    embed.add_field(name="Total Kills", value=summary_data.total_kills, inline=True)
-    embed.add_field(name="Total Deaths", value=summary_data.total_deaths, inline=True)
-    embed.add_field(name="Total Assists", value=summary_data.total_assists, inline=True)
-    embed.add_field(name="K/D Ratio", value=f"{(summary_data.total_kills / summary_data.total_deaths):.2f}" if summary_data.total_deaths > 0 else "N/A", inline=True)
-    embed.add_field(name="Total Score", value=f"{(summary_data.total_score / summary_data.games):.2f}" if summary_data.games > 0 else "N/A", inline=True)
-
-    if avg_stats:
-        embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
-        embed.add_field(name="Kills", value=f"{f'{avg_stats['avg_kills']:.2f}' if avg_stats.get('avg_kills', None) else 'N/A'}", inline=True)
-        embed.add_field(name="Deaths", value=f"{f'{avg_stats['avg_deaths']:.2f}' if avg_stats.get('avg_deaths', None) else 'N/A'}", inline=True)
-        embed.add_field(name="Assists", value=f"{f'{avg_stats['avg_assists']:.2f}' if avg_stats.get('avg_assists', None) else 'N/A'}", inline=True)
-        embed.add_field(name="Score", value=f"{f'{avg_stats['avg_score']:.2f}' if avg_stats.get('avg_score', None) else 'N/A'}", inline=True)
-        embed.add_field(name="MMR Gain", value=f"{f'{avg_stats['avg_mmr_change']:.2f}' if avg_stats.get('avg_mmr_change', None) else 'N/A'}", inline=True)
-    else:
-        embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
-
-    if recent_matches:
-        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
-        embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
-    else:
-        embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
-    
-    return embed
 
 
 ANSI_TARGET_COLORS = {

@@ -27,7 +27,7 @@ from nextcord.ext import commands
 from config import *
 from utils.logger import Logger as log
 from utils.models import BotRegions, BotSettings, MMBotRanks, Platform, MMBotUsers, MMBotUserSummaryStats
-from utils.utils import create_leaderboard_embed
+from utils.statistics import create_leaderboard_embed
 from views.register import RegistryButtonView
 
 
