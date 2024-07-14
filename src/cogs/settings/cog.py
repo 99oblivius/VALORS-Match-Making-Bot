@@ -198,16 +198,20 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         if not ranks:
             return await interaction.response.send_message("No ranks set.", ephemeral=True)
         
-        ranks_dict = {f"Rank {rank.id}": {"mmr": rank.mmr_threshold, "role_id": rank.role_id} for rank in ranks}
+        role_id_to_name = {role.id: role.name for role in interaction.guild.roles}
+        
+        ranks_dict = {}
+        for rank in ranks:
+            role_name = role_id_to_name.get(rank.role_id, f"Unknown Role ({rank.role_id})")
+            ranks_dict[role_name] = { "mmr_threshold": rank.mmr_threshold, "role_id": rank.role_id }
         
         json_str = json.dumps(ranks_dict, indent=4)
         json_bytes = json_str.encode('utf-8')
         json_file = BytesIO(json_bytes)
         json_file.seek(0)
+        file = nextcord.File(json_file, filename="mmr_ranks.json")
         await interaction.response.send_message(
-            "Here are the current ranks:\n_edit and upload with_ </ranks set_ranks:1249109243114557461>", 
-            file=nextcord.File(json_file, filename="mmr_ranks.json"), 
-            ephemeral=True)
+            "Here are the current ranks:\n_edit and upload with_ </ranks set_ranks:1249109243114557461>", file=file, ephemeral=True)
 
     @settings.subcommand(name="set_ranks", description="Set MMR ranks")
     async def set_ranks(self, interaction: nextcord.Interaction, 
