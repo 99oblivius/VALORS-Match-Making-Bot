@@ -42,11 +42,8 @@ class Matches(commands.Cog):
     @tasks.loop(seconds=60)
     async def rotate_map_pool(self):
         now = datetime.now(pytz.timezone('US/Eastern'))
-        if now.minute == 00 and now.hour == 00:
-            settings = await self.bot.store.get_settings(GUILD_ID)
-            maps = await self.bot.store.get_maps(GUILD_ID)
-            new_phase = (settings.mm_maps_phase - 1) % len(maps)
-            await self.bot.store.upsert(BotSettings, guild_id=GUILD_ID, mm_maps_phase=new_phase)
+        if now.minute == 00 and now.hour % 8 == 0:
+            await self.bot.store.shuffle_map_order(GUILD_ID)
 
     @rotate_map_pool.before_loop
     async def wait_rotate_map_pool(self):
@@ -178,6 +175,24 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     @match_making.subcommand(name="settings", description="Match making settings")
     async def mm_settings(self, interaction: nextcord.Interaction):
         pass
+
+    @mm_settings.subcommand(name="shuffle_maps", description="Shuffle the order of maps in the pool")
+    async def shuffle_map_pool(self, interaction: nextcord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            await self.bot.store.shuffle_map_order(interaction.guild.id)
+            shuffled_maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
+            map_list = [m.map for m in shuffled_maps]
+            
+            log.debug(f"{interaction.user.display_name} shuffled the map pool:")
+            
+            await interaction.followup.send(
+                f"Maps have been successfully shuffled. New order:\n`{', '.join(map_list)}`", ephemeral=True)
+        except Exception as e:
+            log.error(f"Error shuffling maps: {repr(e)}")
+            await interaction.followup.send(
+                "An error occurred while shuffling the maps.", ephemeral=True)
 
     @mm_settings.subcommand(name="accept_period", description="Set match accept period")
     async def set_mm_accept_period(self, interaction: nextcord.Interaction, 

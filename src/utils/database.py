@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple
+import random
 
 from sqlalchemy import delete, desc, func, inspect, or_, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -862,6 +863,28 @@ class Database:
 ########
 # MAPS #
 ########
+
+    @log_db_operation
+    async def shuffle_map_order(self, guild_id: int) -> None:
+        async with self._session_maker() as session:
+            async with session.begin():
+                result = await session.execute(
+                    select(MMBotMaps.map)
+                    .where(
+                        MMBotMaps.guild_id == guild_id,
+                        MMBotMaps.active == True)
+                    .order_by(MMBotMaps.order))
+                maps = result.scalars().all()
+                shuffled_maps = random.sample(maps, len(maps))
+                for new_order, map_name in enumerate(shuffled_maps):
+                    await session.execute(
+                        update(MMBotMaps)
+                        .where(
+                            MMBotMaps.guild_id == guild_id,
+                            MMBotMaps.map == map_name)
+                        .values(order=new_order))
+            await session.commit()
+
     @log_db_operation
     async def set_maps(self, guild_id: int, maps: List[Dict[str, str]]):
         data = [{"guild_id": guild_id, "map": m[0], "resource_id": m[1]['resource_id'], "media": m[1]['media'], "active": True, "order": n} for n, m in enumerate(maps)]
