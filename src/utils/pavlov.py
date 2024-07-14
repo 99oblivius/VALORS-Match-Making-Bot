@@ -70,10 +70,16 @@ class RCONManager:
     async def add_server(self, host: str, port: int, password: str) -> bool:
         reply = None
         rcon = PavlovRCON(host, port, password)
-        try:
-            reply = await rcon.send("ServerInfo")
-        except ConnectionRefusedError:
-            return False
+        count = 0
+        while count < 3:
+            try:
+                reply = await rcon.send("ServerInfo")
+                break
+            except ConnectionRefusedError:
+                return False
+            except Exception:
+                await asyncio.sleep(1)
+                count += 1
         if reply and reply.get('Successful', False):
             self.servers[f'{host}:{port}'] = rcon
             return True
