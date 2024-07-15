@@ -18,7 +18,7 @@
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple
 import random
@@ -400,6 +400,47 @@ class Database:
 
             result = await session.execute(query)
             return {row.user_id: row.mmr_before for row in result}
+
+    async def get_user_pick_preferences(self, guild_id: int, user_id: int) -> Dict[str, Dict[str, int]]:
+        async with self._session_maker() as session:
+            bans_query = select(MMBotUserBans.map, func.count(MMBotUserBans.map).label('count')).\
+                where(MMBotUserBans.guild_id == guild_id, MMBotUserBans.user_id == user_id).\
+                group_by(MMBotUserBans.map)
+            bans_result = await session.execute(bans_query)
+            bans = dict(bans_result.all())
+
+            picks_query = select(MMBotUserMapPicks.map, func.count(MMBotUserMapPicks.map).label('count')).\
+                where(MMBotUserMapPicks.guild_id == guild_id, MMBotUserMapPicks.user_id == user_id).\
+                group_by(MMBotUserMapPicks.map)
+            picks_result = await session.execute(picks_query)
+            picks = dict(picks_result.all())
+
+            sides_query = select(MMBotUserSidePicks.side, func.count(MMBotUserSidePicks.side).label('count')).\
+                where(MMBotUserSidePicks.guild_id == guild_id, MMBotUserSidePicks.user_id == user_id).\
+                group_by(MMBotUserSidePicks.side)
+            sides_result = await session.execute(sides_query)
+            sides = dict(sides_result.all())
+
+            return { 'bans': bans, 'picks': picks, 'sides': sides }
+    
+    @log_db_operation
+    async def get_player_play_periods(self, guild_id: int, user_id: int, limit: int=50) -> List[Tuple[datetime, datetime]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(
+                    MMBotMatches.start_timestamp,
+                    MMBotMatches.end_timestamp)
+                .join(
+                    MMBotUserMatchStats,
+                    (MMBotUserMatchStats.match_id == MMBotMatches.id) &
+                    (MMBotUserMatchStats.guild_id == guild_id) &
+                    (MMBotUserMatchStats.user_id == user_id))
+                .where(
+                    MMBotMatches.end_timestamp.isnot(None))
+                .order_by(desc(MMBotMatches.start_timestamp))
+                .limit(limit))
+            matches = result.all()
+            return [(match.start_timestamp, match.end_timestamp) for match in matches]
 
 
 ############

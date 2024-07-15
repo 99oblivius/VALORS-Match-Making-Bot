@@ -16,12 +16,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from math import floor
+from datetime import datetime, timedelta
 
 import nextcord
 from nextcord import Embed, Guild, User, Member
 import pandas as pd
+import numpy as np
+from scipy.stats import gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -30,7 +33,11 @@ from utils.models import MMBotRanks, MMBotUserMatchStats
 from utils.utils import get_rank_color
 
 
-def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks: List[Dict[nextcord.Role, MMBotRanks]]) -> go.Figure:
+def create_graph(graph_type: str, 
+                 match_stats: List[MMBotUserMatchStats], 
+                 ranks: List[Dict[nextcord.Role, MMBotRanks]] | None=None, 
+                 preferences: Dict[str, Dict[str, int]] | None=None,
+                 play_periods: List[Tuple[datetime, datetime]] | None=None) -> go.Figure:
     df = pd.DataFrame([vars(stat) for stat in match_stats])
     df['game_number'] = range(1, len(df) + 1)
     df['cumulative_wins'] = df['win'].cumsum()
@@ -42,7 +49,115 @@ def create_graph(graph_type: str, match_stats: List[MMBotUserMatchStats], ranks:
     theme_color1_2 = f'#{hex(VALORS_THEME1_2)[2:]}'
     theme_color2 = f'#{hex(VALORS_THEME2)[2:]}'
 
-    if graph_type == "mmr_game":
+    if graph_type == "activity_hours":
+        # Convert play periods to hours and minutes
+        all_times = []
+        for start, end in play_periods:
+            current = start
+            while current < end:
+                all_times.append(current.hour + current.minute / 60)
+                current += timedelta(minutes=1)
+
+        # Create a high-resolution array for smooth plotting
+        theta = np.linspace(0, 2*np.pi, 240)  # 240 points for 6-minute resolution
+        r = np.linspace(0.4, 1, 30)  # 30 radial divisions
+        theta_grid, r_grid = np.meshgrid(theta, r)
+
+        # Perform kernel density estimation
+        xy = np.vstack([np.cos(theta_grid.ravel()), np.sin(theta_grid.ravel())] * r_grid.ravel())
+        z = gaussian_kde([(x / 24) * 2 * np.pi for x in all_times])(theta)
+        z = np.tile(z, (30, 1))
+
+        # Normalize z values
+        z = (z - z.min()) / (z.max() - z.min())
+
+        fig = go.Figure()
+
+        # Add heatmap
+        fig.add_trace(go.Barpolar(
+            r=r,
+            theta=np.degrees(theta),
+            base=0.4,
+            width=2*np.pi/240,
+            marker_color=z.T.ravel(),
+            marker=dict(
+                colorscale='Viridis',
+                showscale=True,
+                colorbar=dict(
+                    title="Activity Density",
+                    tickvals=[0, 0.5, 1],
+                    ticktext=['Low', 'Medium', 'High']
+                )
+            ),
+            hoverinfo='none'
+        ))
+
+        # Add hour labels
+        for i in range(24):
+            angle = i * 2 * np.pi / 24
+            r = 1.15
+            x = r * np.cos(angle - np.pi/2)
+            y = r * np.sin(angle - np.pi/2)
+            fig.add_annotation(
+                x=x, y=y,
+                text=f"{i:02d}",
+                showarrow=False,
+                font=dict(size=12, color="white")
+            )
+
+        # Add noon and midnight labels
+        fig.add_annotation(x=0, y=1.25, text="Noon", showarrow=False, font=dict(size=14, color="white"))
+        fig.add_annotation(x=0, y=-1.25, text="Midnight", showarrow=False, font=dict(size=14, color="white"))
+
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(visible=False, range=[0, 1.3]),
+                angularaxis=dict(
+                    visible=True,
+                    tickmode='array',
+                    tickvals=[],
+                    ticktext=[],
+                    direction='clockwise'
+                ),
+            ),
+            showlegend=False,
+            title="Playtime by Hour",
+            height=600,
+            width=600,
+        )
+    
+    elif graph_type == "pick_preferences":
+        categories = ['Bans', 'Picks', 'Sides']
+        data = []
+        
+        all_maps = set(preferences['bans'].keys()) | set(preferences['picks'].keys())
+        for map_name in all_maps:
+            data.append(go.Bar(
+                name=map_name,
+                x=categories[:2],
+                y=[preferences['bans'].get(map_name, 0), preferences['picks'].get(map_name, 0)],
+                text=[preferences['bans'].get(map_name, 0), preferences['picks'].get(map_name, 0)],
+                textposition='auto'
+            ))
+        
+        for side in preferences['sides']:
+            data.append(go.Bar(
+                name=side.name,
+                x=[categories[2]],
+                y=[preferences['sides'][side]],
+                text=[preferences['sides'][side]],
+                textposition='auto'
+            ))
+        
+        fig = go.Figure(data=data)
+        fig.update_layout(
+            title="Pick Preferences",
+            yaxis_title="Count",
+            barmode='group',
+            height=600,
+            legend_title="Maps/Sides")
+    
+    elif graph_type == "mmr_game":
         mmr_values = df['mmr_before'] + df['mmr_change']
         fig = go.Figure(go.Scatter(
             x=df['game_number'], 

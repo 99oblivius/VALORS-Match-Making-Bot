@@ -80,7 +80,7 @@ def calculate_mmr_change(
     s = 400
     closeness_ratio = 4/9
 
-    kd_rate = BASE_MMR_CHANGE / 5 * (5 + (kills+assists/5) - deaths) / 10
+    kd_rate = BASE_MMR_CHANGE / 5 * ((kills+assists/5) - deaths) / 10
     
     r_ab = ally_team_avg_mmr - enemy_team_avg_mmr
     pr_a = 1 / (1 + pow(10, -r_ab/s))
