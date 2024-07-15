@@ -24,13 +24,13 @@ import nextcord
 from nextcord import Embed, Guild, User, Member
 import pandas as pd
 import numpy as np
-from scipy.stats import gaussian_kde
+from scipy import stats
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2
 from utils.models import MMBotRanks, MMBotUserMatchStats
-from utils.utils import get_rank_color
+from utils.utils import get_rank_color, get_rank_role
 
 
 def create_graph(graph_type: str, 
@@ -50,78 +50,60 @@ def create_graph(graph_type: str,
     theme_color2 = f'#{hex(VALORS_THEME2)[2:]}'
 
     if graph_type == "activity_hours":
-        # Convert play periods to hours and minutes
-        all_times = []
+        hours = []
         for start, end in play_periods:
-            current = start
-            while current < end:
-                all_times.append(current.hour + current.minute / 60)
-                current += timedelta(minutes=1)
+            duration = (end - start).total_seconds() / 3600
+            mid_hour = (start.hour + start.minute / 60 + duration / 2) % 24
+            hours.append(mid_hour)
 
-        # Create a high-resolution array for smooth plotting
-        theta = np.linspace(0, 2*np.pi, 240)  # 240 points for 6-minute resolution
-        r = np.linspace(0.4, 1, 30)  # 30 radial divisions
+        # Create circular KDE
+        theta = np.linspace(0, 2*np.pi, 360)
+        r = np.linspace(0.2, 1, 100)
         theta_grid, r_grid = np.meshgrid(theta, r)
 
-        # Perform kernel density estimation
-        xy = np.vstack([np.cos(theta_grid.ravel()), np.sin(theta_grid.ravel())] * r_grid.ravel())
-        z = gaussian_kde([(x / 24) * 2 * np.pi for x in all_times])(theta)
-        z = np.tile(z, (30, 1))
+        x = r_grid * np.cos(theta_grid)
+        y = r_grid * np.sin(theta_grid)
 
-        # Normalize z values
-        z = (z - z.min()) / (z.max() - z.min())
+        values = np.array([(np.cos(h*2*np.pi/24), np.sin(h*2*np.pi/24)) for h in hours])
+        kernel = stats.gaussian_kde(values.T)
+        intensity = kernel(np.vstack([x.ravel(), y.ravel()])).reshape(x.shape)
 
+        # Normalize intensity
+        intensity = (intensity - intensity.min()) / (intensity.max() - intensity.min())
+
+        # Create the plot
         fig = go.Figure()
 
-        # Add heatmap
+        # Add heatmap trace
         fig.add_trace(go.Barpolar(
             r=r,
             theta=np.degrees(theta),
-            base=0.4,
-            width=2*np.pi/240,
-            marker_color=z.T.ravel(),
+            customdata=intensity.T,
+            hovertemplate='Time: %{theta:.1f}°<br>Intensity: %{customdata:.2f}<extra></extra>',
             marker=dict(
+                color=intensity.T,
                 colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(
-                    title="Activity Density",
-                    tickvals=[0, 0.5, 1],
-                    ticktext=['Low', 'Medium', 'High']
-                )
+                showscale=False
             ),
-            hoverinfo='none'
+            name=''
         ))
 
-        # Add hour labels
-        for i in range(24):
-            angle = i * 2 * np.pi / 24
-            r = 1.15
-            x = r * np.cos(angle - np.pi/2)
-            y = r * np.sin(angle - np.pi/2)
-            fig.add_annotation(
-                x=x, y=y,
-                text=f"{i:02d}",
-                showarrow=False,
-                font=dict(size=12, color="white")
-            )
-
-        # Add noon and midnight labels
-        fig.add_annotation(x=0, y=1.25, text="Noon", showarrow=False, font=dict(size=14, color="white"))
-        fig.add_annotation(x=0, y=-1.25, text="Midnight", showarrow=False, font=dict(size=14, color="white"))
-
+        # Customize layout
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=False, range=[0, 1.3]),
+                radialaxis=dict(visible=False, range=[0, 1]),
                 angularaxis=dict(
-                    visible=True,
-                    tickmode='array',
-                    tickvals=[],
-                    ticktext=[],
-                    direction='clockwise'
-                ),
+                    tickvals=[0, 90, 180, 270],
+                    ticktext=['0:00', '6:00', '12:00', '18:00'],
+                    direction='clockwise',
+                    rotation=90,
+                )
             ),
             showlegend=False,
-            title="Playtime by Hour",
+            title=dict(
+                text='User Activity Density Map',
+                font=dict(size=20)
+            ),
             height=600,
             width=600,
         )
@@ -310,7 +292,7 @@ def create_graph(graph_type: str,
 
     return fig
 
-def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches) -> Embed:
+def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches, ranks) -> Embed:
     ranked_players = 0
     ranked_position = None
     for player in leaderboard_data:
@@ -318,7 +300,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
             ranked_players += 1
         if player['user_id'] == user.id:
             ranked_position = ranked_players
-    embed = Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", color=VALORS_THEME1)
+    embed = Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", description=f"Currently in {get_rank_role(guild, ranks, summary_data.mmr).mention}", color=VALORS_THEME1)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
     embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
@@ -341,7 +323,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
         embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
     if recent_matches:
-        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {match.mmr_change:+.2f}" for match in recent_matches])
+        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {f'{match.mmr_change:+.2f}' if match.mmr_change else "In-game"}" for match in recent_matches])
         embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
     else:
         embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)

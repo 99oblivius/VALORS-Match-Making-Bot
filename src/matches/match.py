@@ -40,7 +40,7 @@ from config import (
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import format_duration, format_mm_attendance, generate_score_image
+from utils.utils import format_duration, format_mm_attendance, generate_score_image, get_rank_role
 from utils.statistics import create_leaderboard_embed
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
@@ -197,13 +197,8 @@ class Match:
         if not guild:
             log.error(f"Could not find guild with id {self.guild_id}")
             return
-
-        rank_roles = sorted(
-            [(r.mmr_threshold, guild.get_role(r.role_id)) 
-            for r in await self.bot.store.get_ranks(self.guild_id)], key=lambda x: x[0])
         
-        def get_rank_role(mmr):
-            return next((role for threshold, role in reversed(rank_roles) if mmr > threshold), None)
+        rank_roles = await self.bot.store.get_ranks(self.guild_id)
 
         for player in self.players:
             user_id = player.user_id
@@ -226,7 +221,7 @@ class Match:
 
                 summary_data = users_summary_data[user_id]
 
-                new_rank_role = get_rank_role(summary_data.mmr + current_stats['mmr_change'])
+                new_rank_role = get_rank_role(guild, rank_roles, summary_data.mmr + current_stats['mmr_change'])
                 member = guild.get_member(user_id)
                 current_rank_roles = set(role for role in member.roles if role in {r for _, r in rank_roles})
                 if current_rank_roles != {new_rank_role}:

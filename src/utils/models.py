@@ -202,7 +202,7 @@ class MMBotUserSummaryStats(Base):
 
     guild_id        = Column(BigInteger, primary_key=True, nullable=False)
     user_id         = Column(BigInteger, primary_key=True, nullable=False)
-    mmr             = Column(Float, default=800)
+    mmr             = Column(Float, default=900)
     games           = Column(Integer, default=0)
     wins            = Column(Integer, default=0)
     losses          = Column(Integer, default=0)
