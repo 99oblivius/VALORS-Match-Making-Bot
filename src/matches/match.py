@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import List
 from io import BytesIO
+import pprint
 
 import nextcord
 from nextcord.ext import commands
@@ -223,7 +224,7 @@ class Match:
 
                 new_rank_role = get_rank_role(guild, rank_roles, summary_data.mmr + current_stats['mmr_change'])
                 member = guild.get_member(user_id)
-                current_rank_roles = set(role for role in member.roles if role in {r for _, r in rank_roles})
+                current_rank_roles = set(role for role in member.roles if role in rank_roles)
                 if current_rank_roles != {new_rank_role}:
                     roles_to_remove = current_rank_roles - {new_rank_role}
                     roles_to_add = {new_rank_role} - current_rank_roles
@@ -695,6 +696,7 @@ class Match:
                 VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
+                pprint(player_list)
 
                 if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
                     break

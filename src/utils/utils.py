@@ -85,7 +85,7 @@ def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
     cooldown_seconds = (cooldown_end - datetime.now(timezone.utc)).total_seconds()
     return max(0, int(cooldown_seconds))
 
-def get_rank_role(guild, ranks, mmr):
+def get_rank_role(guild: Guild, ranks: List[MMBotRanks], mmr: int):
     ranks = sorted([(r.mmr_threshold, guild.get_role(r.role_id)) for r in ranks], key=lambda x: x[0])
     return next((role for threshold, role in reversed(ranks) if mmr > threshold), None)
 
