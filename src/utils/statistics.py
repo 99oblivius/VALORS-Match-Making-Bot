@@ -310,7 +310,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     embed.add_field(name="Total Deaths", value=summary_data.total_deaths, inline=True)
     embed.add_field(name="Total Assists", value=summary_data.total_assists, inline=True)
     embed.add_field(name="K/D Ratio", value=f"{(summary_data.total_kills / summary_data.total_deaths):.2f}" if summary_data.total_deaths > 0 else "N/A", inline=True)
-    embed.add_field(name="Total Score", value=f"{(summary_data.total_score / summary_data.games):.2f}" if summary_data.games > 0 else "N/A", inline=True)
+    embed.add_field(name="Total Score", value=summary_data.total_score, inline=True)
 
     if avg_stats:
         embed.add_field(name="\u200b", value="Average Performance (Last 10 Games)", inline=False)
