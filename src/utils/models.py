@@ -245,6 +245,13 @@ class MMBotMaps(Base):
     active       = Column(Boolean, nullable=False, default=True)
     order        = Column(SmallInteger)
 
+class MMBotMods(Base):
+    __tablename__ = 'mm_bot_mods'
+
+    guild_id     = Column(BigInteger, ForeignKey('bot_settings.guild_id'), primary_key=True, nullable=False)
+    mod          = Column(String(32), primary_key=True, nullable=False)
+    resource_id  = Column(String(32))
+
 
 ##############
 # MM Matches #

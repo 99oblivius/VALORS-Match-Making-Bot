@@ -215,12 +215,28 @@ class RCONManager:
     async def list_banned_players(self, serveraddr: str, *args, **kwargs):
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
-            reply = await rcon.send("Banlist")
-            return reply
+            return await rcon.send("Banlist")
     
     @safe_rcon
     async def list_maps(self, serveraddr: str, *args, **kwargs):
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
-            reply = await rcon.send("MapList")
-            return reply
+            return await rcon.send("MapList")
+    
+    @safe_rcon
+    async def mod_list(self, serveraddr: str, *args, **kwargs) -> dict:
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            return await rcon.send("UGCModList")
+    
+    @safe_rcon
+    async def add_mod(self, serveraddr: str, mod_id: str, *args, **kwargs):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            return await rcon.send(f"UGCAddMod {mod_id}")
+    
+    @safe_rcon
+    async def clear_mods(self, serveraddr: str, *args, **kwargs):
+        if serveraddr in self.servers:
+            rcon = self.servers[serveraddr]
+            return await rcon.send(f"UGCClearModList")

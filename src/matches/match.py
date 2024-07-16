@@ -659,6 +659,13 @@ class Match:
                 log.debug(f"[{self.match_id}] No running rcon servers found")
                 self.state = MatchState.CLEANUP - 1
             await self.increment_state()
+
+        if check_state(MatchState.SET_SERVER_MODS):
+            mods = await self.bot.store.get_mods(guild.id)
+            await self.bot.rcon_manager.clear_mods(serveraddr)
+            for mod in mods:
+                await self.bot.rcon_manager.add_mod(serveraddr, mod.resource_id)
+            await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
             self.match = await self.bot.store.get_match(self.match_id)
@@ -859,6 +866,7 @@ class Match:
             await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
+            await self.bot.rcon_manager.clear_mods(serveraddr)
             await self.bot.rcon_manager.max_players(serveraddr, 10)
             await self.increment_state()
         

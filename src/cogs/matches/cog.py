@@ -248,6 +248,39 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         
         await interaction.response.send_message(
             "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:1257503332952707173>", file=file, ephemeral=True)
+        
+    @mm_settings.subcommand(name="set_mods", description="Choose what mods are added to match making")
+    async def set_mods(self, interaction: nextcord.Interaction, 
+        mods: nextcord.Attachment=nextcord.SlashOption(description="Json string for mod name and resource_id")):
+        try:
+            file = await mods.read()
+            m = json.loads(file)
+        except Exception:
+            return await interaction.response.send_message(
+                "The file you provided did not contain a valid json string\ne.g. `{\"RconPlus\": \"UGC3462586\",}`", ephemeral=True)
+        
+        await self.bot.store.set_mods(guild_id=interaction.guild.id, mods=[(k, v) for k, v in m.items()])
+        log.debug(f"{interaction.user.display_name} set the mods to:")
+        log.pretty(m)
+        await interaction.response.send_message(
+            f"Mods successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
+    
+    @mm_settings.subcommand(name="get_mods", description="Get the current mods with their ids")
+    async def get_mods(self, interaction: nextcord.Interaction):
+        mods = await self.bot.store.get_mods(guild_id=interaction.guild.id)
+        mod_dict = {
+            m.mod: {"resource_id": m.resource_id}
+            for m in mods
+        }
+        
+        json_str = json.dumps(mod_dict, indent=4)
+        json_bytes = json_str.encode('utf-8')
+        json_file = BytesIO(json_bytes)
+        json_file.seek(0)
+        file = nextcord.File(json_file, filename="mods.json")
+        
+        await interaction.response.send_message(
+            "Here are the current mods:\n_edit and upload with_ </queue settings set_mods:1257503332952707173>", file=file, ephemeral=True)
 
 
 def setup(bot):

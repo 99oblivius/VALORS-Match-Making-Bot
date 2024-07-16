@@ -960,6 +960,32 @@ class Database:
                 .order_by(MMBotMaps.order))
             return result.scalars().all()
 
+########
+# MODS #
+########
+    @log_db_operation
+    async def set_mods(self, guild_id: int, mods: List[Dict[str, str]]):
+        data = [{"guild_id": guild_id, "mod": m[0], "resource_id": m[1]['resource_id']} for m in mods]
+        async with self._session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    delete(MMBotMods).where(
+                        MMBotMods.guild_id == guild_id,
+                        MMBotMods.mod.not_in([m[0] for m in mods])))
+                insert_stmt = insert(MMBotMods).values(data)
+                update_stmt = insert_stmt.on_conflict_do_update(
+                    index_elements=[key.name for key in inspect(MMBotMods).primary_key],
+                    set_={"resource_id": insert_stmt.excluded.resource_id})
+                await session.execute(update_stmt)
+
+    @log_db_operation
+    async def get_mods(self, guild_id: int) -> List[MMBotMods]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMods)
+                .where(MMBotMods.guild_id == guild_id))
+            return result.scalars().all()
+
 ##############
 # SIDE PICKS #
 ##############
