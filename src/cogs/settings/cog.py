@@ -245,7 +245,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
                 await old_message.delete()
             except nextcord.NotFound: pass
         
-        data = await self.bot.store.get_leaderboard(interaction.guild.id, limit=100)
+        data = await self.bot.store.get_leaderboard(interaction.guild.id)
         ranks = await self.bot.store.get_ranks(interaction.guild.id)
         previous_data = await self.bot.store.get_last_mmr_for_users(interaction.guild.id)
         embed = create_leaderboard_embed(interaction.guild, data, previous_data, ranks)

@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import List
 from io import BytesIO
-import pprint
+from pprint import pprint
 
 import nextcord
 from nextcord.ext import commands
@@ -890,7 +890,7 @@ class Match:
             message = await channel.fetch_message(settings.leaderboard_message)
             ranks = await self.bot.store.get_ranks(guild.id)
             
-            data = await self.bot.store.get_leaderboard(guild.id, limit=100)
+            data = await self.bot.store.get_leaderboard(guild.id)
             previous_data = await self.bot.store.get_last_mmr_for_users(guild.id)
             embed = create_leaderboard_embed(guild, data, previous_data, ranks)
             asyncio.create_task(message.edit(embed=embed))

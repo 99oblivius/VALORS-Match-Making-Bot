@@ -353,13 +353,14 @@ class Database:
             return result.scalars().first()
     
     @log_db_operation
-    async def get_leaderboard(self, guild_id: int, limit: int=10) -> List[Dict[str, Any]]:
+    async def get_leaderboard(self, guild_id: int) -> List[Dict[str, Any]]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserSummaryStats)
-                .where(MMBotUserSummaryStats.guild_id == guild_id)
-                .order_by(desc(MMBotUserSummaryStats.mmr))
-                .limit(limit))
+                .where(
+                    MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.games > 0)
+                .order_by(desc(MMBotUserSummaryStats.mmr)))
             return [
                 {
                     "user_id": row.MMBotUserSummaryStats.user_id,

@@ -50,63 +50,7 @@ def create_graph(graph_type: str,
     theme_color2 = f'#{hex(VALORS_THEME2)[2:]}'
 
     if graph_type == "activity_hours":
-        hours = []
-        for start, end in play_periods:
-            duration = (end - start).total_seconds() / 3600
-            mid_hour = (start.hour + start.minute / 60 + duration / 2) % 24
-            hours.append(mid_hour)
-
-        # Create circular KDE
-        theta = np.linspace(0, 2*np.pi, 360)
-        r = np.linspace(0.2, 1, 100)
-        theta_grid, r_grid = np.meshgrid(theta, r)
-
-        x = r_grid * np.cos(theta_grid)
-        y = r_grid * np.sin(theta_grid)
-
-        values = np.array([(np.cos(h*2*np.pi/24), np.sin(h*2*np.pi/24)) for h in hours])
-        kernel = stats.gaussian_kde(values.T)
-        intensity = kernel(np.vstack([x.ravel(), y.ravel()])).reshape(x.shape)
-
-        # Normalize intensity
-        intensity = (intensity - intensity.min()) / (intensity.max() - intensity.min())
-
-        # Create the plot
-        fig = go.Figure()
-
-        # Add heatmap trace
-        fig.add_trace(go.Barpolar(
-            r=r,
-            theta=np.degrees(theta),
-            customdata=intensity.T,
-            hovertemplate='Time: %{theta:.1f}°<br>Intensity: %{customdata:.2f}<extra></extra>',
-            marker=dict(
-                color=intensity.T,
-                colorscale='Viridis',
-                showscale=False
-            ),
-            name=''
-        ))
-
-        # Customize layout
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=False, range=[0, 1]),
-                angularaxis=dict(
-                    tickvals=[0, 90, 180, 270],
-                    ticktext=['0:00', '6:00', '12:00', '18:00'],
-                    direction='clockwise',
-                    rotation=90,
-                )
-            ),
-            showlegend=False,
-            title=dict(
-                text='User Activity Density Map',
-                font=dict(size=20)
-            ),
-            height=600,
-            width=600,
-        )
+        ...
     
     elif graph_type == "pick_preferences":
         categories = ['Bans', 'Picks', 'Sides']
@@ -296,7 +240,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     ranked_players = 0
     ranked_position = None
     for player in leaderboard_data:
-        if player['games'] > 0 and guild.get_member(player['user_id']):
+        if guild.get_member(player['user_id']):
             ranked_players += 1
         if player['user_id'] == user.id:
             ranked_position = ranked_players
@@ -333,7 +277,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
 def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]], last_mmr: Dict[int, int], ranks: List[MMBotRanks]) -> Embed:
     field_count = 0
 
-    valid_scores = [player['avg_score'] for player in leaderboard_data if player['games'] > 0 and guild.get_member(player['user_id'])]
+    valid_scores = [player['avg_score'] for player in leaderboard_data if guild.get_member(player['user_id'])]
     avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
     embed = Embed(title="Match Making Leaderboard", description=f"{len(valid_scores)} ranking players\nK/D/A and Score are mean averages")
 
@@ -343,7 +287,6 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
     ranking_position = 0
     for player in leaderboard_data:
         if field_count > 25: break
-        if player['games'] == 0: continue
 
         member = guild.get_member(player['user_id'])
         if member is None: continue
