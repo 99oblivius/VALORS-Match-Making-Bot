@@ -46,3 +46,11 @@ LFG_PING_DELAY = 30*60
 MATCH_PLAYER_COUNT = 10
 STARTING_MMR = 900
 BASE_MMR_CHANGE = 32
+
+REGION_TIMEZONES = {
+    "EUW": "Europe/London",        # Western Europe
+    "NAW": "America/Los_Angeles",  # Western North America
+    "NAC": "America/Chicago",      # North Central America
+    "NAE": "America/New_York",     # North Eastern America
+    "APAC": "Asia/Singapore",      # Asia Pacific
+}

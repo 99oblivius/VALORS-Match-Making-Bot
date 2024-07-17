@@ -18,26 +18,41 @@
 
 from typing import Dict, List, Any, Tuple
 from math import floor
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
+import pytz
+from concurrent.futures import ThreadPoolExecutor
 
 import nextcord
 from nextcord import Embed, Guild, User, Member
 import pandas as pd
 import numpy as np
-from scipy import stats
+import colorsys
+from scipy.fft import fft, ifft
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2
+from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES
 from utils.models import MMBotRanks, MMBotUserMatchStats
 from utils.utils import get_rank_color, get_rank_role
 
+async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
+    with ThreadPoolExecutor() as pool:
+        return await loop.run_in_executor(
+            pool,
+            create_graph,
+            graph_type,
+            match_stats,
+            ranks,
+            preferences,
+            play_periods,
+            user_region)
 
 def create_graph(graph_type: str, 
                  match_stats: List[MMBotUserMatchStats], 
                  ranks: List[Dict[nextcord.Role, MMBotRanks]] | None=None, 
                  preferences: Dict[str, Dict[str, int]] | None=None,
-                 play_periods: List[Tuple[datetime, datetime]] | None=None) -> go.Figure:
+                 play_periods: List[Tuple[datetime, datetime]] | None=None,
+                 user_region: str | None=None) -> go.Figure:
     df = pd.DataFrame([vars(stat) for stat in match_stats])
     df['game_number'] = range(1, len(df) + 1)
     df['cumulative_wins'] = df['win'].cumsum()
@@ -50,7 +65,125 @@ def create_graph(graph_type: str,
     theme_color2 = f'#{hex(VALORS_THEME2)[2:]}'
 
     if graph_type == "activity_hours":
-        ...
+        def circular_gaussian_smooth_inplace(minutes_array, sigma):
+            n = len(minutes_array)
+            x = np.arange(n)
+            kernel = np.exp(-0.5 * ((x - n/2)**2) / sigma**2)
+            kernel = np.roll(kernel, n//2)
+            fft_minutes = fft(minutes_array)
+            fft_minutes *= kernel
+            minutes_array[:] = np.real(ifft(fft_minutes))
+
+        def normalize_inplace(arr):
+            min_val = np.min(arr)
+            max_val = np.max(arr)
+            arr -= min_val
+            arr /= (max_val - min_val)
+
+        def value_to_color(value):
+            if value < 0.33:
+                r = value * 3
+                return f'rgb({int(r*255)},0,0)'
+            elif value < 0.66:
+                r = 1
+                g = (value - 0.33) * 3
+                return f'rgb(255,{int(g*255)},0)'
+            else:
+                r = 1
+                g = 1
+                b = (value - 0.66) * 3
+                return f'rgb(255,255,{int(b*255)})'
+        
+        def minutes_to_bucket(dt):
+            return dt.hour * 60 + dt.minute
+        
+        def get_region_offset(user_region):
+            if user_region not in REGION_TIMEZONES:
+                return 0
+            
+            tz = pytz.timezone(REGION_TIMEZONES[user_region])
+            now = datetime.now(pytz.UTC)
+            now_local = now.astimezone(tz)
+            offset = now_local.utcoffset()
+            return offset.total_seconds() / 3600
+        
+        offset_hours = get_region_offset(user_region)
+        
+        minutes_in_day = np.zeros(24*60, dtype=float)
+
+        for start, end in play_periods:
+            start_minute = minutes_to_bucket(start)
+            end_minute = minutes_to_bucket(end)
+            
+            if end_minute < start_minute:
+                minutes_in_day[start_minute:] += 1
+                minutes_in_day[:end_minute+1] += 1
+            else:
+                minutes_in_day[start_minute:end_minute+1] += 1
+
+        circular_gaussian_smooth_inplace(minutes_in_day, 15)
+        normalize_inplace(minutes_in_day)
+
+        num_points = len(minutes_in_day)
+        theta = np.linspace(0, 2*np.pi, num_points, endpoint=False)
+        r_inner, r_outer = 0.5, 1.0
+
+        theta = (theta - (offset_hours * np.pi / 12)) % (2*np.pi)
+
+        x_inner = r_inner * np.cos(theta)
+        y_inner = r_inner * np.sin(theta)
+        x_outer = r_outer * np.cos(theta)
+        y_outer = r_outer * np.sin(theta)
+
+        colors = np.array([value_to_color(v) for v in minutes_in_day])
+
+        fig = go.Figure()
+
+        for i in range(num_points):
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_inner[i], x_outer[i]],
+                    y=[y_inner[i], y_outer[i]],
+                    mode='lines',
+                    line=dict(color=colors[i], width=1),
+                    hoverinfo='none',
+                    showlegend=False))
+        
+        for hour in range(24):
+            angle = (hour - 6 - offset_hours) * (2*np.pi/24)
+            x, y = r_outer * 1.1 * np.cos(-angle), r_outer * 1.1 * np.sin(-angle)
+            adjusted_hour = int((hour - offset_hours) % 24)
+            fig.add_annotation(
+                x=x, y=y,
+                text=f"{adjusted_hour % 12 or 12} {'AM' if adjusted_hour < 12 else 'PM'}",
+                showarrow=False,
+                font=dict(size=10))
+        
+        total_games = len(match_stats)
+        timezone_info = REGION_TIMEZONES.get(user_region, "/UTC").split('/')[-1]
+        fig.add_annotation(
+            x=0, y=0,
+            text=f"Total Games: {total_games}<br>Timezone: {timezone_info}",
+            showarrow=False,
+            font=dict(size=12),
+            align="center",
+            bordercolor="white",
+            borderwidth=2,
+            borderpad=4,
+            bgcolor="rgba(0,0,0,0.5)",
+            opacity=0.8
+        )
+        
+        fig.update_layout(
+            showlegend=False,
+            xaxis=dict(visible=False, range=[-1.2, 1.2]),
+            yaxis=dict(visible=False, range=[-1.2, 1.2]),
+            width=600,
+            height=600,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=0, r=0, t=0, b=0))
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
     
     elif graph_type == "pick_preferences":
         categories = ['Bans', 'Picks', 'Sides']

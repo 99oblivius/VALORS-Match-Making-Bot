@@ -28,7 +28,7 @@ from nextcord.ext import commands
 from config import *
 from utils.logger import Logger as log
 from utils.models import BotSettings
-from utils.statistics import create_graph, create_stats_embed
+from utils.statistics import create_graph_async, create_stats_embed
 from utils.utils import format_duration, create_queue_embed
 from views.queue.buttons import QueueButtonsView
 
@@ -119,10 +119,12 @@ class Advanced(commands.Cog):
         if graph_type == "pick_preferences":
             preferences = await self.bot.store.get_user_pick_preferences(interaction.guild.id, user.id)
         
+        region = None
         play_periods = None
         if graph_type == "activity_hours":
+            region = (await self.bot.store.get_user(interaction.guild.id, user.id)).region
             play_periods = await self.bot.store.get_player_play_periods(interaction.guild.id, user.id)
-        fig = create_graph(graph_type, match_stats, ranks, preferences, play_periods)
+        fig = await create_graph_async(asyncio.get_event_loop(), graph_type, match_stats, ranks, preferences, play_periods, region)
         
         # Save the plot to a BytesIO object
         img_bytes = BytesIO()

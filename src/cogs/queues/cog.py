@@ -28,7 +28,7 @@ from nextcord.ext import commands
 from config import *
 from utils.logger import Logger as log
 from utils.models import BotSettings
-from utils.statistics import create_graph, create_stats_embed
+from utils.statistics import create_graph_async, create_stats_embed
 from utils.utils import format_duration, create_queue_embed
 from views.queue.buttons import QueueButtonsView
 
@@ -187,7 +187,7 @@ class Queues(commands.Cog):
 
         ranks = await self.bot.store.get_ranks(interaction.guild.id)
         ranks = { interaction.guild.get_role(rank.role_id): rank for rank in ranks }
-        fig = create_graph(graph_type, match_stats, ranks)
+        fig = await create_graph_async(asyncio.get_event_loop(), graph_type, match_stats, ranks)
         
         # Save the plot to a BytesIO object
         img_bytes = BytesIO()
