@@ -72,7 +72,6 @@ class Match:
                     break
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
-                await asyncio.sleep(5)
 
     async def process_players(self, players_dict, users_match_stats, users_summary_data, disconnection_tracker, is_new_round):
         found_player_ids = {p.user_id: False for p in self.players}
@@ -692,7 +691,7 @@ class Match:
 
             current_players = set()
             server_players = set()
-            expected_player_ids = {
+            expected_unique_ids = {
                 str(platform_id)
                 for player in self.players
                 for platform_id in player.user_platform_mappings
@@ -703,9 +702,8 @@ class Match:
                 VariableLog.debug(player_log)
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
-                pprint(player_list)
 
-                if len(current_players) == MATCH_PLAYER_COUNT: # and current_players.issubset(expected_player_ids):
+                if expected_unique_ids.intersection(current_players):
                     break
 
                 new_players = current_players - server_players
@@ -734,7 +732,7 @@ class Match:
                             await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
                 
                 server_players = current_players
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):
@@ -776,7 +774,6 @@ class Match:
             b_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B])
 
             await self.wait_for_snd_mode()
-            await asyncio.sleep(5)
 
             ready_to_continue = False
             max_score = 0
@@ -784,8 +781,11 @@ class Match:
             while not ready_to_continue:
                 if max_score >= 10:
                     ready_to_continue = True
+                await asyncio.sleep(2)
                 try:
                     reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+                    if "Team0Score" not in reply: continue
+
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
                     max_score = max(team_scores)
                     self.current_round = int(reply.get('Round', self.current_round))
@@ -844,7 +844,6 @@ class Match:
                     _, line_number, func_name, _ = tb[-1]
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
                     print("[Reply] ", reply)
-                await asyncio.sleep(2)
             
             if not abandoned_users:
                 await self.finalize_match(

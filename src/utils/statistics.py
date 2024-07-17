@@ -148,7 +148,7 @@ def create_graph(graph_type: str,
                     line=dict(color=colors[i], width=1),
                     hoverinfo='none',
                     showlegend=False))
-        
+
         for hour in range(24):
             angle = (hour - 6 - offset_hours) * (2*np.pi/24)
             x, y = r_outer * 1.1 * np.cos(-angle), r_outer * 1.1 * np.sin(-angle)
