@@ -73,7 +73,7 @@ class Queues(commands.Cog):
         if user.id in (u.user_id for u in blocked_users):
             description = "Updated "
         
-        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration)
+        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration, interaction.user.id)
         self.bot.queue_manager.remove_user(user.id)
         await self.bot.store.unqueue_user_guild(interaction.guild.id, user.id)
 

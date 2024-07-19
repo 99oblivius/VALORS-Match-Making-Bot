@@ -177,6 +177,7 @@ class MMBotBlockedUsers(Base):
     id          = Column(Integer, primary_key=True)
     guild_id    = Column(BigInteger, nullable=False)
     user_id     = Column(BigInteger, nullable=False)
+    blocked_by  = Column(BigInteger, nullable=False)
     expiration  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
