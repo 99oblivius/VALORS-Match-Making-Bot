@@ -305,6 +305,7 @@ class Match:
         
         guild = self.bot.get_guild(self.guild_id)
         queue_channel = guild.get_channel(settings.mm_queue_channel)
+        text_channel = guild.get_channel(settings.mm_text_channel)
 
         self.match_thread  = guild.get_thread(self.match.match_thread)
         log_channel   = guild.get_channel(settings.mm_log_channel)
@@ -350,7 +351,8 @@ class Match:
             embed = nextcord.Embed(title=f"Match - #{self.match_id}", color=VALORS_THEME2)
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
-            await self.match_thread.send(''.join(add_mention), embed=embed, view=AcceptView(self.bot, done_event))
+            view = AcceptView(self.bot, done_event)
+            await self.match_thread.send(''.join(add_mention), embed=embed, view=view)
 
             async def notify_unaccepted_players(delay: int=30):
                 await asyncio.sleep(delay)
@@ -376,6 +378,9 @@ class Match:
                 self.state = MatchState.CLEANUP - 1
                 embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
                 await self.match_thread.send(embed=embed)
+                player_ids = [p.user_id for p in self.players]
+                dodged_mentions = ' '.join((f'<@{userid}>' for userid in player_ids if userid not in view.accepted_players))
+                await text_channel.send(f"{dodged_mentions}\nDid not accept the last match in time.\nPlayers can queue up again in 10 seconds.")
             finally: [task.cancel() for task in notify_tasks]
             await self.increment_state()
 

@@ -32,6 +32,7 @@ class AcceptView(nextcord.ui.View):
         self.bot = bot
         self.timeout = None
         self.done_event = done_event
+        self.accepted_players = []
     
     @nextcord.ui.button(
         label="Accept", 
@@ -59,8 +60,8 @@ class AcceptView(nextcord.ui.View):
         msg = await interaction.response.send_message(
             "You accepted the match!", ephemeral=True)
         
-        accepted_players = await self.bot.store.get_accepted_players(match.id)
-        if accepted_players == MATCH_PLAYER_COUNT:
+        self.accepted_players = await self.bot.store.get_accepted_players(match.id)
+        if len(self.accepted_players) == MATCH_PLAYER_COUNT:
             self.done_event.set()
         
         await asyncio.sleep(3)

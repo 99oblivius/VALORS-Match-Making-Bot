@@ -700,11 +700,12 @@ class Database:
     @log_db_operation
     async def get_accepted_players(self, match_id: int) -> int:
         async with self._session_maker() as session:
-            stmt = select(func.count(MMBotMatchPlayers.user_id)).where(
-                MMBotMatchPlayers.match_id == match_id,
-                MMBotMatchPlayers.accepted == True)
-            result = await session.execute(stmt)
-            return result.scalars().first()
+            result = await session.execute(
+                select(MMBotMatchPlayers.user_id)
+                .where(
+                    MMBotMatchPlayers.match_id == match_id,
+                    MMBotMatchPlayers.accepted == True))
+            return result.scalars().all()
     
     @log_db_operation
     async def is_user_in_match(self, user_id: int) -> bool:
