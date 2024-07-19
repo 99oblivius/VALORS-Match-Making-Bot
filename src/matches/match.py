@@ -68,7 +68,7 @@ class Match:
             try:
                 reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
                 log.debug(f"WAITING FOR SND {reply}")
-                if reply['GameMode'] == 'SND':
+                if reply['GameMode'] == 'SND' and reply['PlayerCount'][0] != '0':
                     break
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
@@ -703,8 +703,10 @@ class Match:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
 
-                if expected_unique_ids.intersection(current_players):
+                if len(current_players) == MATCH_PLAYER_COUNT:
                     break
+                # if expected_unique_ids.intersection(current_players):
+                #     break
 
                 new_players = current_players - server_players
 
