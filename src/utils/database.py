@@ -442,6 +442,42 @@ class Database:
                 .limit(limit))
             matches = result.all()
             return [(match.start_timestamp, match.end_timestamp) for match in matches]
+    
+    @log_db_operation
+    async def get_user_blocks(self, guild_id: int) -> List[MMBotBlockedUsers]:
+        async with self._session_maker() as session:
+            now = datetime.now(timezone.utc)
+            result = await session.execute(
+                select(MMBotBlockedUsers)
+                .where(
+                    MMBotBlockedUsers.guild_id == guild_id,
+                    MMBotBlockedUsers.expiration > now))
+            return result.scalars().all()
+    
+    @log_db_operation
+    async def set_user_block(self, guild_id: int, user_id: int, expiration: datetime):
+        async with self._session_maker() as session:
+            now = datetime.now(timezone.utc)
+            existing_block = await session.execute(
+                select(MMBotBlockedUsers)
+                .where(
+                    MMBotBlockedUsers.guild_id == guild_id,
+                    MMBotBlockedUsers.user_id == user_id,
+                    MMBotBlockedUsers.expiration > now))
+            existing_block = existing_block.scalar_one_or_none()
+
+            if existing_block:
+                await session.execute(
+                    update(MMBotBlockedUsers)
+                    .where(
+                        MMBotBlockedUsers.guild_id == guild_id,
+                        MMBotBlockedUsers.user_id == user_id)
+                    .values(expiration=expiration))
+            else:
+                await session.execute(
+                    insert(MMBotBlockedUsers)
+                    .values(guild_id=guild_id, user_id=user_id, expiration=expiration))
+            await session.commit()
 
 
 ############
@@ -584,6 +620,18 @@ class Database:
                 insert_stmt = insert(MMBotMatchPlayers).values(match_users)
                 await session.execute(insert_stmt)
                 return new_match.id
+    
+    @log_db_operation
+    async def unqueue_user_guild(self, guild_id: int, user_id: int):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(MMBotQueueUsers)
+                .where(
+                    MMBotQueueUsers.guild_id == guild_id, 
+                    MMBotQueueUsers.user_id == user_id,
+                    MMBotQueueUsers.in_queue == True)
+                .values(in_queue=False))
+            await session.commit()
     
     @log_db_operation
     async def unqueue_user(self, channel_id: int, user_id: int):

@@ -372,6 +372,5 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         else:
             return ["Unsupported platform for ID validation"]
 
-
 def setup(bot):
     bot.add_cog(Settings(bot))

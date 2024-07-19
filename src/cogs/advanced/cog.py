@@ -103,8 +103,8 @@ class Advanced(commands.Cog):
                 return await interaction.followup.send("Invalid period format. Use 0y0m0d0h (e.g., 1y6m for 1 year and 6 months) or Ng (e.g., 50g for last 50 games).", ephemeral=True)
 
             years, months, days, hours = map(lambda x: int(x) if x else 0, period_match.groups())
-            start_date = datetime.now() - timedelta(days=years*365 + months*30 + days, hours=hours)
-            end_date = datetime.now()
+            start_date = datetime.now(timezone.utc) - timedelta(days=years*365 + months*30 + days, hours=hours)
+            end_date = datetime.now(timezone.utc)
             match_stats = await self.bot.store.get_match_stats_in_period(interaction.guild.id, user.id, start_date, end_date)
 
         if not match_stats:

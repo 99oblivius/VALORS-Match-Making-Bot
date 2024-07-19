@@ -141,6 +141,12 @@ class QueueButtonsView(nextcord.ui.View):
         if not user.region: return await interaction.response.send_message(
             "You must select your region.", ephemeral=True)
         
+        blocked_users = await self.bot.store.get_user_blocks(interaction.guild.id)
+        blocked_user = next((u for u in blocked_users if u.user_id == user.user_id), None)
+        if blocked_user:
+            return await interaction.response.send_message(
+                f"You will be unblocked from this queue <t:{int(blocked_user.expiration.timestamp())}:R>", ephemeral=True)
+        
         in_match = await self.bot.store.is_user_in_match(interaction.user.id)
         if in_match:
             msg = await interaction.response.send_message(

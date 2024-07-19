@@ -171,6 +171,18 @@ class MMBotUsers(Base):
 
     summary_stats = relationship("MMBotUserSummaryStats", uselist=False, back_populates="user")
 
+class MMBotBlockedUsers(Base):
+    __tablename__ = 'mm_bot_blocked_users'
+
+    id          = Column(Integer, primary_key=True)
+    guild_id    = Column(BigInteger, nullable=False)
+    user_id     = Column(BigInteger, nullable=False)
+    expiration  = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
 class MMBotUserMatchStats(Base):
     __tablename__ = 'mm_bot_user_match_stats'
 
