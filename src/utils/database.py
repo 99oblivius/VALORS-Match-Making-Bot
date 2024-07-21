@@ -817,8 +817,9 @@ class Database:
                     (MMBotUserBans.map == MMBotMaps.map) & 
                     (MMBotUserBans.match_id == match_id) & 
                     (MMBotUserBans.phase == phase))
-                .where(MMBotMaps.guild_id == guild_id)
-                .where(MMBotMaps.active == True)
+                .where(
+                    MMBotMaps.guild_id == guild_id,
+                    MMBotMaps.active == True)
                 .group_by(MMBotMaps.map, MMBotMaps.order)
                 .order_by(MMBotMaps.order))
             ban_counts = result.all()
@@ -954,6 +955,19 @@ class Database:
 ########
 # MAPS #
 ########
+
+    @log_db_operation
+    async def get_last_played_map(self, queue_channel: int) -> str:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMatches.map)
+                .where(
+                    MMBotMatches.queue_channel == queue_channel,
+                    MMBotMatches.end_timestamp != None,
+                    MMBotMatches.complete == True)
+                .order_by(desc(MMBotMatches.id))
+                .limit(1))
+            return result.scalar_one_or_none()
 
     @log_db_operation
     async def shuffle_map_order(self, guild_id: int) -> None:

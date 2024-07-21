@@ -49,6 +49,9 @@ class BanView(nextcord.ui.View):
 
         banned_maps = await instance.bot.store.get_bans(match.id)
         ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
+
+        last_map = await instance.bot.store.get_last_played_map(match.queue_channel)
+        ban_counts = [m for m in ban_counts if m[0] != last_map]
         bans = shifted_window(ban_counts, match.maps_phase, match.maps_range)
         for n, (m, count) in enumerate(bans):
             if m in banned_maps:
