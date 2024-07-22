@@ -30,6 +30,7 @@ class MapPickView(nextcord.ui.View):
         super().__init__(*args, **kwargs)
         self.timeout = None
         self.bot: commands.Bot = bot
+        self.last_played_map = None
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
@@ -48,8 +49,8 @@ class MapPickView(nextcord.ui.View):
         banned_maps = await instance.bot.store.get_bans(match.id)
         pick_counts = await instance.bot.store.get_map_vote_count(guild_id, match.id)
         
-        last_map = await instance.bot.store.get_last_played_map(match.queue_channel)
-        pick_counts = [m for m in pick_counts if m[0] != last_map]
+        cls.last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
+        pick_counts = [m for m in pick_counts if m[0] != cls.last_played_map]
         picks = shifted_window(pick_counts, match.maps_phase, match.maps_range)
         for n, (m, count) in enumerate(picks):
             if m in banned_maps:
@@ -69,6 +70,7 @@ class MapPickView(nextcord.ui.View):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
         maps = await self.bot.store.get_maps(interaction.guild.id)
+        maps = [m for m in maps if m[0] != self.last_played_map]
         settings = await self.bot.store.get_settings(interaction.guild.id)
         pick_maps = shifted_window([m.map for m in maps], settings.mm_maps_phase, settings.mm_maps_range)
         slot_id = int(button.custom_id.split(':')[-1])

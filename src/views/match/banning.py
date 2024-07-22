@@ -32,6 +32,7 @@ class BanView(nextcord.ui.View):
         super().__init__(*args, **kwargs)
         self.timeout = None
         self.bot: commands.Bot = bot
+        self.last_played_map = None
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
@@ -50,8 +51,8 @@ class BanView(nextcord.ui.View):
         banned_maps = await instance.bot.store.get_bans(match.id)
         ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
 
-        last_map = await instance.bot.store.get_last_played_map(match.queue_channel)
-        ban_counts = [m for m in ban_counts if m[0] != last_map]
+        cls.last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
+        ban_counts = [m for m in ban_counts if m[0] != cls.last_played_map]
         bans = shifted_window(ban_counts, match.maps_phase, match.maps_range)
         for n, (m, count) in enumerate(bans):
             if m in banned_maps:
@@ -70,8 +71,10 @@ class BanView(nextcord.ui.View):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
         maps = await self.bot.store.get_maps(interaction.guild.id)
+        maps = [m for m in maps if m[0] != self.last_played_map]
         settings = await self.bot.store.get_settings(interaction.guild.id)
         ban_maps = shifted_window([m.map for m in maps], settings.mm_maps_phase, settings.mm_maps_range)
+        
         slot_id = int(button.custom_id.split(':')[-1])
         
         user_bans = await self.bot.store.get_user_map_bans(match.id, interaction.user.id)
