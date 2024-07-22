@@ -198,7 +198,8 @@ class Match:
             log.error(f"Could not find guild with id {self.guild_id}")
             return
         
-        rank_roles = await self.bot.store.get_ranks(self.guild_id)
+        ranks = await self.bot.store.get_ranks(self.guild_id)
+        rank_ids = set(r.role_id for r in ranks)
 
         for player in self.players:
             user_id = player.user_id
@@ -221,9 +222,9 @@ class Match:
 
                 summary_data = users_summary_data[user_id]
 
-                new_rank_role = get_rank_role(guild, rank_roles, summary_data.mmr + current_stats['mmr_change'])
+                new_rank_role = get_rank_role(guild, ranks, summary_data.mmr + current_stats['mmr_change'])
                 member = guild.get_member(user_id)
-                current_rank_roles = set(role for role in member.roles if role in rank_roles)
+                current_rank_roles = set(role for role in member.roles if role.id in rank_ids)
                 if current_rank_roles != {new_rank_role}:
                     roles_to_remove = current_rank_roles - {new_rank_role}
                     roles_to_add = {new_rank_role} - current_rank_roles
