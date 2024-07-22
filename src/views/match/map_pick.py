@@ -70,7 +70,7 @@ class MapPickView(nextcord.ui.View):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
         maps = await self.bot.store.get_maps(interaction.guild.id)
-        maps = [m for m in maps if m[0] != self.last_played_map]
+        maps = [m for m in maps if m.map != self.last_played_map]
         settings = await self.bot.store.get_settings(interaction.guild.id)
         pick_maps = shifted_window([m.map for m in maps], settings.mm_maps_phase, settings.mm_maps_range)
         slot_id = int(button.custom_id.split(':')[-1])

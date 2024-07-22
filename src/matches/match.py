@@ -199,7 +199,7 @@ class Match:
             return
         
         ranks = await self.bot.store.get_ranks(self.guild_id)
-        rank_ids = set(r.role_id for r in ranks)
+        rank_ids = { r.role_id for r in ranks }
 
         for player in self.players:
             user_id = player.user_id
@@ -221,22 +221,26 @@ class Match:
                 current_stats.update({"win": win, "mmr_change": mmr_change, "ping": ping})
 
                 summary_data = users_summary_data[user_id]
+                new_mmr = summary_data.mmr + current_stats['mmr_change']
 
-                new_rank_role = get_rank_role(guild, ranks, summary_data.mmr + current_stats['mmr_change'])
+                new_rank_id = next((r.role_id for r in sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True) if new_mmr >= r.mmr_threshold), None)
+
                 member = guild.get_member(user_id)
-                current_rank_roles = set(role for role in member.roles if role.id in rank_ids)
-                if current_rank_roles != {new_rank_role}:
-                    roles_to_remove = current_rank_roles - {new_rank_role}
-                    roles_to_add = {new_rank_role} - current_rank_roles
-
-                    if roles_to_remove:
-                        asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
-                        log.info(f"{roles_to_add} role(s) removed from {member.display_name}")
-                    
-                    if roles_to_add:
-                        asyncio.create_task(member.add_roles(*roles_to_add, reason="Updating MMR rank"))
-                        log.info(f"{roles_to_add} role(s) added to {member.display_name}")
-
+                if member:
+                    current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+                
+                    if new_rank_id not in current_rank_role_ids:
+                        
+                        roles_to_remove = [guild.get_role(role_id) for role_id in current_rank_role_ids]
+                        roles_to_remove = [role for role in roles_to_remove if role is not None]
+                        if roles_to_remove:
+                            asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                            log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
+                        
+                        new_role = guild.get_role(new_rank_id)
+                        if new_role:
+                            asyncio.create_task(member.add_roles(new_role, reason="Updating MMR rank"))
+                            log.info(f"Role {new_role.name} added to {member.display_name}")
 
                 users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
                 final_updates[user_id] = current_stats

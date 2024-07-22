@@ -19,7 +19,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import List
+from typing import List, Tuple
 import asyncio
 import base64
 import re
@@ -28,7 +28,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 
-from nextcord import Embed, Guild
+from nextcord import Embed, Guild, Role
 
 from config import VALORS_THEME1
 from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
@@ -85,7 +85,7 @@ def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
     cooldown_seconds = (cooldown_end - datetime.now(timezone.utc)).total_seconds()
     return max(0, int(cooldown_seconds))
 
-def get_rank_role(guild: Guild, ranks: List[MMBotRanks], mmr: int):
+def get_rank_role(guild: Guild, ranks: List[MMBotRanks], mmr: int) -> Role:
     ranks = sorted([(r.mmr_threshold, guild.get_role(r.role_id)) for r in ranks], key=lambda x: x[0])
     return next((role for threshold, role in reversed(ranks) if mmr > threshold), None)
 
