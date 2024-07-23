@@ -35,7 +35,7 @@ class BanView(nextcord.ui.View):
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
-        for slot_id in range(25):
+        for slot_id in range(20):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_match_bans:{slot_id}")
             button.callback = partial(instance.ban_callback, button)
             instance.add_item(button)
@@ -50,7 +50,7 @@ class BanView(nextcord.ui.View):
         ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
         last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
 
-        available_maps = (x for x in ban_counts if x[0] != last_played_map)
+        available_maps = [x for x in ban_counts if x[0] != last_played_map]
         available_maps = shifted_window(available_maps, match.maps_phase, match.maps_range)
         bans = (x for x in available_maps if x[0] not in banned_maps)
         for n, (m, count) in enumerate(bans):
@@ -97,7 +97,7 @@ class BanView(nextcord.ui.View):
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
-                map=bans[slot_id], 
+                map=bans[slot_id].map, 
                 phase=match.phase)
             log.debug(f"{interaction.user.display_name} wants to ban {bans[slot_id]}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)

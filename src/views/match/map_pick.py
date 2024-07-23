@@ -33,7 +33,7 @@ class MapPickView(nextcord.ui.View):
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
-        for slot_id in range(25):
+        for slot_id in range(20):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_map_picks:{slot_id}")
             button.callback = partial(instance.pick_callback, button)
             instance.add_item(button)
@@ -48,7 +48,7 @@ class MapPickView(nextcord.ui.View):
         pick_counts = await instance.bot.store.get_map_vote_count(guild_id, match.id)
         last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
 
-        available_maps = (x for x in pick_counts if x[0] != last_played_map)
+        available_maps = [x for x in pick_counts if x[0] != last_played_map]
         available_maps = shifted_window(available_maps, match.maps_phase, match.maps_range)
         picks = (x for x in available_maps if x[0] not in banned_maps)
         for n, (m, count) in enumerate(picks):
@@ -87,7 +87,7 @@ class MapPickView(nextcord.ui.View):
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
-                map=picks[slot_id])
+                map=picks[slot_id].map)
             log.debug(f"{interaction.user.display_name} voted to pick {picks[slot_id]}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
