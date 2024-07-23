@@ -59,6 +59,7 @@ class Match:
         self.state     = state
 
         self.players       = []
+        self.persistent_player_stats = {}
         self.user_platform_map = {}
         self.current_round = None
 
@@ -79,7 +80,7 @@ class Match:
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
 
-    async def process_players(self, players_dict, users_match_stats, users_summary_data, disconnection_tracker, is_new_round):
+    async def process_players(self, players_dict, users_summary_data, disconnection_tracker, is_new_round):
         found_player_ids = {p.user_id: False for p in self.players}
         for platform_id, player_data in players_dict.items():
             user_id = next((uid for uid, pids in self.user_platform_map.items() if platform_id in pids), None)
@@ -89,13 +90,13 @@ class Match:
                 
                 await self.ensure_correct_team(player, platform_id, player_data)
                 
-                if user_id not in users_match_stats:
-                    users_match_stats[user_id] = self.initialize_user_match_stats(user_id, player, users_summary_data)
+                if user_id not in self.persistent_player_stats:
+                    self.persistent_player_stats[user_id] = self.initialize_user_match_stats(user_id, player, users_summary_data)
                 
-                self.update_user_match_stats(users_match_stats[user_id], player_data)
+                self.update_user_match_stats(self.persistent_player_stats[user_id], player_data)
                 
                 if is_new_round:
-                    users_match_stats[user_id]['rounds_played'] += 1
+                    self.persistent_player_stats[user_id]['rounds_played'] += 1
                     disconnection_tracker[user_id] = 0
             else:
                 log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
@@ -103,22 +104,22 @@ class Match:
         
         return found_player_ids
     
-    async def upsert_user_stats(self, changed_users, users_match_stats, last_users_match_stats, players_dict):
+    async def upsert_user_stats(self, changed_users, last_users_match_stats, players_dict):
         changed_users.clear()
-        for user_id, current_stats in users_match_stats.items():
+        for user_id, current_stats in self.persistent_player_stats.items():
             if user_id not in last_users_match_stats or current_stats != last_users_match_stats[user_id]:
-                changed_users[user_id] = current_stats
+                changed_users[user_id] = current_stats.copy()
 
                 platform_ids = self.user_platform_map.get(user_id, [])
                 for platform_id in platform_ids:
                     if platform_id in players_dict:
                         changed_users[user_id]["ping"] = int(float(players_dict[platform_id]['Ping']))
                         break
-                else:
-                    changed_users[user_id]["ping"] = -1
+                else: changed_users[user_id]["ping"] = -1
 
         if changed_users:
             await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, changed_users)
+            for user_id in changed_users: del changed_users[user_id]["ping"]
             last_users_match_stats.update(copy.deepcopy(changed_users))
 
     async def ensure_correct_team(self, player, platform_id, player_data):
@@ -156,17 +157,10 @@ class Match:
                 if disconnection_tracker[pid] >= 5:
                     abandoned_users.append(pid)
 
-    async def handle_abandons(self, players_dict, abandoned_users, users_match_stats, users_summary_data):
+    async def handle_abandons(self, abandoned_users, users_match_stats, users_summary_data):
         await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandoned_users)
         abandonee_match_update = {}
         abandonee_summary_update = {}
-
-        user_to_platform = {
-            player.user_id: next(
-                (mapping.platform_id for mapping in player.user_platform_mappings 
-                if mapping.platform_id in players_dict), None)
-            for player in self.players
-        }
         
         for abandonee_id in abandoned_users:
             player = next((p for p in self.players if p.user_id == abandonee_id), None)
@@ -201,7 +195,7 @@ class Match:
             "total_assists": summary_data.total_assists + match_stats['assists']
         }
     
-    async def finalize_match(self, users_match_stats, users_summary_data, team_scores, last_reply: dict | None):
+    async def finalize_match(self, users_summary_data, team_scores, last_reply: dict | None):
         if last_reply is None:
             last_reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
         
@@ -218,8 +212,8 @@ class Match:
 
         for player in self.players:
             user_id = player.user_id
-            if user_id in users_match_stats:
-                current_stats = users_match_stats[user_id]
+            if user_id in self.persistent_player_stats:
+                current_stats = self.persistent_player_stats[user_id]
                 ct_start = current_stats['ct_start']
                 win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
 
@@ -315,6 +309,7 @@ class Match:
 
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
+        self.compute_user_platform_map()
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
@@ -717,7 +712,6 @@ class Match:
 
             current_players = set()
             server_players = set()
-            expected_platform_ids = set(pid for pids in self.user_platform_map.values() for pid in pids)
     
             while len(server_players) < MATCH_PLAYER_COUNT:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
@@ -731,12 +725,13 @@ class Match:
 
                     tasks = []
                     for platform_id in new_players:
-                        if platform_id in expected_platform_ids:
-                            user_id = self.platform_to_user_map[platform_id]
-                            player = self.user_id_to_player_map[user_id]
+                        player = next((p for p in self.players if platform_id in [m.platform_id for m in p.user_platform_mappings]), None)
+                        if player:
                             teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
+                            log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
                             tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
                         else:
+                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
                             tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
                     
                     if tasks:
@@ -821,14 +816,12 @@ class Match:
 
                     found_player_ids = await self.process_players(
                         players_dict, 
-                        users_match_stats, 
                         users_summary_data, 
                         disconnection_tracker, 
                         is_new_round)
                     
                     await self.upsert_user_stats(
                         changed_users,
-                        users_match_stats,
                         last_users_match_stats,
                         players_dict)
                     
@@ -840,7 +833,6 @@ class Match:
                     
                     if abandoned_users:
                         await self.handle_abandons(
-                            players_dict, 
                             abandoned_users, 
                             users_match_stats, 
                             users_summary_data, 
@@ -855,7 +847,6 @@ class Match:
             
             if not abandoned_users:
                 await self.finalize_match(
-                    users_match_stats, 
                     users_summary_data, 
                     team_scores,
                     reply)
