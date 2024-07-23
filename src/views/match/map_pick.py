@@ -28,14 +28,12 @@ from utils.utils import shifted_window
 class MapPickView(nextcord.ui.View):
     def __init__(self, bot, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.timeout = None
         self.bot: commands.Bot = bot
-        self.last_played_map = None
 
     @classmethod
     def create_dummy_persistent(cls, bot: commands.Bot):
         instance = cls(bot, timeout=None)
-        for slot_id in range(10):
+        for slot_id in range(25):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_map_picks:{slot_id}")
             button.callback = partial(instance.pick_callback, button)
             instance.add_item(button)
@@ -48,13 +46,13 @@ class MapPickView(nextcord.ui.View):
 
         banned_maps = await instance.bot.store.get_bans(match.id)
         pick_counts = await instance.bot.store.get_map_vote_count(guild_id, match.id)
-        
-        cls.last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
-        pick_counts = [m for m in pick_counts if m[0] != cls.last_played_map]
-        picks = shifted_window(pick_counts, match.maps_phase, match.maps_range)
+        last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
+
+        available_maps = (x for x in pick_counts if x[0] != last_played_map)
+        available_maps = shifted_window(available_maps, match.maps_phase, match.maps_range)
+        picks = (x for x in available_maps if x[0] not in banned_maps)
         for n, (m, count) in enumerate(picks):
-            if m in banned_maps:
-                continue
+            if m in banned_maps: continue
             button = nextcord.ui.Button(
                 label=f"{m}: {count}", 
                 style=nextcord.ButtonStyle.green, 
@@ -69,24 +67,28 @@ class MapPickView(nextcord.ui.View):
         if match.phase != Phase.A_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
-        maps = await self.bot.store.get_maps(interaction.guild.id)
-        maps = [m for m in maps if m.map != self.last_played_map]
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        pick_maps = shifted_window([m.map for m in maps], settings.mm_maps_phase, settings.mm_maps_range)
+        banned_maps = await self.bot.store.get_bans(match.id)
+        maps = await self.bot.store.get_maps(interaction.guild.id)
+        user_picks = await self.bot.store.get_user_map_pick(match.id, interaction.user.id)
+        last_played_map = await self.bot.store.get_last_played_map(match.queue_channel)
+
+        available_maps = [m for m in maps if m.map != last_played_map]
+        available_maps = shifted_window(available_maps, settings.mm_maps_phase, settings.mm_maps_range)
+        picks = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
-        user_picks = await self.bot.store.get_user_map_pick(match.id, interaction.user.id)
         await self.bot.store.remove(MMBotUserMapPicks, 
             match_id=match.id, 
             user_id=interaction.user.id)
-        if pick_maps[slot_id] not in user_picks:
+        if picks[slot_id] not in user_picks:
             # vote this one
             await self.bot.store.insert(MMBotUserMapPicks, 
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
-                map=pick_maps[slot_id])
-            log.debug(f"{interaction.user.display_name} voted to pick {pick_maps[slot_id]}")
+                map=picks[slot_id])
+            log.debug(f"{interaction.user.display_name} voted to pick {picks[slot_id]}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

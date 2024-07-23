@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import List
 from io import BytesIO
-from pprint import pprint
 
 import nextcord
 from nextcord.ext import commands
@@ -41,7 +40,7 @@ from config import (
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import format_duration, format_mm_attendance, generate_score_image, get_rank_role
+from utils.utils import format_duration, format_mm_attendance, generate_score_image
 from utils.statistics import create_leaderboard_embed
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
@@ -296,6 +295,10 @@ class Match:
         
         self.state = await self.load_state()
         settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
+        guild = self.bot.get_guild(self.guild_id)
+        queue_channel = guild.get_channel(settings.mm_queue_channel)
+        text_channel = guild.get_channel(settings.mm_text_channel)
+
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
@@ -308,9 +311,6 @@ class Match:
             server = await self.bot.store.get_server(host, int(port))
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
         
-        guild = self.bot.get_guild(self.guild_id)
-        queue_channel = guild.get_channel(settings.mm_queue_channel)
-        text_channel = guild.get_channel(settings.mm_text_channel)
 
         self.match_thread  = guild.get_thread(self.match.match_thread)
         log_channel   = guild.get_channel(settings.mm_log_channel)
