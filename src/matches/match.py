@@ -693,15 +693,16 @@ class Match:
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
             self.match = await self.bot.store.get_match(self.match_id)
-            await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
-            await self.bot.rcon_manager.unban_all_players(serveraddr)
-            await self.bot.rcon_manager.comp_mode(serveraddr, state=True)
-            await self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT)
-
             pin = 5
-            await self.bot.rcon_manager.set_pin(serveraddr, pin)
             server_name = f"VALORS MM - {self.match_id}"
-            await self.bot.rcon_manager.set_name(serveraddr, server_name)
+            await asyncio.gather(
+                self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP),
+                self.bot.rcon_manager.unban_all_players(serveraddr),
+                self.bot.rcon_manager.comp_mode(serveraddr, state=True),
+                self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT),
+                self.bot.rcon_manager.set_pin(serveraddr, pin),
+                self.bot.rcon_manager.set_name(serveraddr, server_name)
+            )
 
             embed = nextcord.Embed(title=f"Match [0/{MATCH_PLAYER_COUNT}]", description=f"Server ready!", color=VALORS_THEME1)
             embed.set_image(match_map.media)
@@ -716,50 +717,34 @@ class Match:
 
             current_players = set()
             server_players = set()
-            expected_unique_ids = {
-                str(platform_id)
-                for player in self.players
-                for platform_id in player.user_platform_mappings
-            }
-            
-            while True:
-                player_log = f"[{self.match_id}] Waiting on players: {len(server_players)}/{MATCH_PLAYER_COUNT}"
-                VariableLog.debug(player_log)
+            expected_platform_ids = set(pid for pids in self.user_platform_map.values() for pid in pids)
+    
+            while len(server_players) < MATCH_PLAYER_COUNT:
                 player_list = await self.bot.rcon_manager.player_list(serveraddr)
                 current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
-
-                if len(current_players) == MATCH_PLAYER_COUNT:
-                    break
-                # if expected_unique_ids.intersection(current_players):
-                #     break
-
+                
                 new_players = current_players - server_players
-
-                if current_players != server_players:
+                if new_players:
                     embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
                     asyncio.create_task(match_message.edit(embed=embed))
                     log.info(f"[{self.match_id}] New players joined: {new_players}")
+
+                    tasks = []
                     for platform_id in new_players:
-                        player = next((
-                            player for player in self.players 
-                            for p in player.user_platform_mappings
-                            if p.platform_id == platform_id
-                        ), None)
-                        
-                        if player:
+                        if platform_id in expected_platform_ids:
+                            user_id = self.platform_to_user_map[platform_id]
+                            player = self.user_id_to_player_map[user_id]
                             teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
-                            team_list = await self.bot.rcon_manager.inspect_team(serveraddr, Team(teamid))
-                            if platform_id not in (p['UniqueId'] for p in team_list.get('InspectList', [])):
-                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                                await self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid)
-                            else:
-                                log.info(f"[{self.match_id}] Player {platform_id} already in team {teamid}")
+                            tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
                         else:
-                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
-                            await self.bot.rcon_manager.kick_player(serveraddr, platform_id)
-                
+                            tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
+                    
+                    if tasks:
+                        await asyncio.gather(*tasks)
+
                 server_players = current_players
                 await asyncio.sleep(3)
+
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):
