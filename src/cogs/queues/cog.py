@@ -50,12 +50,15 @@ class Queues(commands.Cog):
     @nextcord.slash_command(name="block", description="Block a user from queuing", guild_ids=[GUILD_ID])
     async def block_from_queue(self, interaction: nextcord.Interaction, 
         user: nextcord.Member | nextcord.User,
+        reason: str = nextcord.SlashOption(required=True),
         period: str = nextcord.SlashOption(
             name="period",
             description="Time period (format: 0w0d0h0m)",
             required=False,
             default="-1")
     ):
+        if len(reason) > 1024:
+            return await interaction.response.send_message("Invalid reason. Reason, too long. Try and keep it bellow 1024 characters.", ephemeral=True)
         now = datetime.now(timezone.utc)
         period_match = re.match(r"(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?", period)
         if period == "-1":
@@ -73,9 +76,17 @@ class Queues(commands.Cog):
         if user.id in (u.user_id for u in blocked_users):
             description = "Updated "
         
-        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration, interaction.user.id)
+        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration, reason, interaction.user.id)
         self.bot.queue_manager.remove_user(user.id)
         await self.bot.store.unqueue_user_guild(interaction.guild.id, user.id)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        staff_channel = interaction.guild.get_channel(settings.staff_channel)
+        if staff_channel:
+            embed = nextcord.Embed(
+                title="Match Making", 
+                description=f"{user.mention} was blocked from participating in match making for```{reason}```", 
+                color=VALORS_THEME1_1)
+            await staff_channel.send(embed=embed)
 
         log.debug(f"{interaction.user.display_name} blocked {user.display_name} from queueing for {period}")
         stamp = int(expiration.timestamp())

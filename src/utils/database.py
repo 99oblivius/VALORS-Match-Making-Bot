@@ -455,7 +455,7 @@ class Database:
             return result.scalars().all()
     
     @log_db_operation
-    async def set_user_block(self, guild_id: int, user_id: int, expiration: datetime, blocked_by: int):
+    async def set_user_block(self, guild_id: int, user_id: int, expiration: datetime, reason: str, blocked_by: int):
         async with self._session_maker() as session:
             now = datetime.now(timezone.utc)
             existing_block = await session.execute(
@@ -472,11 +472,11 @@ class Database:
                     .where(
                         MMBotBlockedUsers.guild_id == guild_id,
                         MMBotBlockedUsers.user_id == user_id)
-                    .values(expiration=expiration, blocked_by=blocked_by))
+                    .values(reason=reason, expiration=expiration, blocked_by=blocked_by))
             else:
                 await session.execute(
                     insert(MMBotBlockedUsers)
-                    .values(guild_id=guild_id, user_id=user_id, expiration=expiration, blocked_by=blocked_by))
+                    .values(guild_id=guild_id, user_id=user_id, expiration=expiration, reason=reason, blocked_by=blocked_by))
             await session.commit()
 
 
