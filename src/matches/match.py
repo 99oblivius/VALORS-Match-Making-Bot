@@ -785,11 +785,12 @@ class Match:
             await self.increment_state()
 
         if check_state(MatchState.MATCH_WAIT_FOR_END):
+            self.match = await self.bot.store.get_match(self.match_id)
             team_scores = [0, 0]
             users_match_stats = {}
             last_users_match_stats = {}
             disconnection_tracker = { player.user_id: 0 for player in self.players }
-            last_round_number = self.match.a_score + self.match.b_score
+            last_round_number = self.match.a_score + self.match.b_score if self.match.a_score else 0
             abandoned_users = []
             changed_users = {}
             players_dict = {}

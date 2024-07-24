@@ -74,22 +74,27 @@ class Logger:
     def _get_caller_class():
         current_frame = inspect.currentframe()
         try:
-            for _ in range(3):  # Skip Logger frames
+            for _ in range(3):
                 if current_frame is not None:
                     current_frame = current_frame.f_back
             
             if current_frame is not None:
-                frame_info = inspect.getframeinfo(current_frame)
                 module = inspect.getmodule(current_frame)
                 if module:
+                    class_name = None
                     for name, obj in module.__dict__.items():
                         if inspect.isclass(obj):
-                            for attr, value in obj.__dict__.items():
-                                if getattr(value, '__code__', None) is current_frame.f_code:
-                                    return obj.__name__
-                return frame_info.function
+                            if current_frame.f_code in [func.__code__ for func in obj.__dict__.values() if callable(func)]:
+                                return obj.__name__
+                            elif class_name is None:
+                                class_name = obj.__name__
+                    
+                    if class_name:
+                        return f"Global: {class_name}"
+                    
+                return "Global"
         finally:
-            del current_frame  # Avoid reference cycles
+            del current_frame
 
         return ''
 

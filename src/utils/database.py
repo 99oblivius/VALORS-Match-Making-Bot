@@ -43,6 +43,8 @@ class Database:
         async def wrapper(*args, **kwargs):
             start_time = time.time()
             result = await func(*args, **kwargs)
+            if log.get_level() > log.DEBUG:
+                return result
             end_time = time.time()
             execution_time = end_time - start_time
 
