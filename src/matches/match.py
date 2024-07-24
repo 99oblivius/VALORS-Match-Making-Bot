@@ -734,7 +734,7 @@ class Match:
                     
                     new_players = current_players - server_players
                     if new_players:
-                        if len(current_players < 10):
+                        if len(current_players) < 10:
                             embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
                         else:
                             embed.title = f"Match"
