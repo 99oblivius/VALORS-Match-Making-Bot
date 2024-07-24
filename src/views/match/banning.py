@@ -76,7 +76,7 @@ class BanView(nextcord.ui.View):
 
         available_maps = [m for m in maps if m.map != last_played_map]
         available_maps = shifted_window(available_maps, settings.mm_maps_phase, settings.mm_maps_range)
-        bans = [m for m in maps if m.map not in banned_maps]
+        bans = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
         if bans[slot_id] in user_bans:
