@@ -80,7 +80,7 @@ class Match:
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
 
-    async def process_players(self, players_dict, users_summary_data, disconnection_tracker, is_new_round):
+    async def process_players(self, players_dict, disconnection_tracker, is_new_round):
         found_player_ids = {p.user_id: False for p in self.players}
         for platform_id, player_data in players_dict.items():
             user_id = next((uid for uid, pids in self.user_platform_map.items() if platform_id in pids), None)
@@ -89,9 +89,6 @@ class Match:
                 player = next(p for p in self.players if p.user_id == user_id)
                 
                 await self.ensure_correct_team(player, platform_id, player_data)
-                
-                if user_id not in self.persistent_player_stats:
-                    self.persistent_player_stats[user_id] = self.initialize_user_match_stats(user_id, player, users_summary_data)
                 
                 self.update_user_match_stats(self.persistent_player_stats[user_id], player_data)
                 
@@ -128,17 +125,32 @@ class Match:
             log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
             await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
 
-    def initialize_user_match_stats(self, user_id, player, users_summary_data):
-        return {
-            "mmr_before": users_summary_data.get(user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
-            "games": users_summary_data.get(user_id, MMBotUserSummaryStats(games=0)).games + 1,
-            "ct_start": (player.team == Team.A) == (self.match.b_side == Side.T),
-            "score": 0,
-            "kills": 0,
-            "deaths": 0,
-            "assists": 0,
-            "rounds_played": 0
-        }
+    def initialize_user_match_stats(self, match_stats, users_summary_data):
+        id_stats = { stats.user_id: stats for stats in match_stats }
+        for p in self.players:
+            if p.user_id in id_stats:
+                stats = id_stats[p.user_id]
+                self.persistent_player_stats[p.user_id] = {
+                    "mmr_before": stats.mmr_before,
+                    "games": stats.games,
+                    "ct_start": stats.ct_start,
+                    "score": stats.score,
+                    "kills": stats.kills,
+                    "deaths": stats.deaths,
+                    "assists": stats.assists,
+                    "rounds_played": stats.rounds_played
+                }
+            else:
+                self.persistent_player_stats[p.user_id] = {
+                    "mmr_before": users_summary_data.get(p.user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
+                    "games": users_summary_data.get(p.user_id, MMBotUserSummaryStats(games=0)).games + 1,
+                    "ct_start": (p.team == Team.A) == (self.match.b_side == Side.T),
+                    "score": 0,
+                    "kills": 0,
+                    "deaths": 0,
+                    "assists": 0,
+                    "rounds_played": 0
+                }
 
     def update_user_match_stats(self, user_stats, player_data):
         kills, deaths, assists = map(int, player_data['KDA'].split('/'))
@@ -157,7 +169,7 @@ class Match:
                 if disconnection_tracker[pid] >= 5:
                     abandoned_users.append(pid)
 
-    async def handle_abandons(self, abandoned_users, users_match_stats, users_summary_data):
+    async def handle_abandons(self, abandoned_users, users_summary_data):
         await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandoned_users)
         abandonee_match_update = {}
         abandonee_summary_update = {}
@@ -168,7 +180,7 @@ class Match:
                 await self.match_thread.send(f"<@{player.user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
-                stats = users_match_stats.get(abandonee_id, self.initialize_user_match_stats(abandonee_id, player, users_summary_data))
+                stats = self.persistent_player_stats[abandonee_id]
                 
                 mmr_change = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
                 stats.update({"mmr_change": mmr_change})
@@ -714,31 +726,38 @@ class Match:
             server_players = set()
     
             while len(server_players) < MATCH_PLAYER_COUNT:
-                player_list = await self.bot.rcon_manager.player_list(serveraddr)
-                current_players = { str(p['UniqueId']) for p in player_list.get('PlayerList', []) }
-                
-                new_players = current_players - server_players
-                if new_players:
-                    embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
-                    asyncio.create_task(match_message.edit(embed=embed))
-                    log.info(f"[{self.match_id}] New players joined: {new_players}")
-
-                    tasks = []
-                    for platform_id in new_players:
-                        player = next((p for p in self.players if platform_id in [m.platform_id for m in p.user_platform_mappings]), None)
-                        if player:
-                            teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
-                            log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                            tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
-                        else:
-                            log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
-                            tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
-                    
-                    if tasks:
-                        await asyncio.gather(*tasks)
-
-                server_players = current_players
                 await asyncio.sleep(3)
+                try:
+                    players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                    if not 'InspectList' in players_data: continue
+                    current_players = { str(player['UniqueId']) for player in players_data['InspectList'] }
+                    
+                    new_players = current_players - server_players
+                    if new_players:
+                        embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
+                        asyncio.create_task(match_message.edit(embed=embed))
+                        log.info(f"[{self.match_id}] New players joined: {new_players}")
+
+                        tasks = []
+                        for platform_id in new_players:
+                            player = next((p for p in self.players if platform_id in [m.platform_id for m in p.user_platform_mappings]), None)
+                            if player:
+                                teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
+                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
+                            else:
+                                log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
+                                tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
+                        
+                        if tasks:
+                            await asyncio.gather(*tasks)
+
+                    server_players = current_players
+                except Exception as e:
+                    tb = traceback.extract_tb(e.__traceback__)
+                    _, line_number, func_name, _ = tb[-1]
+                    log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
+                    print("[players_data] ", players_data)
 
             await self.increment_state()
         
@@ -747,7 +766,7 @@ class Match:
             server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
             await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             for ma in server_maps.get('MapList', []):
-                await self.bot.rcon_manager.remove_map(serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=1)
+                await self.bot.rcon_manager.remove_map(serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=3)
             await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
             log.info(f"[{self.match_id}] Switching to SND")
 
@@ -771,9 +790,9 @@ class Match:
             changed_users = {}
             players_dict = {}
             
-            users_summary_data = await self.bot.store.get_users_summary_stats(
-                self.guild_id, [p.user_id for p in self.players]
-            )
+            users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in self.players])
+            match_stats = await self.bot.store.get_match_stats(self.match_id)
+            self.initialize_user_match_stats(match_stats, users_summary_data)
 
             a_side = 'T' if self.match.b_side == Side.CT else 'CT'
             b_side = 'CT' if self.match.b_side == Side.CT else 'T'
@@ -788,9 +807,9 @@ class Match:
             while not ready_to_continue:
                 if max_score >= 10:
                     ready_to_continue = True
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 try:
-                    reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+                    reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
                     if "Team0Score" not in reply: continue
 
                     team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
@@ -808,15 +827,14 @@ class Match:
                         embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
                         embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
                         asyncio.create_task(log_message.edit(embed=embed))
-                        log.debug(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
+                        log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
-                    players_data = await self.bot.rcon_manager.inspect_all(self.match.serveraddr, retry_attempts=1)
+                    players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
                     if not 'InspectList' in players_data: continue
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
 
                     found_player_ids = await self.process_players(
                         players_dict, 
-                        users_summary_data, 
                         disconnection_tracker, 
                         is_new_round)
                     
