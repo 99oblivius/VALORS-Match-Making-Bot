@@ -80,7 +80,7 @@ class RCONManager:
             except Exception:
                 await asyncio.sleep(1)
                 count += 1
-        if reply and reply.get('Successful', False):
+        if reply and isinstance(reply, dict) and reply.get('Successful', False):
             self.servers[f'{host}:{port}'] = rcon
             return True
         return False
