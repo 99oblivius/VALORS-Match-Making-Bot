@@ -959,14 +959,14 @@ class Database:
 ########
 
     @log_db_operation
-    async def get_last_played_map(self, queue_channel: int) -> str:
+    async def get_last_played_map(self, queue_channel: int) -> str | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches.map)
                 .where(
                     MMBotMatches.queue_channel == queue_channel,
-                    MMBotMatches.end_timestamp != None,
-                    MMBotMatches.complete == True)
+                    MMBotMatches.end_timestamp.is_not(None),
+                    MMBotMatches.complete)
                 .order_by(desc(MMBotMatches.id))
                 .limit(1))
             return result.scalar_one_or_none()
