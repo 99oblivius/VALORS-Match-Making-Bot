@@ -19,13 +19,12 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import List, Tuple
+from typing import List
 import asyncio
 import base64
 import re
 
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 
 from nextcord import Embed, Guild, Role
