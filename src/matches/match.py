@@ -734,7 +734,11 @@ class Match:
                     
                     new_players = current_players - server_players
                     if new_players:
-                        embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
+                        if len(current_players < 10):
+                            embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
+                        else:
+                            embed.title = f"Match"
+                            embed.description = "Match started"
                         asyncio.create_task(match_message.edit(embed=embed))
                         log.info(f"[{self.match_id}] New players joined: {new_players}")
 
@@ -785,7 +789,7 @@ class Match:
             users_match_stats = {}
             last_users_match_stats = {}
             disconnection_tracker = { player.user_id: 0 for player in self.players }
-            last_round_number = 0
+            last_round_number = self.match.a_score + self.match.b_score
             abandoned_users = []
             changed_users = {}
             players_dict = {}
@@ -886,10 +890,10 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.LOG_END):
-            match = await self.bot.store.get_match(self.match_id)
+            self.match = await self.bot.store.get_match(self.match_id)
             match_stats = await self.bot.store.get_match_stats(self.match_id)
             try:
-                leaderboard_image = await generate_score_image(self.bot.cache, guild, match, match_stats)
+                leaderboard_image = await generate_score_image(self.bot.cache, guild, self.match, match_stats)
                 file = nextcord.File(BytesIO(leaderboard_image), filename=f"Match_{self.match_id}_leaderboard.png")
                 await log_message.edit(file=file)
             except Exception as e:
