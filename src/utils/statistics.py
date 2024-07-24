@@ -26,7 +26,6 @@ import nextcord
 from nextcord import Embed, Guild, User, Member
 import pandas as pd
 import numpy as np
-import colorsys
 from scipy.fft import fft, ifft
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
