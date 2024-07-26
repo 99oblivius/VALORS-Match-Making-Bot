@@ -27,7 +27,7 @@ from nextcord.ext import commands
 from config import *
 from utils.logger import Logger as log
 from utils.models import BotRegions, BotSettings, MMBotRanks, Platform, MMBotUsers, MMBotUserSummaryStats
-from utils.statistics import create_leaderboard_embed
+from utils.statistics import update_leaderboard
 from views.register import RegistryButtonView
 
 
@@ -237,24 +237,9 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
 
     @settings.subcommand(name="set_leaderboard", description="Set the channel and leaderboard message")
     async def set_leaderboard(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        channel = interaction.guild.get_channel(settings.leaderboard_channel)
-        if channel:
-            try:
-                old_message = await channel.fetch_message(settings.leaderboard_message)
-                await old_message.delete()
-            except nextcord.NotFound: pass
-        
-        data = await self.bot.store.get_leaderboard(interaction.guild.id)
-        ranks = await self.bot.store.get_ranks(interaction.guild.id)
-        previous_data = await self.bot.store.get_last_mmr_for_users(interaction.guild.id)
-        embed = create_leaderboard_embed(interaction.guild, data, previous_data, ranks)
-        msg = await interaction.channel.send(embed=embed)
-        await self.bot.store.update(BotSettings, 
-            guild_id=interaction.guild.id, 
-            leaderboard_channel=interaction.channel.id, 
-            leaderboard_message=msg.id)
-        await interaction.response.send_message(
+        await interaction.response.defer(ephemeral=True)
+        await update_leaderboard(self.bot.store, interaction.guild)
+        await interaction.followup.send(
             f"Match Making Leaderboard set", ephemeral=True)
 
     @nextcord.slash_command(name="change_mmr", description="Change a member's Match Making Rating", guild_ids=[GUILD_ID])

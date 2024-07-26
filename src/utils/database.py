@@ -402,7 +402,52 @@ class Database:
                 .where(MMBotUserMatchStats.guild_id == guild_id))
 
             result = await session.execute(query)
-            return {row.user_id: row.mmr_before for row in result}
+            return { row.user_id: row.mmr_before for row in result }
+        
+    async def get_leaderboard_with_previous_mmr(self, guild_id: int) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            subquery = (
+                select(
+                    MMBotUserMatchStats.user_id,
+                    func.max(MMBotUserMatchStats.match_id).label('latest_match_id'))
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.abandoned == False)
+                .group_by(MMBotUserMatchStats.user_id)
+                .subquery())
+
+            query = (
+                select(
+                    MMBotUserSummaryStats,
+                    MMBotUserMatchStats.mmr_before.label('previous_mmr'))
+                .join(
+                    subquery,
+                    (MMBotUserSummaryStats.user_id == subquery.c.user_id))
+                .join(
+                    MMBotUserMatchStats,
+                    (MMBotUserMatchStats.user_id == subquery.c.user_id) &
+                    (MMBotUserMatchStats.match_id == subquery.c.latest_match_id))
+                .where(
+                    MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.games > 0)
+                .order_by(desc(MMBotUserSummaryStats.mmr)))
+
+            result = await session.execute(query)
+            return [
+                {
+                    "user_id": row.MMBotUserSummaryStats.user_id,
+                    "mmr": row.MMBotUserSummaryStats.mmr,
+                    "previous_mmr": row.previous_mmr,
+                    "games": row.MMBotUserSummaryStats.games,
+                    "wins": row.MMBotUserSummaryStats.wins,
+                    "win_rate": row.MMBotUserSummaryStats.wins / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_kills": row.MMBotUserSummaryStats.total_kills / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_deaths": row.MMBotUserSummaryStats.total_deaths / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_assists": row.MMBotUserSummaryStats.total_assists / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                    "avg_score": row.MMBotUserSummaryStats.total_score / row.MMBotUserSummaryStats.games if row.MMBotUserSummaryStats.games > 0 else 0,
+                }
+                for row in result
+            ]
 
     async def get_user_pick_preferences(self, guild_id: int, user_id: int) -> Dict[str, Dict[str, int]]:
         async with self._session_maker() as session:

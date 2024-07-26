@@ -41,7 +41,7 @@ from config import (
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
 from utils.utils import format_duration, format_mm_attendance, generate_score_image
-from utils.statistics import create_leaderboard_embed
+from utils.statistics import update_leaderboard
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import ChosenMapView, MapPickView
@@ -908,20 +908,21 @@ class Match:
                 await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
             
-            channel = guild.get_channel(settings.leaderboard_channel)
             try:
                 await self.match_thread.send(embed=embed)
             except AttributeError:
                 pass
+            # channel = guild.get_channel(settings.leaderboard_channel)
             
-            guild = self.bot.get_guild(self.guild_id)
-            message = await channel.fetch_message(settings.leaderboard_message)
-            ranks = await self.bot.store.get_ranks(guild.id)
+            # guild = self.bot.get_guild(self.guild_id)
+            # message = await channel.fetch_message(settings.leaderboard_message)
+            # ranks = await self.bot.store.get_ranks(guild.id)
             
-            data = await self.bot.store.get_leaderboard(guild.id)
-            previous_data = await self.bot.store.get_last_mmr_for_users(guild.id)
-            embed = create_leaderboard_embed(guild, data, previous_data, ranks)
-            asyncio.create_task(message.edit(embed=embed))
+            # data = await self.bot.store.get_leaderboard(guild.id)
+            # previous_data = await self.bot.store.get_last_mmr_for_users(guild.id)
+            # embeds = create_leaderboard_embeds(guild, data, previous_data, ranks)
+            # asyncio.create_task(message.edit(embeds=embeds))
+            asyncio.create_task(update_leaderboard(self.bot.store, guild))
             await asyncio.sleep(10)
             # match_thread
             try:

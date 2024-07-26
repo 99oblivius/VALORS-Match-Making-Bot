@@ -23,7 +23,7 @@ import pytz
 from concurrent.futures import ThreadPoolExecutor
 
 import nextcord
-from nextcord import Embed, Guild, User, Member
+from nextcord import Embed, Guild, User, Member, TextChannel, Interaction
 import pandas as pd
 import numpy as np
 from scipy.fft import fft, ifft
@@ -31,7 +31,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES
-from utils.models import MMBotRanks, MMBotUserMatchStats
+from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings
 from utils.utils import get_rank_color, get_rank_role
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
@@ -406,30 +406,42 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     
     return embed
 
-def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]], last_mmr: Dict[int, int], ranks: List[MMBotRanks]) -> Embed:
-    field_count = 0
-
+async def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]], ranks: List[MMBotRanks], start_rank: int) -> Tuple[Embed, int]:
     valid_scores = [player['avg_score'] for player in leaderboard_data if guild.get_member(player['user_id'])]
     avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
-    embed = Embed(title="Match Making Leaderboard", description=f"{len(valid_scores)} ranking players\nK/D/A and Score are mean averages")
+    
+    embed = Embed()
+    if start_rank == 1:
+        embed.title = "Match Making Leaderboard"
+        embed.set_footer(text="K/D/A and Score are mean averages")
 
-    ranked_mmr = ((n, user_id) for n, (user_id, _) in enumerate(sorted(last_mmr.items(), key=lambda x: x[1], reverse=True), 1))
-    previous_positions = { user_id: n for n, user_id in ranked_mmr if guild.get_member(user_id) }
+    field_content = ""
+    players_added = 0
 
-    ranking_position = 0
-    for player in leaderboard_data:
-        if field_count > 25: break
+    previous_positions = { player['user_id']: i + 1 for i, player in enumerate(sorted(leaderboard_data, key=lambda x: x['previous_mmr'] or 0, reverse=True)) }
 
+    for ranking_position in range(start_rank, start_rank + 50):
+        if ranking_position > len(leaderboard_data):
+            break
+
+        player = leaderboard_data[ranking_position - 1]
         member = guild.get_member(player['user_id'])
-        if member is None: continue
-        
-        ranking_position += 1
+        if member is None:
+            continue
+
+        players_added += 1
 
         previous_position = previous_positions.get(player['user_id'], None)
-        if previous_position is None:               rank_change = "\u001b[35m·"
-        elif ranking_position < previous_position:  rank_change = "\u001b[32m↑"
-        elif ranking_position > previous_position:  rank_change = "\u001b[31m↓"
-        else:                                       rank_change = "\u001b[36m|"
+        if previous_position is None:
+            rank_change = "\u001b[35m·"
+        else:
+            position_change = previous_position - ranking_position
+            if position_change > 0:
+                rank_change = f"\u001b[32m↑"
+            elif position_change < 0:
+                rank_change = f"\u001b[31m↓"
+            else:
+                rank_change = f"\u001b[36m|"
 
         name = member.display_name[:11] + '…' if len(member.display_name) > 12 else member.display_name
         name = name.ljust(12)
@@ -441,32 +453,80 @@ def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str, Any]
         a = floor(player['avg_assists'])
         score = floor(player['avg_score'])
         
-        # Color coding
         rank_color = get_rank_color(guild, float(mmr), ranks)
         win_rate_color = "\u001b[32m" if win_rate > 60 else "\u001b[31m" if win_rate < 40 else "\u001b[0m"
         score_color = "\u001b[32m" if score > avg_score else "\u001b[31m"
         
         kda = f"{k}/{d}/{a}".rjust(8)
-        if k < d:
-            kda_formatted = kda.replace(str(d), f"\u001b[31m{d}\u001b[0m", 1)
-        else:
-            kda_formatted = kda
+        kda_formatted = kda.replace(str(d), f"\u001b[31m{d}\u001b[0m", 1) if k < d else kda
 
         row = f"{ranking_position:3} {rank_change}\u001b[0m {name} | {rank_color}{mmr}\u001b[0m | {games} | {win_rate_color}{win_rate:3}%\u001b[0m | {kda_formatted} | {score_color}{score:2}\u001b[0m\n"
         
-        if ranking_position % 5 == 1:
-            if ranking_position == 1:
+        if players_added % 5 == 1:
+            if players_added == 1:
                 header = "  R | Player       |  MMR |   G |  W%  |   K/D/A  | S  "
                 field_content = f"```ansi\n\u001b[1m{header}\u001b[0m\n{'─' * len(header)}\n{row}"
             else:
-                field_content += "```"
-                embed.add_field(name="\u200b", value=field_content, inline=False)
+                embed.add_field(name="\u200b", value=field_content + "```", inline=False)
                 field_content = f"```ansi\n{row}"
-            field_count += 1
         else:
             field_content += row
+
     if field_content:
-        field_content += "```"
-        embed.add_field(name="\u200b", value=field_content, inline=False)
-    
-    return embed
+        embed.add_field(name="\u200b", value=field_content + "```", inline=False)
+
+    return embed, ranking_position + 1
+
+async def update_leaderboard(store, guild: Guild):
+    settings = await store.get_settings(guild.id)
+    channel = guild.get_channel(settings.leaderboard_channel)
+    if not isinstance(channel, TextChannel):
+        return
+
+    data = await store.get_leaderboard_with_previous_mmr(guild.id)
+    ranks = await store.get_ranks(guild.id)
+
+    # Remove players who have left the server
+    data = [player for player in data if guild.get_member(player['user_id'])]
+
+    total_players = len(data)
+
+    header_embed = Embed(title="Match Making Leaderboard")
+    header_embed.add_field(name="Total Players", value=str(total_players), inline=True)
+    header_embed.set_footer(text="K/D/A and Score are mean averages")
+
+    try:
+        header_message = await channel.fetch_message(settings.leaderboard_message)
+        await header_message.edit(content=None, embed=header_embed)
+    except:
+        header_message = await channel.send(embed=header_embed)
+        await store.update(BotSettings, 
+            guild_id=guild.id, 
+            leaderboard_channel=channel.id, 
+            leaderboard_message=header_message.id)
+
+    existing_messages = []
+    async for message in channel.history(after=header_message, limit=None):
+        if message.author == guild.me:
+            existing_messages.append(message)
+        else:
+            await message.delete()
+    existing_messages.sort(key=lambda m: m.created_at)
+
+    start_rank = 1
+    for i in range((len(data) - 1) // 50 + 1):
+        embed, next_start_rank = await create_leaderboard_embed(guild, data, ranks, start_rank)
+        if i < len(existing_messages):
+            try:
+                await existing_messages[i].edit(embed=embed)
+            except:
+                await channel.send(embed=embed)
+        else:
+            await channel.send(embed=embed)
+        start_rank = next_start_rank
+
+    for message in existing_messages[((len(data) - 1) // 50 + 1):]:
+        try:
+            await message.delete()
+        except:
+            pass
