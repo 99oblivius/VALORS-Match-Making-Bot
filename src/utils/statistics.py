@@ -32,7 +32,7 @@ from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES
 from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings
-from utils.utils import get_rank_color, get_rank_role
+from utils.utils import get_rank_color, get_rank_role, replace_wide_chars_with_space
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
     with ThreadPoolExecutor() as pool:
@@ -444,6 +444,7 @@ async def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str
                 rank_change = f"\u001b[36m|"
 
         name = member.display_name[:11] + '…' if len(member.display_name) > 12 else member.display_name
+        name = replace_wide_chars_with_space(name)
         name = name.ljust(12)
         mmr = f"{floor(player['mmr'])}".rjust(4)
         games = f"{player['games']}".rjust(3)

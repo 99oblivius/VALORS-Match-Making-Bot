@@ -27,6 +27,7 @@ import re
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
+import unicodedata
 
 from nextcord import Embed, Guild, Role
 
@@ -51,6 +52,9 @@ def format_duration(seconds):
 
 def format_mm_attendance(users: List[MMBotMatchPlayers]):
     return "\n".join([f"{'🟢' if user.accepted else '🔴'} <@{user.user_id}>" for user in users])
+
+def replace_wide_chars_with_space(text):
+    return ''.join(' ' if unicodedata.east_asian_width(char) in ('F', 'W') else char for char in text)
 
 def format_team(team: bool) -> str:
     return 'B' if team else 'A'
