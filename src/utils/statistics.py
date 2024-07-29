@@ -376,7 +376,12 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
             ranked_players += 1
         if player['user_id'] == user.id:
             ranked_position = ranked_players
-    embed = Embed(title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", description=f"Currently in {get_rank_role(guild, ranks, summary_data.mmr).mention}", color=VALORS_THEME1)
+
+    rank_role = get_rank_role(guild, ranks, summary_data.mmr)
+    embed = Embed(
+        title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
+        description=f"Currently in {rank_role.mention}", 
+        color=rank_role.color)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
     embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
@@ -399,8 +404,16 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
         embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
     if recent_matches:
-        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills:>2} | D: {match.deaths:>2} | A: {match.assists:>2} | MMR: {f'{match.mmr_change:+.2f}' if match.mmr_change else "In-game"}" for match in recent_matches])
-        embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
+        recent_matches_str = "\n".join([
+            f"\u001b[{'32' if match.win else '31'}m{'W' if match.win else 'L'}\u001b[0m | "
+            f"K: \u001b[36m{match.kills:>2}\u001b[0m | "
+            f"D: \u001b[31m{match.deaths:>2}\u001b[0m | "
+            f"A: \u001b[33m{match.assists:>2}\u001b[0m | "
+            f"MMR: \u001b[{'32' if match.mmr_change > 0 else '31' if match.mmr_change < 0 else '35'}m"
+            f"{f'{match.mmr_change:+.2f}' if match.mmr_change else 'In-game'}\u001b[0m"
+            for match in recent_matches
+        ])
+        embed.add_field(name="Recent Matches", value=f"```ansi\n{recent_matches_str}```", inline=False)
     else:
         embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
     
