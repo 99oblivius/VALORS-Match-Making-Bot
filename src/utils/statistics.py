@@ -399,7 +399,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
         embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
     if recent_matches:
-        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills} | D: {match.deaths} | A: {match.assists} | MMR: {f'{match.mmr_change:+.2f}' if match.mmr_change else "In-game"}" for match in recent_matches])
+        recent_matches_str = "\n".join([f"{'W' if match.win else 'L'} | K: {match.kills:>2} | D: {match.deaths:>2} | A: {match.assists:>2} | MMR: {f'{match.mmr_change:+.2f}' if match.mmr_change else "In-game"}" for match in recent_matches])
         embed.add_field(name="Recent Matches", value=f"```{recent_matches_str}```", inline=False)
     else:
         embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
