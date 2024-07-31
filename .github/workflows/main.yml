@@ -16,29 +16,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for schema changes
-        id: check_schema
-        run: |
-          git fetch origin main
-          SCHEMA_CHANGED=$(git diff origin/main..HEAD -- src/utils/models.py alembic/ | wc -l)
-          echo "schema_changed=$SCHEMA_CHANGED" >> $GITHUB_OUTPUT
-
-      - name: Schema Update
-        if: steps.check_schema.outputs.schema_changed != '0'
-        run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=schema" \
-          -H "Authorization: ${{ secrets.SCHEMA_UPDATE_API_KEY }}")
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d')
-          if [ "$http_code" != "200" ]; then
-            echo "Error: $body"
-            exit 1
-          fi
-          echo "Schema update successful: $body"
-
       - name: Regular Update
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://valorsbotapi.oblivius.dev/update?type=regular" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.valorsleague.org/update?type=regular" \
           -H "Authorization: ${{ secrets.UPDATE_API_KEY }}")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
