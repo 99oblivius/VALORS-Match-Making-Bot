@@ -63,16 +63,6 @@ class Database:
         self._engine: AsyncEngine = create_async_engine(DATABASE_URL, pool_size=20, max_overflow=0)
         self._session_maker: sessionmaker = sessionmaker(bind=self._engine, class_=AsyncSession, expire_on_commit=False)
     
-    def __del__(self):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.cleanup())
-            else:
-                loop.run_until_complete(self.cleanup())
-        except Exception as e:
-            log.error(f"Error during database cleanup: {repr(e)}")
-    
 ###########
 # CLASSIC #
 ###########
