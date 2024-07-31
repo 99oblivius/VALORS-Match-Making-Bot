@@ -177,7 +177,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         serveraddr: str=nextcord.SlashOption(description="Server host:port", required=True)
     ):
         host, port = serveraddr.split(':')
-        await self.bot.store.remove_server(host, port)
+        await self.bot.store.remove_server(host, int(port))
         log.debug(f"{interaction.user.display_name} removed an rcon server {serveraddr}")
         await interaction.response.send_message(
             f"Server `{host}`:`{port}` removed successfully.", ephemeral=True)
