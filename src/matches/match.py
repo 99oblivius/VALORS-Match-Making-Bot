@@ -661,8 +661,9 @@ class Match:
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
             rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             server = None
+            print(f"RCON_SERVERS: {rcon_servers}")
             if rcon_servers:
-                while server is None or len(rcon_servers) > 0:
+                while server is None and len(rcon_servers) > 0:
                     region_distribution = Counter([user.region for user in users])
 
                     def server_score(server_region):
@@ -726,9 +727,11 @@ class Match:
             server_players = set()
     
             while len(server_players) < MATCH_PLAYER_COUNT:
-                await asyncio.sleep(3)
+                await asyncio.sleep(5)
                 try:
                     players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                    print(f"Waiting Players {len(players_data['InspectList']) if 'InspectList' in players_data else ''}:\n", players_data)
+                    print()
                     if not 'InspectList' in players_data: continue
                     current_players = { str(player['UniqueId']) for player in players_data['InspectList'] }
                     
