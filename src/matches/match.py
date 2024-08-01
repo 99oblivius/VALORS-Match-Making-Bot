@@ -676,9 +676,10 @@ class Match:
                         server = best_server
                         break
                     rcon_servers.remove(best_server)
-                serveraddr = f'{server.host}:{server.port}'
-                await self.bot.store.set_serveraddr(self.match_id, serveraddr)
-                await self.bot.store.use_server(serveraddr)
+                if server:
+                    serveraddr = f'{server.host}:{server.port}'
+                    await self.bot.store.set_serveraddr(self.match_id, serveraddr)
+                    await self.bot.store.use_server(serveraddr)
             if not rcon_servers or server is None:
                 embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
                 embed.set_image(match_map.media)
