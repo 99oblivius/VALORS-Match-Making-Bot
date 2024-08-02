@@ -62,5 +62,23 @@ async def cleanup_match(loop, match_id) -> bool:
     running_matches[match.match_id] = task
     return True
 
+async def go_back_to(loop, match_id, state: MatchState) -> bool:
+    task = running_matches.pop(match_id, None)
+    match = active_matches.get(match_id)
+    if not task or not match: return False
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    
+    await match.change_state(state)
+
+    task = loop.create_task(match.run())
+    task.add_done_callback(lambda t: running_matches.pop(match_id, None))
+    running_matches[match_id] = task
+    return True
+
 def get_match(match_id) -> Match:
     return active_matches.get(match_id)

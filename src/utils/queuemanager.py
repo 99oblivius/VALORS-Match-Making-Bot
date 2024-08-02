@@ -22,7 +22,7 @@ from collections import deque
 
 import nextcord
 
-from config import GUILD_ID, VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME2, MATCH_PLAYER_COUNT
+from config import GUILD_ID, VALORS_THEME1_1, VALORS_THEME2, MATCH_PLAYER_COUNT
 from utils.logger import Logger as log
 from utils.utils import format_duration, create_queue_embed
 

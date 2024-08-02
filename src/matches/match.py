@@ -19,10 +19,10 @@
 import asyncio
 import copy
 import traceback
-from collections import Counter
 from datetime import datetime, timezone
 from functools import wraps
 from typing import List
+from typing import Dict, Tuple
 from io import BytesIO
 
 import nextcord
@@ -46,6 +46,7 @@ from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import ChosenMapView, MapPickView
 from views.match.side_pick import ChosenSideView, SidePickView
+from views.match.no_server_found import NoServerFoundView
 from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side
 from .match_states import MatchState
 from .ranked_teams import get_teams
@@ -79,6 +80,52 @@ class Match:
                     break
             except Exception as e:
                 log.error(f"Error while waiting for SND mode: {str(e)}")
+    
+    async def show_no_server_found_message(self):
+        embed = nextcord.Embed(
+            title="Match", 
+            description=f"No suitable servers found.", 
+            color=VALORS_THEME1)
+        done_event = asyncio.Event()
+        view = NoServerFoundView(self.bot, self.match_id, done_event)
+        
+        if hasattr(self, 'no_server_message') and self.no_server_message:
+            self.no_server_message = await self.no_server_message.edit(embed=embed, view=view)
+        else:
+            self.no_server_message = await self.match_thread.send(embed=embed, view=view)
+        await done_event.wait()
+    
+    async def estimate_user_server_ping(self, user_id: int, serveraddr: str, ping_data: Dict[Tuple[int, str], Dict[str, float]]) -> int:
+        user_server = (user_id, serveraddr)
+        if user_server in ping_data:
+            return round(ping_data[user_server]['weighted_avg_ping'])
+        
+        user = await self.bot.store.get_user(self.guild_id, user_id)
+        host, port = serveraddr.split(':')
+        server = await self.bot.store.get_server(host, int(port))
+        
+        if user.region == server.region:
+            region_pings = [data['weighted_avg_ping'] for (uid, addr), data in ping_data.items() 
+                            if addr.split(':')[0] == serveraddr.split(':')[0] and data['weighted_avg_ping'] is not None]
+            return round(sum(region_pings) / len(region_pings)) if region_pings else 50
+        
+        base_ping = 50
+        region_difference = abs(ord(user.region[0]) - ord(server.region[0]))
+        return base_ping + region_difference * 20
+
+    async def estimate_pings(self, rcon_servers: List[RconServers]):
+        user_ids = [player.user_id for player in self.players]
+        ping_data = await self.bot.store.get_weighted_player_server_pings(self.guild_id)
+        
+        estimated_pings = {}
+        for server in rcon_servers:
+            serveraddr = f"{server.host}:{server.port}"
+            server_pings = {}
+            for user_id in user_ids:
+                ping = await self.estimate_user_server_ping(user_id, serveraddr, ping_data)
+                server_pings[user_id] = ping
+            estimated_pings[serveraddr] = server_pings
+        return estimated_pings
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
         found_player_ids = {p.user_id: False for p in self.players}
@@ -329,7 +376,7 @@ class Match:
         serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
         if serveraddr:
             host, port = serveraddr.split(':')
-            server = await self.bot.store.get_server(host, int(port))
+            server = await self.bot.store.get_server(host, port)
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
         
 
@@ -659,39 +706,36 @@ class Match:
         
         if check_state(MatchState.MATCH_FIND_SERVER):
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
-            rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             server = None
-            print(f"RCON_SERVERS: {rcon_servers}")
-            if rcon_servers:
-                while server is None and len(rcon_servers) > 0:
-                    region_distribution = Counter([user.region for user in users])
+            # rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
+            rcon_servers: List[RconServers] = []
+            log.debug(f"RCON_SERVERS: {rcon_servers}")
 
-                    def server_score(server_region):
-                        return sum(region_distribution[server_region] for server_region in region_distribution)
+            if rcon_servers:
+                estimated_pings = await self.estimate_pings(rcon_servers)
+                server_scores = []
+                for server in rcon_servers:
+                    serveraddr = f"{server.host}:{server.port}"
+                    server_pings = estimated_pings[serveraddr]
+                    max_ping = max(server_pings.values())
+                    avg_ping = sum(server_pings.values()) / len(server_pings)
                     
-                    best_server = max(rcon_servers, key=lambda server: server_score(server.region))
-                    successful = await self.bot.rcon_manager.add_server(best_server.host, best_server.port, best_server.password)
+                    score = max_ping * 0.75 + avg_ping * 0.25
+                    server_scores.append((server, score))
+                
+                sorted_servers = sorted(server_scores, key=lambda x: x[1])
+
+                for server, _ in sorted_servers:
+                    successful = await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
                     if successful:
-                        log.info(f"[{self.match_id}] Match found running rcon server {best_server.host}:{best_server.port} password: {best_server.password} region: {best_server.region}")
-                        server = best_server
-                        break
-                    rcon_servers.remove(best_server)
-                if server:
-                    serveraddr = f'{server.host}:{server.port}'
-                    await self.bot.store.set_serveraddr(self.match_id, serveraddr)
-                    await self.bot.store.use_server(serveraddr)
-            if not rcon_servers or server is None:
-                embed = nextcord.Embed(title="Match", description="No running servers found.", color=VALORS_THEME1)
-                embed.set_image(match_map.media)
-                embed.add_field(name=f"Team A - {match_sides[0].name}", 
-                    value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-                embed.add_field(name=f"Team B - {match_sides[1].name}", 
-                    value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
-                embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-                await match_message.edit(embed=embed)
-                log.debug(f"[{self.match_id}] No running rcon servers found")
-                self.state = MatchState.CLEANUP - 1
-            await self.increment_state()
+                        log.info(f"[{self.match_id}] Server found running rcon server {server.host}:{server.port} password: {server.password} region: {server.region}")
+                        serveraddr = f'{server.host}:{server.port}'
+                        server = serveraddr
+                        await self.bot.store.set_serveraddr(self.match_id, serveraddr)
+                        await self.bot.store.use_server(serveraddr)
+                        await self.increment_state()
+            if not rcon_servers or not server:
+                await self.show_no_server_found_message()
 
         if check_state(MatchState.SET_SERVER_MODS):
             mods = await self.bot.store.get_mods(guild.id)

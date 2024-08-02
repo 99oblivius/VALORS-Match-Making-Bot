@@ -137,7 +137,7 @@ class Database:
                 select(RconServers)
                 .where(
                     RconServers.host == host, 
-                    RconServers.port == port))
+                    RconServers.port == int(port)))
             return result.scalar_one_or_none()
     
     @log_db_operation
@@ -179,6 +179,55 @@ class Database:
                     RconServers.port == int(port))
                 .values(being_used=False))
             await session.commit()
+
+    @log_db_operation
+    async def get_weighted_player_server_pings(self, guild_id: int, limit: int = 10) -> Dict[Tuple[int, str], Dict[str, float]]:
+        async with self._session_maker() as session:
+            recent_matches = (
+                select(
+                    MMBotUserMatchStats.user_id,
+                    MMBotMatches.serveraddr,
+                    MMBotUserMatchStats.ping,
+                    MMBotMatches.end_timestamp,
+                    func.row_number().over(
+                        partition_by=(MMBotUserMatchStats.user_id, MMBotMatches.serveraddr),
+                        order_by=desc(MMBotMatches.end_timestamp)
+                    ).label('row_num'))
+                .join(MMBotMatches, MMBotUserMatchStats.match_id == MMBotMatches.id)
+                .where(
+                    MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.ping.isnot(None),
+                    MMBotMatches.serveraddr.isnot(None))
+                .subquery()
+            )
+
+            result = await session.execute(
+                select(
+                    recent_matches.c.user_id,
+                    recent_matches.c.serveraddr,
+                    func.avg(recent_matches.c.ping).label('avg_ping'),
+                    func.min(recent_matches.c.ping).label('min_ping'),
+                    func.max(recent_matches.c.ping).label('max_ping'),
+                    func.sum(
+                        recent_matches.c.ping * func.exp(-0.1 * (func.extract('epoch', func.now() - recent_matches.c.end_timestamp) / 86400))
+                    ).label('weighted_sum'),
+                    func.sum(
+                        func.exp(-0.1 * (func.extract('epoch', func.now() - recent_matches.c.end_timestamp) / 86400))
+                    ).label('weight_sum'))
+                .where(recent_matches.c.row_num <= limit)
+                .group_by(recent_matches.c.user_id, recent_matches.c.serveraddr))
+
+            ping_data = {}
+            for row in result:
+                user_server = (row.user_id, row.serveraddr)
+                ping_data[user_server] = {
+                    'avg_ping': row.avg_ping,
+                    'min_ping': row.min_ping,
+                    'max_ping': row.max_ping,
+                    'weighted_avg_ping': row.weighted_sum / row.weight_sum if row.weight_sum and row.weight_sum > 0 else None
+                }
+
+            return ping_data
 
 ###########
 # GET BOT #
