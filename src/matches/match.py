@@ -97,21 +97,28 @@ class Match:
     
     async def estimate_user_server_ping(self, user_id: int, serveraddr: str, ping_data: Dict[Tuple[int, str], Dict[str, float]]) -> int:
         user_server = (user_id, serveraddr)
-        if user_server in ping_data:
-            return round(ping_data[user_server]['weighted_avg_ping'])
+        if user_server in ping_data and ping_data[user_server] is not None:
+            weighted_avg_ping = ping_data[user_server].get('weighted_avg_ping')
+            if weighted_avg_ping is not None:
+                return round(weighted_avg_ping)
         
         user = await self.bot.store.get_user(self.guild_id, user_id)
         host, port = serveraddr.split(':')
         server = await self.bot.store.get_server(host, int(port))
         
         if user.region == server.region:
-            region_pings = [data['weighted_avg_ping'] for (uid, addr), data in ping_data.items() 
-                            if addr.split(':')[0] == serveraddr.split(':')[0] and data['weighted_avg_ping'] is not None]
-            return round(sum(region_pings) / len(region_pings)) if region_pings else 50
+            region_pings = [
+                data.get('weighted_avg_ping') 
+                for (uid, addr), data in ping_data.items() 
+                if addr.split(':')[0] == serveraddr.split(':')[0] 
+                and data is not None 
+                and data.get('weighted_avg_ping') is not None
+            ]
+            if region_pings:
+                return round(sum(region_pings) / len(region_pings))
         
-        base_ping = 50
         region_difference = abs(ord(user.region[0]) - ord(server.region[0]))
-        return base_ping + region_difference * 20
+        return 50 + region_difference * 20
 
     async def estimate_pings(self, rcon_servers: List[RconServers]):
         user_ids = [player.user_id for player in self.players]
@@ -706,9 +713,8 @@ class Match:
         
         if check_state(MatchState.MATCH_FIND_SERVER):
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
-            server = None
-            # rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
-            rcon_servers: List[RconServers] = []
+            success = None
+            rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
             log.debug(f"RCON_SERVERS: {rcon_servers}")
 
             if rcon_servers:
@@ -730,11 +736,12 @@ class Match:
                     if successful:
                         log.info(f"[{self.match_id}] Server found running rcon server {server.host}:{server.port} password: {server.password} region: {server.region}")
                         serveraddr = f'{server.host}:{server.port}'
-                        server = serveraddr
+                        success = True
                         await self.bot.store.set_serveraddr(self.match_id, serveraddr)
                         await self.bot.store.use_server(serveraddr)
                         await self.increment_state()
-            if not rcon_servers or not server:
+                        break
+            if not success:
                 await self.show_no_server_found_message()
 
         if check_state(MatchState.SET_SERVER_MODS):
