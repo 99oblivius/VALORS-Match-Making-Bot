@@ -157,6 +157,9 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         password: str=nextcord.SlashOption(required=True, description="Server rcon password"),
         region: str=nextcord.SlashOption(required=True)
     ):
+        if await self.bot.store.get_server(host, port):
+            return await interaction.response.send_message(
+                f"Server `{host}`:`{port}` is already added", ephemeral=True)
         await self.bot.store.add_server(host, port, password, region)
         log.debug(f"{interaction.user.display_name} added an rcon server {host}:{port} password:{password} region:{region}")
         await interaction.response.send_message(

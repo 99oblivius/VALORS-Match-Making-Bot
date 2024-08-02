@@ -138,7 +138,7 @@ class Database:
                 .where(
                     RconServers.host == host, 
                     RconServers.port == port))
-            return result.scalars().first()
+            return result.scalar_one_or_none()
     
     @log_db_operation
     async def add_server(self, host: str, port: int, password: str, region: str) -> None:
@@ -492,7 +492,7 @@ class Database:
             return result.scalars().all()
     
     @log_db_operation
-    async def set_user_block(self, guild_id: int, user_id: int, expiration: datetime, reason: str, blocked_by: int):
+    async def set_user_block(self, guild_id: int, user_id: int, expiration: datetime, reason: str = None, blocked_by: int = None):
         async with self._session_maker() as session:
             now = datetime.now(timezone.utc)
             existing_block = await session.execute(
@@ -504,16 +504,33 @@ class Database:
             existing_block = existing_block.scalar_one_or_none()
 
             if existing_block:
+                update_values = {"expiration": expiration}
+                if reason is not None:
+                    update_values["reason"] = reason
+                if blocked_by is not None:
+                    update_values["blocked_by"] = blocked_by
+                
                 await session.execute(
                     update(MMBotBlockedUsers)
                     .where(
                         MMBotBlockedUsers.guild_id == guild_id,
                         MMBotBlockedUsers.user_id == user_id)
-                    .values(reason=reason, expiration=expiration, blocked_by=blocked_by))
+                    .values(**update_values))
             else:
+                insert_values = {
+                    "guild_id": guild_id,
+                    "user_id": user_id,
+                    "expiration": expiration
+                }
+                if reason is not None:
+                    insert_values["reason"] = reason
+                if blocked_by is not None:
+                    insert_values["blocked_by"] = blocked_by
+                
                 await session.execute(
                     insert(MMBotBlockedUsers)
-                    .values(guild_id=guild_id, user_id=user_id, expiration=expiration, reason=reason, blocked_by=blocked_by))
+                    .values(**insert_values))
+            
             await session.commit()
 
 
