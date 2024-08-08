@@ -68,7 +68,7 @@ def generate_auth_url(cache, guild_id: int, user_id: int, platform: str) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     cache.hmset(token, {'guild_id': guild_id, 'discord_uuid': user_id, 'expires_at': expires_at.isoformat(), 'platform': platform})
     cache.expire(token, 300)
-    return f"https://api.valorsleague.org/auth/{platform}/{token}"
+    return f"https://api.valorsleague.org/mm-auth/{platform}/{token}"
 
 def abandon_cooldown(count: int, last_abandon: datetime | None=None) -> int:
     if last_abandon is None:
