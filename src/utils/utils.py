@@ -93,6 +93,15 @@ def get_rank_role(guild: Guild, ranks: List[MMBotRanks], mmr: int) -> Role:
     ranks = sorted([(r.mmr_threshold, guild.get_role(r.role_id)) for r in ranks], key=lambda x: x[0])
     return next((role for threshold, role in reversed(ranks) if mmr > threshold), None)
 
+def next_rank_role(guild: Guild, ranks: List[MMBotRanks], mmr: int) -> Tuple[Role, int]:
+    sorted_ranks = sorted([(r.mmr_threshold, guild.get_role(r.role_id)) for r in ranks], key=lambda x: x[0])
+    
+    for threshold, role in sorted_ranks:
+        if mmr < threshold:
+            return role, threshold - mmr
+    
+    return None, None
+
 def get_rank_color(guild: Guild, mmr: int, ranks: List[MMBotRanks]) -> str:
     def to_rgb(color):
         return ((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)

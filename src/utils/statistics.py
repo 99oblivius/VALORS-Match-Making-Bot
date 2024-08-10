@@ -32,7 +32,7 @@ from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES
 from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings
-from utils.utils import get_rank_color, get_rank_role, replace_wide_chars_with_space
+from utils.utils import get_rank_color, get_rank_role, next_rank_role, replace_wide_chars_with_space
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
     with ThreadPoolExecutor() as pool:
@@ -378,9 +378,10 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
             ranked_position = ranked_players
 
     rank_role = get_rank_role(guild, ranks, summary_data.mmr)
+    next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)
     embed = Embed(
         title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
-        description=f"Currently in {rank_role.mention}", 
+        description=f"Currently in {rank_role.mention}\n-# {floor(mmr_difference)} away from {next_role.mention}", 
         color=rank_role.color)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
