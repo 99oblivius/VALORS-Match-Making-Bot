@@ -143,11 +143,11 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not settings.mm_lfg_role:
-            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings lfg_role')}", ephemeral=True)
+            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings lfg_role')}", ephemeral=True)
         
         channel = interaction.guild.get_channel(settings.mm_text_channel)
         if not channel:
-            return await interaction.response.send_message(f"Queue channel not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_queue')}", ephemeral=True)
+            return await interaction.response.send_message(f"Queue channel not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')}", ephemeral=True)
         
         if interaction.channel.id != settings.mm_text_channel:
             return await interaction.response.send_message(f"You can only use this command in <#{settings.mm_text_channel}>", ephemeral=True)
@@ -305,7 +305,7 @@ class Queues(commands.Cog):
         
         if not settings or not settings.mm_queue_periods:
             return await interaction.response.send_message(
-                f"Failed...\nSet queue periods with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_queue_periods')}", ephemeral=True)
+                f"Failed...\nSet queue periods with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue_periods')}", ephemeral=True)
 
         msg = await self.send_queue_buttons(interaction)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
@@ -339,7 +339,7 @@ class Queues(commands.Cog):
         log.debug(f"{interaction.user.display_name} set queue periods to:")
         log.pretty(periods_json)
         await interaction.response.send_message(
-            f"Queue periods set to `{periods_str}`\nUse {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_queue')} to update", ephemeral=True)
+            f"Queue periods set to `{periods_str}`\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')} to update", ephemeral=True)
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
@@ -355,7 +355,7 @@ class Queues(commands.Cog):
         json_file = BytesIO(json_bytes)
         json_file.seek(0)
         await interaction.response.send_message(
-            f"Here are the current queue periods:\n_edit and upload with_ {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_queue_periods')}", file=nextcord.File(json_file, filename="queue_periods.json"), ephemeral=True)
+            f"Here are the current queue periods:\n_edit and upload with_ {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue_periods')}", file=nextcord.File(json_file, filename="queue_periods.json"), ephemeral=True)
     
     @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
     async def set_text_channel(self, interaction: nextcord.Interaction):
