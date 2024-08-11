@@ -219,11 +219,11 @@ class QueueButtonsView(nextcord.ui.View):
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not settings.mm_lfg_role:
-            return await interaction.response.send_message("lfg_role not set. Set it with </queue settings lfg_role:1257503334533828618>", ephemeral=True)
+            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings lfg_role')}", ephemeral=True)
         
         channel = interaction.guild.get_channel(settings.mm_text_channel)
         if not channel:
-            return await interaction.response.send_message("Queue channel not set. Set it with </queue settings set_queue:1257503334533828618>", ephemeral=True)
+            return await interaction.response.send_message(f"Queue channel not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_queue')}", ephemeral=True)
         
         if interaction.guild.id in self.bot.last_lfg_ping:
             if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
@@ -243,7 +243,7 @@ Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>"
     async def toggle_lfg_callback(self, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not settings.mm_lfg_role:
-            return await interaction.response.send_message("lfg_role not set. Set it with </queue settings lfg_role:1257503334533828618>", ephemeral=True)
+            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings lfg_role')}", ephemeral=True)
     
         lfg_role = interaction.guild.get_role(settings.mm_lfg_role)
         if not lfg_role:

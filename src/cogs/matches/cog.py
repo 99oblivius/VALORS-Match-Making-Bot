@@ -247,7 +247,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         file = nextcord.File(json_file, filename="map_pool.json")
         
         await interaction.response.send_message(
-            "Here is the current map pool:\n_edit and upload with_ </queue settings set_maps:1257503332952707173>", file=file, ephemeral=True)
+            f"Here is the current map pool:\n_edit and upload with_ {await self.bot.command_cache.get_command_mention(interaction.guild, 'queue settings set_maps')}>", file=file, ephemeral=True)
         
     @mm_settings.subcommand(name="set_mods", description="Choose what mods are added to match making")
     async def set_mods(self, interaction: nextcord.Interaction, 
@@ -280,7 +280,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         file = nextcord.File(json_file, filename="mods.json")
         
         await interaction.response.send_message(
-            "Here are the current mods:\n_edit and upload with_ </queue settings set_mods:1257503332952707173>", file=file, ephemeral=True)
+            f"Here are the current mods:\n_edit and upload with_ {await self.bot.command_cache.get_command_mention(interaction.guild, 'mm settings set_mods')}", file=file, ephemeral=True)
 
 
 def setup(bot):

@@ -140,7 +140,7 @@ class RegistryButtonView(nextcord.ui.View):
         regions = await self.bot.store.get_regions(interaction.guild.id)
         if not regions or len(regions) < 1:
             return await interaction.response.send_message(
-                "No regions\nSet regions with </settings regions:1249942181180084235>", ephemeral=True)
+                f"No regions\nSet regions with {await self.bot.command_cache.get_command_mention(interaction.guild, 'settings regions')}", ephemeral=True)
         
         try:
             embed = nextcord.Embed(

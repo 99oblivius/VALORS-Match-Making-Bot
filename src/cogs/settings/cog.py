@@ -133,7 +133,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         log.pretty(regions)
             
         await interaction.response.send_message(
-            f"Regions set\nUse </settings set_register:1257503333674123367> to update", ephemeral=True)
+            f"Regions set\nUse {await self.bot.command_cache.get_command_mention(interaction.guild, 'settings set_register')} to update", ephemeral=True)
 
     @set_regions.on_autocomplete("regions")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, regions: str):
@@ -214,7 +214,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         json_file.seek(0)
         file = nextcord.File(json_file, filename="mmr_ranks.json")
         await interaction.response.send_message(
-            "Here are the current ranks:\n_edit and upload with_ </ranks set_ranks:1249109243114557461>", file=file, ephemeral=True)
+            f"Here are the current ranks:\n_edit and upload with_ {await self.bot.command_cache.get_command_mention(interaction.guild, 'ranks set_ranks')}", file=file, ephemeral=True)
 
     @settings.subcommand(name="set_ranks", description="Set MMR ranks")
     async def set_ranks(self, interaction: nextcord.Interaction, 
@@ -236,7 +236,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         log.pretty(ranks)
 
         await interaction.response.send_message(
-            f"Ranks set successfully. Use </settings get_ranks:1257503333674123367> to view them.", ephemeral=True)
+            f"Ranks set successfully. Use {await self.bot.command_cache.get_command_mention(interaction.guild, 'settings get_ranks')} to view them.", ephemeral=True)
 
     @settings.subcommand(name="set_leaderboard", description="Set the channel and leaderboard message")
     async def set_leaderboard(self, interaction: nextcord.Interaction):

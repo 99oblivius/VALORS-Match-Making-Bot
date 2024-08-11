@@ -29,6 +29,7 @@ from config import *
 from utils.database import Database
 from utils.queuemanager import QueueManager
 from utils.pavlov import RCONManager
+from utils.command_ids import CommandCache
 
 def exit_cleanup(a: list):
     for b in a:
@@ -44,6 +45,7 @@ class Bot(commands.Bot):
         self.cache: redis.StrictRedis     = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
         self.queue_manager: QueueManager  = QueueManager(self)
         self.rcon_manager: RCONManager    = RCONManager(self)
+        self.command_cache: CommandCache  = CommandCache(self)
     
     def __del__(self):
         del self.store
