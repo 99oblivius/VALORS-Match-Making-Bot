@@ -445,7 +445,10 @@ class Match:
                                 title="Queue Popped!", 
                                 description=f"{format_duration(settings.mm_accept_period - delay)} left to ACCEPT\n{self.match_thread.mention}!", 
                                 color=0x18ff18)
-                            await member.send(embed=embed)
+                            try:
+                                await member.send(embed=embed)
+                            except (nextcord.Forbidden, nextcord.HTTPException) as e:
+                                pass
 
             notify_tasks = [
                 asyncio.create_task(notify_unaccepted_players(30)),
@@ -554,6 +557,7 @@ class Match:
                 if player.team != Team.A: continue
                 add_mention.append(f"<@{player.user_id}>")
                 await self.match_thread.add_user(nextcord.Object(id=player.user_id))
+                await asyncio.sleep(0.15)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
@@ -590,6 +594,7 @@ class Match:
                 if player.team != Team.B: continue
                 add_mention.append(f"<@{player.user_id}>")
                 await self.match_thread.add_user(nextcord.Object(id=player.user_id))
+                await asyncio.sleep(0.15)
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
             await asyncio.sleep(time_to_ban)
@@ -782,8 +787,6 @@ class Match:
                 await asyncio.sleep(5)
                 try:
                     players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
-                    print(f"Waiting Players {len(players_data['InspectList']) if 'InspectList' in players_data else ''}:\n", players_data)
-                    print()
                     if not 'InspectList' in players_data: continue
                     current_players = { str(player['UniqueId']) for player in players_data['InspectList'] }
                     
@@ -883,7 +886,8 @@ class Match:
                         embed.description = "- Ongoing\n- Scores updating live"
                         a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
                         asyncio.create_task(self.bot.store.update(MMBotMatches, id=self.match_id, a_score=a_score, b_score=b_score))
-                        if max_score >= 10: embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
+                        if max_score >= 10:
+                            embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
                         embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
                         embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
                         asyncio.create_task(log_message.edit(embed=embed))
@@ -928,6 +932,19 @@ class Match:
                     users_summary_data, 
                     team_scores,
                     reply)
+                
+                try:
+                    embed = log_message.embeds[0]
+                    embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
+                    a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.id]['mmr_change']:+02.2f}" 
+                                            for player in self.players if player.team == Team.A])
+                    b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.id]['mmr_change']:+02.2f}" 
+                                            for player in self.players if player.team == Team.B])
+                    embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
+                    embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
+                    asyncio.create_task(log_message.edit(embed=embed))
+                except Exception as e:
+                    await self.bot.get_user(313912877662863360).send(f"You broke something dummy\n```{traceback.format_exc()}```")
 
             await self.increment_state()
         
