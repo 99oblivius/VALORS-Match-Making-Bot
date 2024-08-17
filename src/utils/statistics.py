@@ -381,7 +381,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)
     embed = Embed(
         title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
-        description=f"Currently in {rank_role.mention}\n-# {floor(mmr_difference)} away from {next_role.mention}", 
+        description=f"Currently in {rank_role.mention}\n-# {floor(mmr_difference)} away from {next_role.mention}" if rank_role else None, 
         color=rank_role.color)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
@@ -410,7 +410,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
             f"K: \u001b[36m{match.kills:>2}\u001b[0m | "
             f"D: \u001b[31m{match.deaths:>2}\u001b[0m | "
             f"A: \u001b[33m{match.assists:>2}\u001b[0m | "
-            f"MMR: \u001b[{'32' if match.mmr_change > 0 else '31' if match.mmr_change < 0 else '35'}m"
+            f"MMR: \u001b[{'32' if (match.mmr_change or 0) > 0 else '31' if (match.mmr_change or 0) < 0 else '35'}m"
             f"{f'{match.mmr_change:+.2f}' if match.mmr_change else 'In-game'}\u001b[0m"
             for match in recent_matches
         ])

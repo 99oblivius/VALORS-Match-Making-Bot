@@ -552,12 +552,7 @@ class Match:
         if check_state(MatchState.A_BANS):
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
-            add_mention = []
-            for player in self.players:
-                if player.team != Team.A: continue
-                add_mention.append(f"<@{player.user_id}>")
-                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
-                await asyncio.sleep(0.15)
+            add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
             a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
@@ -589,12 +584,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
-            add_mention = []
-            for player in self.players:
-                if player.team != Team.B: continue
-                add_mention.append(f"<@{player.user_id}>")
-                await self.match_thread.add_user(nextcord.Object(id=player.user_id))
-                await asyncio.sleep(0.15)
+            add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
             b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
             await asyncio.sleep(time_to_ban)
@@ -936,9 +926,9 @@ class Match:
                 try:
                     embed = log_message.embeds[0]
                     embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-                    a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.id]['mmr_change']:+02.2f}" 
+                    a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
                                             for player in self.players if player.team == Team.A])
-                    b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.id]['mmr_change']:+02.2f}" 
+                    b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
                                             for player in self.players if player.team == Team.B])
                     embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
                     embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
