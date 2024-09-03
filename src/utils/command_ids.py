@@ -28,12 +28,12 @@ class CommandCache:
 
     async def get_command_id(self, guild_id: int, command_name: str) -> int | None:
         name = command_name.split(' ')[0]
-        if guild.id not in self._cache or name not in self._cache[guild_id]:
+        if guild_id not in self._cache or name not in self._cache[guild_id]:
             await self.update_cache(guild_id)
         return self._cache[guild_id].get(name, None)
 
     async def update_cache(self, guild_id: int):
-        all_commands = await self.get_all_command(guild_id)
+        all_commands = await self.get_all_commands(guild_id)
         self._cache[guild_id] = {}
         for c in all_commands:
             self._cache[guild_id][c['name']] = int(c['id'])
