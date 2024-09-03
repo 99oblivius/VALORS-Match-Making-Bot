@@ -475,6 +475,8 @@ class Match:
                 user_teams={Team.A: a_players, Team.B: b_players})
             self.players = await self.bot.store.get_players(self.match_id)
             self.compute_user_platform_map()
+            self.match.a_mmr = a_mmr
+            self.match.b_mmr = b_mmr
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_mmr=a_mmr, b_mmr=b_mmr)
             await self.increment_state()
         
@@ -483,9 +485,9 @@ class Match:
                 title=f"[{self.match_id}] VALORS MM Match",
                 description="Teams created\nInitiating team votes",
                 color=VALORS_THEME1)
-            embed.add_field(name="Team A", 
+            embed.add_field(name=f"[{self.match.a_mmr:.0f}]Team A", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.add_field(name="Team B", 
+            embed.add_field(name=f"[{self.match.b_mmr:.0f}]Team B", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.set_footer(text=f"Match started ")
             embed.timestamp = datetime.now(timezone.utc)
@@ -697,9 +699,9 @@ class Match:
         if check_state(MatchState.LOG_PICKS):
             embed = log_message.embeds[0]
             embed.description = "Server setup"
-            embed.set_field_at(0, name=f"Team A - {'T' if self.match.b_side == Side.CT else 'CT'}", 
+            embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {'T' if self.match.b_side == Side.CT else 'CT'}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.set_field_at(1, name=f"Team B - {'CT' if self.match.b_side == Side.CT else 'T'}", 
+            embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {'CT' if self.match.b_side == Side.CT else 'T'}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.set_image(match_map.media)
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
@@ -878,8 +880,8 @@ class Match:
                         asyncio.create_task(self.bot.store.update(MMBotMatches, id=self.match_id, a_score=a_score, b_score=b_score))
                         if max_score >= 10:
                             embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-                        embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
-                        embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
+                        embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
+                        embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
                         asyncio.create_task(log_message.edit(embed=embed))
                         log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
@@ -930,8 +932,8 @@ class Match:
                                             for player in self.players if player.team == Team.A])
                     b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
                                             for player in self.players if player.team == Team.B])
-                    embed.set_field_at(0, name=f"Team A - {a_side}: {a_score}", value=a_player_list)
-                    embed.set_field_at(1, name=f"Team B - {b_side}: {b_score}", value=b_player_list)
+                    embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
+                    embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
                     asyncio.create_task(log_message.edit(embed=embed))
                 except Exception as e:
                     await self.bot.get_user(313912877662863360).send(f"You broke something dummy\n```{traceback.format_exc()}```")
