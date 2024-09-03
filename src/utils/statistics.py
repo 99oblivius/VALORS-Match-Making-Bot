@@ -382,7 +382,7 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     embed = Embed(
         title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
         description=f"Currently in {rank_role.mention}\n-# {floor(mmr_difference)} away from {next_role.mention}" if rank_role else None, 
-        color=rank_role.color)
+        color=rank_role.color if rank_role else 0)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
     embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
