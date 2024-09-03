@@ -37,6 +37,7 @@ from config import (
    VALORS_THEME1,
    VALORS_THEME1_2,
    VALORS_THEME2,
+   PLACEMENT_MATCHES
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
@@ -228,6 +229,7 @@ class Match:
         abandonee_match_update = {}
         abandonee_summary_update = {}
         
+        played_games = await self.bot.store.get_users_played_games(abandoned_users, self.guild_id)
         for abandonee_id in abandoned_users:
             player = next((p for p in self.players if p.user_id == abandonee_id), None)
             if player:
@@ -236,7 +238,12 @@ class Match:
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
                 stats = self.persistent_player_stats[abandonee_id]
                 
-                mmr_change = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr)
+                mmr_change = calculate_mmr_change(
+                    {}, 
+                    abandoned=True, 
+                    ally_team_avg_mmr=ally_mmr, 
+                    enemy_team_avg_mmr=enemy_mmr, 
+                    placements=played_games[abandonee_id] <= PLACEMENT_MATCHES)
                 stats.update({"mmr_change": mmr_change})
                 
                 abandonee_match_update[abandonee_id] = stats
@@ -276,6 +283,7 @@ class Match:
         ranks = await self.bot.store.get_ranks(self.guild_id)
         rank_ids = { r.role_id for r in ranks }
 
+        played_games = await self.bot.store.get_users_played_games([user.user_id for user in self.players], self.guild_id)
         for player in self.players:
             user_id = player.user_id
             if user_id in self.persistent_player_stats:
@@ -287,9 +295,11 @@ class Match:
                 enemy_score = team_scores[1] if ct_start else team_scores[0]
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
+
                 mmr_change = calculate_mmr_change(current_stats, 
                     ally_team_score=ally_score, enemy_team_score=enemy_score, 
-                    ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win)
+                    ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win,
+                    placements=played_games[player.user_id] <= PLACEMENT_MATCHES)
                 
                 current_stats.update({"win": win, "mmr_change": mmr_change})
 

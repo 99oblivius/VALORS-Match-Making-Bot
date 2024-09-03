@@ -1319,3 +1319,36 @@ class Database:
                     MMBotUserMatchStats.guild_id == guild_id,
                     MMBotMatches.id == subquery))
             return result.scalars().all()
+    
+    @log_db_operation
+    async def get_user_played_games(self, user_id: int, guild_id: int | None = None) -> int:
+        async with self._session_maker() as session:
+            query = select(func.count(MMBotUserMatchStats.id)).where(
+                MMBotUserMatchStats.user_id == user_id,
+                MMBotUserMatchStats.abandoned == False)
+
+            if guild_id is not None:
+                query = query.where(MMBotUserMatchStats.guild_id == guild_id)
+
+            result = await session.execute(query)
+            return result.scalar_one()
+
+    @log_db_operation
+    async def get_users_played_games(self, user_ids: List[int], guild_id: int | None = None) -> Dict[int, int]:
+        async with self._session_maker() as session:
+            query = (
+                select(
+                    MMBotUserMatchStats.user_id,
+                    func.count(MMBotUserMatchStats.id).label('games_played'))
+                .where(
+                    MMBotUserMatchStats.user_id.in_(user_ids),
+                    MMBotUserMatchStats.abandoned == False)
+                .group_by(MMBotUserMatchStats.user_id))
+
+            if guild_id is not None:
+                query = query.where(MMBotUserMatchStats.guild_id == guild_id)
+
+            result = await session.execute(query)
+            played_games = {row.user_id: row.games_played for row in result}
+            
+            return { user_id: played_games.get(user_id, 0) for user_id in user_ids }

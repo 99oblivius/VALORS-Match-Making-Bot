@@ -123,7 +123,14 @@ class Matches(commands.Cog):
             return await interaction.response.send_message("You cannot abandon if you are not in a match", ephemeral=True)
         ally_mmr = match.a_mmr if player.team == Team.A else match.b_mmr
         enemy_mmr = match.b_mmr if player.team == Team.A else match.a_mmr
-        mmr_loss = calculate_mmr_change({}, abandoned=True, ally_team_avg_mmr=ally_mmr if ally_mmr else 0, enemy_team_avg_mmr=enemy_mmr if enemy_mmr else 0)
+
+        played_games = await self.bot.store.get_user_played_games(interaction.user.id, interaction.guild.id)
+        mmr_loss = calculate_mmr_change(
+            {}, 
+            abandoned=True, 
+            ally_team_avg_mmr=ally_mmr if ally_mmr else 0, 
+            enemy_team_avg_mmr=enemy_mmr if enemy_mmr else 0, 
+            placements=played_games <= PLACEMENT_MATCHES)
         embed = nextcord.Embed(
             title="Abandon", 
             description=f"""Are you certain you want to abandon this match?
