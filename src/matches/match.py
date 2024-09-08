@@ -351,7 +351,7 @@ class Match:
 
         for user in requeue_after:
             self.bot.queue_manager.remove_user(user.user_id)
-            await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
+            asyncio.run(self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id))
         
         for player in requeue_players:
             self.bot.queue_manager.add_user(player.user_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
