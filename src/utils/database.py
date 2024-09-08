@@ -1352,3 +1352,56 @@ class Database:
             played_games = {row.user_id: row.games_played for row in result}
             
             return { user_id: played_games.get(user_id, 0) for user_id in user_ids }
+
+
+#######################
+# USER NOTIFICARTIONS #
+#######################
+
+    @log_db_operation
+    async def set_user_notification(self, guild_id: int, user_id: int, count: int=0, expiry: int | None=None, one_time: bool=False) -> None:
+        async with self._session_maker() as session:
+            if count == 0:
+                stmt = delete(MMBotUserNotifications).where(
+                        MMBotUserNotifications.guild_id == guild_id,
+                        MMBotUserNotifications.user_id == user_id)
+            else:
+                stmt = insert(MMBotUserNotifications).values(
+                    guild_id=guild_id, 
+                    user_id=user_id, 
+                    queue_count=count, 
+                    expiry=expiry,
+                    one_time=one_time).on_conflict_do_update(
+                        index_elements=[key.name for key in inspect(MMBotUserNotifications).primary_key], set_={
+                            'queue_count': count,
+                            'expiry': expiry,
+                            'one_time': one_time
+                        })
+            await session.execute(stmt)
+            await session.commit()
+    
+    @log_db_operation
+    async def delete_user_notifications(self, guild_id: int, user_ids: List[int]) -> None:
+        async with self._session_maker() as session:
+            await session.execute(
+                delete(MMBotUserNotifications)
+                .where(
+                    MMBotUserNotifications.guild_id == guild_id,
+                    MMBotUserNotifications.user_id.in_(user_ids)))
+            await session.commit()
+    
+    @log_db_operation
+    async def get_user_notifications(self, guild_id: int) -> Dict[int, Dict[str, Any]]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotUserNotifications)
+                .where(MMBotUserNotifications.guild_id == guild_id)
+            )
+            return {
+                notification.user_id: {
+                    'queue_count': notification.queue_count,
+                    'expiry': notification.expiry,
+                    'one_time': notification.one_time
+                }
+                for notification in result.scalars()
+            }

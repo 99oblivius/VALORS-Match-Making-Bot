@@ -177,7 +177,9 @@ class QueueButtonsView(nextcord.ui.View):
                 guild_id=interaction.guild.id, 
                 queue_channel=interaction.channel.id, 
                 queue_expiry=expiry)
-            if not in_queue: total_in_queue += 1
+            if not in_queue:
+                total_in_queue += 1
+                asyncio.create_task(self.bot.queue_manager.notify_queue_count(interaction.guild.id, settings, total_in_queue))
             log.debug(f"{interaction.user.display_name} has queued up")
             
             if total_in_queue == MATCH_PLAYER_COUNT:

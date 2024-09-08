@@ -255,6 +255,40 @@ class Queues(commands.Cog):
         file = nextcord.File(img_bytes, filename="graph.png")
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await interaction.response.send_message(f"Graph for {user.mention}", file=file, ephemeral=interaction.channel.id != settings.mm_text_channel)
+    
+    @nextcord.slash_command(name="pingme", description="Get a direct message when the queue reaches a specified size", guild_ids=[GUILD_ID])
+    async def pingme(self, 
+        interaction: nextcord.Interaction,
+        count: int = nextcord.SlashOption(
+            description="How many members in queue for you to be pinged. 0 to not be notified.",
+            min_value=0,
+            max_value=MATCH_PLAYER_COUNT-1,
+            required=True),
+        expiration: str = nextcord.SlashOption(
+            description="Time period (format: 0d0h0m)",
+            required=False,
+            default=None),
+        one_time: bool = nextcord.SlashOption(
+            description="Only be pinged once",
+            choices={
+                "Yes": True,
+                "No": False
+            },
+            default=False,
+            required=False)
+    ):
+        if expiration:
+            expiry_match = re.match(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?", expiration)
+            if not expiry_match:
+                return await interaction.followup.send("Invalid period format. Use 0d0h0m (e.g., 2h6m for 2 hours and 6 minutes).", ephemeral=True)
+
+            days, hours, minutes = map(lambda x: int(x) if x else 0, expiry_match.groups())
+            expiration = int((datetime.now(timezone.utc) + timedelta(days=days, hours=hours, minutes=minutes)).timestamp())
+        
+        await self.bot.store.set_user_notification(interaction.guild.id, interaction.user.id, count, expiration, one_time)
+        message = f"You will be notified {'once ' if one_time else ''}if the queue reaches `{count}` members{f' <t:{expiration}:R>' if expiration else ''}."
+        await interaction.response.send_message(message, ephemeral=True)
+
 
     ##############################
     # QUEUE SETTINGS SUBCOMMANDS #

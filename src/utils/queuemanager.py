@@ -130,3 +130,28 @@ class QueueManager:
                 self.add_user(user.user_id, user.queue_expiry)
             else:
                 await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
+    
+    async def notify_queue_count(self, guild_id: int, settings, queue_count: int):
+        async def notify(user_id):
+            embed = nextcord.Embed(
+                title="Notification", 
+                description=f"The queue in <#{settings.mm_queue_channel}> has reached\n## {queue_count}", 
+                color=0xffffff)
+            await self.bot.get_user(user_id).send(embed=embed)
+
+        user_notifications = await self.bot.store.get_user_notifications(guild_id)
+        remove_notifications = []
+        notifications_to_make = []
+        for user_id, info in user_notifications.items():
+            if info['queue_count'] == queue_count:
+                if info['expiry'] and info['expiry'] < datetime.now(timezone.utc).timestamp():
+                    remove_notifications.append(user_id)
+                else:
+                    notifications_to_make.append(notify(user_id))
+                    if info['one_time']:
+                        remove_notifications.append(user_id)
+        
+        if notifications_to_make:
+            await asyncio.gather(*notifications_to_make)
+        if remove_notifications:
+            await self.bot.store.delete_user_notifications(guild_id, remove_notifications)
