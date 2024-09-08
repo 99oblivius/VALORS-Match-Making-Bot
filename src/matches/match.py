@@ -339,23 +339,14 @@ class Match:
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
 
     async def start_requeue_players(self, settings: BotSettings, requeue_players: List[MMBotMatchPlayers]):
-        if not requeue_players:
-            return
-        
         guild = self.bot.get_guild(settings.guild_id)
-        async def update_queue_message():
-            queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
-            asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
-            embed = create_queue_embed(queue_users)
-
-            message = await guild.get_channel(settings.mm_queue_channel).fetch_message(settings.mm_queue_message)
-            await message.edit(embeds=[message.embeds[0], embed])
 
         queue_users = asyncio.run(
             self.bot.store.get_queue_users(settings.mm_queue_channel))
         queue_players = sorted(queue_users, key=lambda user: user.timestamp, reverse=True)
         
-        players_to_requeue = max(0, len(queue_players) + len(requeue_players) - MATCH_PLAYER_COUNT)
+        total_users_and_players = len(queue_players) + len(requeue_players)
+        players_to_requeue = max(0, total_users_and_players - MATCH_PLAYER_COUNT)
         requeue_after = queue_players[:players_to_requeue]
 
         for user in requeue_after:
@@ -372,7 +363,7 @@ class Match:
                     queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5))
             log.debug(f"{guild.get_member(player.user_id).user.display_name} has auto queued up")
             
-        if queue_users + queue_players >= MATCH_PLAYER_COUNT:
+        if total_users_and_players >= MATCH_PLAYER_COUNT:
             self.bot.queue_manager.remove_user(player.user_id)
             for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
 
@@ -391,7 +382,12 @@ class Match:
                     queue_expiry=user.queue_expiry))
             log.debug(f"{guild.get_member(user.user_id).user.display_name} has auto requeued")
         
-        await update_queue_message()
+        queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
+        asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
+        embed = create_queue_embed(queue_users)
+
+        message = await guild.get_channel(settings.mm_queue_channel).fetch_message(settings.mm_queue_message)
+        await message.edit(embeds=[message.embeds[0], embed])
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
@@ -1089,4 +1085,5 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()
 
-            await self.start_requeue_players(settings, requeue_players)
+            if requeue_players:
+                await self.start_requeue_players(settings, requeue_players)
