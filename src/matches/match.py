@@ -39,9 +39,10 @@ from config import (
    VALORS_THEME2,
    PLACEMENT_MATCHES
 )
+from matches import make_match
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import format_duration, format_mm_attendance, generate_score_image
+from utils.utils import format_duration, format_mm_attendance, generate_score_image, create_queue_embed
 from utils.statistics import update_leaderboard
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
@@ -338,6 +339,60 @@ class Match:
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
 
+    async def start_requeue_players(self, settings: BotSettings, requeue_players: List[MMBotMatchPlayers]):
+        if not requeue_players:
+            return
+        
+        guild = self.bot.get_guild(settings.guild_id)
+        async def update_queue_message():
+            queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
+            asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
+            embed = create_queue_embed(queue_users)
+
+            message = await guild.get_channel(settings.mm_queue_channel).fetch_message(settings.mm_queue_message)
+            await message.edit(embeds=[message.embeds[0], embed])
+
+        queue_users = asyncio.run(
+            self.bot.store.get_queue_users(settings.mm_queue_channel))
+        queue_players = sorted(queue_users, key=lambda user: user.timestamp, reverse=True)
+        
+        players_to_requeue = max(0, len(queue_players) + len(requeue_players) - MATCH_PLAYER_COUNT)
+        requeue_after = queue_players[:players_to_requeue]
+
+        for user in requeue_after:
+            self.bot.queue_manager.remove_user(user.user_id)
+            await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
+        
+        for player in requeue_players:
+            self.bot.queue_manager.add_user(player.user_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
+            asyncio.run(
+                self.bot.store.upsert_queue_user(
+                    user_id=player.user_id, 
+                    guild_id=settings.guild_id, 
+                    queue_channel=settings.mm_queue_channel, 
+                    queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5))
+            log.debug(f"{guild.get_member(player.user_id).user.display_name} has auto queued up")
+            
+        if queue_users + queue_players >= MATCH_PLAYER_COUNT:
+            self.bot.queue_manager.remove_user(player.user_id)
+            for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
+
+            match_id = asyncio.run(self.bot.store.unqueue_add_match_users(settings, settings.mm_queue_channel))
+            loop = asyncio.get_event_loop()
+            make_match(loop, self.bot, settings.guild_id, match_id)
+        
+        for user in requeue_after:
+            self.bot.queue_manager.add_user(user.user_id, user.queue_expiry)
+            asyncio.run(
+                self.bot.store.upsert_queue_user(
+                    user_id=user.user_id, 
+                    guild_id=settings.guild_id, 
+                    queue_channel=settings.mm_queue_channel, 
+                    queue_expiry=user.queue_expiry))
+            log.debug(f"{guild.get_member(user.user_id).user.display_name} has auto requeued")
+        
+        await update_queue_message()
+
     async def increment_state(self):
         self.state = MatchState(self.state + 1)
         log.debug(f"Match state -> {self.state}")
@@ -376,6 +431,8 @@ class Match:
         
         def check_state(state: MatchState):
             return True if self.state == state else False
+        
+        requeue_players = []
         
         self.state = await self.load_state()
         settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
@@ -468,12 +525,13 @@ class Match:
             try:
                 await asyncio.wait_for(done_event.wait(), timeout=settings.mm_accept_period)
             except asyncio.TimeoutError:
+                requeue_players = view.accepted_players
                 self.state = MatchState.CLEANUP - 1
                 embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
                 await self.match_thread.send(embed=embed)
                 player_ids = [p.user_id for p in self.players]
                 dodged_mentions = ' '.join((f'<@{userid}>' for userid in player_ids if userid not in view.accepted_players))
-                await text_channel.send(f"{dodged_mentions}\nDid not accept the last match in time.\nPlayers can queue up again in 10 seconds.")
+                await text_channel.send(f"{dodged_mentions}\nDid not accept the last match in time.\nRemaining players will be re-queued automatically.")
             finally: [task.cancel() for task in notify_tasks]
             await self.increment_state()
 
@@ -1030,3 +1088,5 @@ class Match:
             # complete True
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()
+
+            await self.start_requeue_players(settings, requeue_players)
