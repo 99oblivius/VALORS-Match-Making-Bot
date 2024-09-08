@@ -39,7 +39,6 @@ from config import (
    VALORS_THEME2,
    PLACEMENT_MATCHES
 )
-from matches import make_match
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
 from utils.utils import format_duration, format_mm_attendance, generate_score_image, create_queue_embed
@@ -379,6 +378,7 @@ class Match:
 
             match_id = asyncio.run(self.bot.store.unqueue_add_match_users(settings, settings.mm_queue_channel))
             loop = asyncio.get_event_loop()
+            from matches import make_match
             make_match(loop, self.bot, settings.guild_id, match_id)
         
         for user in requeue_after:
