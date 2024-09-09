@@ -341,8 +341,7 @@ class Match:
     async def start_requeue_players(self, settings: BotSettings, requeue_players: List[MMBotMatchPlayers]):
         guild = self.bot.get_guild(settings.guild_id)
 
-        queue_users = asyncio.run(
-            self.bot.store.get_queue_users(settings.mm_queue_channel))
+        queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
         queue_players = sorted(queue_users, key=lambda user: user.timestamp, reverse=True)
         
         total_users_and_players = len(queue_players) + len(requeue_players)
@@ -351,35 +350,33 @@ class Match:
 
         for user in requeue_after:
             self.bot.queue_manager.remove_user(user.user_id)
-            asyncio.run(self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id))
+            await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
         
         for player in requeue_players:
             self.bot.queue_manager.add_user(player.user_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
-            asyncio.run(
-                self.bot.store.upsert_queue_user(
+            await self.bot.store.upsert_queue_user(
                     user_id=player.user_id, 
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
-                    queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5))
+                    queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
             log.debug(f"{guild.get_member(player.user_id).user.display_name} has auto queued up")
             
         if total_users_and_players >= MATCH_PLAYER_COUNT:
             self.bot.queue_manager.remove_user(player.user_id)
             for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
 
-            match_id = asyncio.run(self.bot.store.unqueue_add_match_users(settings, settings.mm_queue_channel))
+            match_id = await self.bot.store.unqueue_add_match_users(settings, settings.mm_queue_channel)
             loop = asyncio.get_event_loop()
             from matches import make_match
             make_match(loop, self.bot, settings.guild_id, match_id)
         
         for user in requeue_after:
             self.bot.queue_manager.add_user(user.user_id, user.queue_expiry)
-            asyncio.run(
-                self.bot.store.upsert_queue_user(
+            await self.bot.store.upsert_queue_user(
                     user_id=user.user_id, 
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
-                    queue_expiry=user.queue_expiry))
+                    queue_expiry=user.queue_expiry)
             log.debug(f"{guild.get_member(user.user_id).user.display_name} has auto requeued")
         
         queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
