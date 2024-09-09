@@ -29,6 +29,7 @@ from utils.logger import Logger as log
 from utils.models import BotRegions, BotSettings, MMBotRanks, Platform, MMBotUsers, MMBotUserSummaryStats
 from utils.statistics import update_leaderboard
 from views.register import RegistryButtonView
+from utils.utils import log_moderation
 
 
 async def validate_steam_id(platform_id: str) -> bool:
@@ -62,11 +63,14 @@ class Settings(commands.Cog):
     async def settings_set_logs(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, log_channel=interaction.channel.id)
         await interaction.response.send_message("Log channel set", ephemeral=True)
+        await log_moderation(interaction, interaction.channel.id, "Moderation logs set to here")
 
     @settings.subcommand(name="set_staff", description="Set which channel is intended for staff commands")
     async def settings_set_staff(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, staff_channel=interaction.channel.id)
         await interaction.response.send_message("Staff channel set", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Staff channel set", f"<#{interaction.channel.id}>")
     
     @settings.subcommand(name="set_register", description="Set which channel is intended for registry")
     async def settings_set_register_select(self, interaction: nextcord.Interaction):
@@ -96,6 +100,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
             register_channel=interaction.channel.id, 
             register_message=msg.id)
         await interaction.response.send_message("Registry channel set", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, "Register buttons set", f"<#{interaction.channel.id}>")
     
     @settings.subcommand(name="regions", description="Set regions")
     async def set_regions(self, interaction: nextcord.Interaction, 
@@ -134,6 +139,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
             
         await interaction.response.send_message(
             f"Regions set\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'settings set_register')} to update", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Regions set to", f"```\n{regions}```")
 
     @set_regions.on_autocomplete("regions")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, regions: str):
@@ -164,6 +171,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         log.debug(f"{interaction.user.display_name} added an rcon server {host}:{port} password:{password} region:{region}")
         await interaction.response.send_message(
             f"`{region}` Server `{host}`:`{port}` added successfully.", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "RCON Server added", f"{host}:{port}")
 
     @add_server.on_autocomplete("region")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, region: str):
@@ -184,6 +193,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         log.debug(f"{interaction.user.display_name} removed an rcon server {serveraddr}")
         await interaction.response.send_message(
             f"Server `{host}`:`{port}` removed successfully.", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "RCON Server removed", f"{host}:{port}")
 
     @remove_server.on_autocomplete("serveraddr")
     async def autocomplete_regions(self, interaction: nextcord.Interaction, serveraddr: str):
@@ -237,6 +248,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
 
         await interaction.response.send_message(
             f"Ranks set successfully. Use {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'settings get_ranks')} to view them.", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Ranks set", f"```\n{ranks}```")
 
     @settings.subcommand(name="set_leaderboard", description="Set the channel and leaderboard message")
     async def set_leaderboard(self, interaction: nextcord.Interaction):
@@ -244,6 +257,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         await update_leaderboard(self.bot.store, interaction.guild)
         await interaction.followup.send(
             f"Match Making Leaderboard set", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Leaderboard channel set", f"<#{interaction.channel.id}>")
 
     @nextcord.slash_command(name="change_mmr", description="Change a member's Match Making Rating", guild_ids=[GUILD_ID])
     async def change_mmr(self, interaction: nextcord.Interaction, 
@@ -291,6 +306,8 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         await interaction.response.send_message(
             f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.", ephemeral=True)
         log.info(f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.")
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Member mmr adjusted", f"before: {old_mmr}\nafter: {new_mmr}")
     
     @nextcord.slash_command(name="manual_register", description="Manually register a guild member with a platform ID", guild_ids=[GUILD_ID])
     async def manual_register(self,
@@ -330,6 +347,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         except Exception as e:
             log.error(f"An error occurred while registering the user: {repr(e)}")
             await interaction.response.send_message(f"An error occurred while registering the user.", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, "Member manually registered", f"{user.mention}")
 
     @manual_register.on_autocomplete("platform")
     async def autocomplete_platform(self, interaction: nextcord.Interaction, platform: str):

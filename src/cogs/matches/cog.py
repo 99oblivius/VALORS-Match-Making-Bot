@@ -30,7 +30,7 @@ from matches import cleanup_match, get_match, load_ongoing_matches
 from matches.functions import calculate_mmr_change
 from utils.logger import Logger as log
 from utils.models import BotSettings, Team, Side
-from utils.utils import abandon_cooldown, format_duration, generate_score_image
+from utils.utils import abandon_cooldown, format_duration, generate_score_image, log_moderation
 from views.match.abandon import AbandonView
 from views.match.accept import AcceptView
 from views.match.banning import BanView
@@ -73,7 +73,7 @@ class Matches(commands.Cog):
 
     @nextcord.slash_command(name="cancel", description="Cancel a match", guild_ids=[GUILD_ID])
     async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if staff_role and not staff_role in interaction.user.roles:
             msg = await interaction.response.send_message("Missing permissions", ephemeral=True)
@@ -87,7 +87,6 @@ class Matches(commands.Cog):
             match = await self.bot.store.get_match(match_id)
             if not match:
                 return await interaction.response.send_message(f"There is no match #{match_id}", ephemeral=True)
-
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):
@@ -99,13 +98,15 @@ class Matches(commands.Cog):
             f"Match id {match_id} cleaning up", ephemeral=True)
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        log_channel = interaction.guild.get_channel(settings.mm_log_channel)
-        if not log_channel: return
-        log_message = await log_channel.fetch_message(match.log_message)
-        if not log_message: return
-        embed = log_message.embeds[0]
+        scores_channel = interaction.guild.get_channel(settings.mm_log_channel)
+        if not scores_channel: return
+        scores_message = await scores_channel.fetch_message(match.log_message)
+        if not scores_message: return
+        embed = scores_message.embeds[0]
         embed.description = "Match canceled"
-        await log_message.edit(embed=embed)
+        await scores_message.edit(embed=embed)
+
+        await log_moderation(interaction, settings.log_channel, "Match canceled")
     
     @nextcord.slash_command(name="abandon", description="Abandon a match", guild_ids=[GUILD_ID])
     async def mm_abandon(self, interaction: nextcord.Interaction):
@@ -200,6 +201,9 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
             log.error(f"Error shuffling maps: {repr(e)}")
             await interaction.followup.send(
                 "An error occurred while shuffling the maps.", ephemeral=True)
+        
+        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Map pool shuffled", f"New order:\n```\n{', '.join(map_list)}```")
 
     @mm_settings.subcommand(name="accept_period", description="Set match accept period")
     async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
@@ -208,6 +212,9 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         log.debug(f"{interaction.user.display_name} set the accept period to:")
         log.pretty(seconds)
         await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
+
+        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Accept period changed", f"{format_duration(seconds)}")
     
     @set_mm_accept_period.on_autocomplete("seconds")
     async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
@@ -220,6 +227,9 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=size)
         await interaction.response.send_message(f"Match making set to {size} maps range", ephemeral=True)
+
+        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Map options changed", f"{size}")
     
     @mm_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")
     async def set_map_pool(self, interaction: nextcord.Interaction, 
@@ -238,6 +248,8 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         log.pretty(m)
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
+        
+        await log_moderation(interaction, settings.log_channel, "Map pool changed", f"New pool:\n```\n{', '.join([k for k in m.jeys()])}```")
     
     @mm_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
     async def get_map_pool(self, interaction: nextcord.Interaction):
@@ -271,6 +283,9 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         log.pretty(m)
         await interaction.response.send_message(
             f"Mods successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Mod list changed", f"New mods:\n```\n{', '.join([k for k in m.jeys()])}```")
     
     @mm_settings.subcommand(name="get_mods", description="Get the current mods with their ids")
     async def get_mods(self, interaction: nextcord.Interaction):

@@ -29,7 +29,7 @@ from config import *
 from utils.logger import Logger as log
 from utils.models import BotSettings
 from utils.statistics import create_graph_async, create_stats_embed
-from utils.utils import format_duration, create_queue_embed
+from utils.utils import format_duration, create_queue_embed, log_moderation
 from views.queue.buttons import QueueButtonsView
 
 
@@ -91,6 +91,8 @@ class Queues(commands.Cog):
         log.debug(f"{interaction.user.display_name} blocked {user.display_name} from queueing for {period}")
         stamp = int(expiration.timestamp())
         await interaction.response.send_message(f"{description} {user.mention} block successfully until <t:{stamp}:D> <t:{stamp}:R>.", ephemeral=True)
+
+        await log_moderation(interaction, settings.log_channel, "Member blocked", f"{user.mention}{f' until <t:{expiration}:f> <t:{expiration}:R>' if period else ''}")
     
     @nextcord.slash_command(name="unblock", description="(Unblock a user from queuing", guild_ids=[GUILD_ID])
     async def unblock_from_queue(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
@@ -103,6 +105,9 @@ class Queues(commands.Cog):
 
         log.debug(f"{interaction.user.display_name} unblocked {user.display_name} from queue")
         await interaction.response.send_message(f"{user.mention} unblocked successfully.", ephemeral=True)
+
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Member unblocked", f"{user.mention}")
 
     @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[GUILD_ID])
     async def remove_from_queue(self, interaction: nextcord.Interaction, 
@@ -132,6 +137,8 @@ class Queues(commands.Cog):
         await message.edit(embeds=[message.embeds[0], embed])
 
         await interaction.response.send_message(f"<@{user_id}> was manually removed from queue", ephemeral=True)
+
+        await log_moderation(interaction, settings.log_channel, "Member removed from queue", f"{user.mention}")
 
     @nextcord.slash_command(name="queue", description="Queue settings", guild_ids=[GUILD_ID])
     async def queue(self, interaction: nextcord.Interaction):
@@ -301,6 +308,8 @@ class Queues(commands.Cog):
     async def set_logs(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_log_channel=interaction.channel.id)
         await interaction.response.send_message("Queue log channel set", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set mm logs", f"<#{interaction.channel.id}>")
 
     @queue_settings.subcommand(name="lfg_role", description="Set lfg role")
     async def set_mm_lfg(self, interaction: nextcord.Interaction, lfg: nextcord.Role):
@@ -308,6 +317,8 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_lfg_role=lfg.id)
         await interaction.response.send_message(f"LookingForGame role set to {lfg.mention}", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set lfg role", f"{lfg.mention}>")
 
     @queue_settings.subcommand(name="verified_role", description="Set verified role")
     async def set_mm_verified(self, interaction: nextcord.Interaction, verified: nextcord.Role):
@@ -315,6 +326,8 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_verified_role=verified.id)
         await interaction.response.send_message(f"Verified role set to {verified.mention}", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set verified role", f"{verified.mention}>")
 
     @queue_settings.subcommand(name="staff_role", description="Set match making staff role")
     async def set_mm_staff(self, interaction: nextcord.Interaction, staff: nextcord.Role):
@@ -322,6 +335,8 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
         await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set staff role", f"{staff.mention}>")
 
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
         embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
@@ -344,6 +359,7 @@ class Queues(commands.Cog):
         msg = await self.send_queue_buttons(interaction)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
         await interaction.response.send_message(f"Queue channel set!", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, "Queue buttons set", f"In <#{interaction.channel.id}>")
     
     @queue_settings.subcommand(name="set_reminder", description="Set queue reminder time in seconds")
     async def set_queue_reminder(self, interaction: nextcord.Interaction, 
@@ -353,6 +369,8 @@ class Queues(commands.Cog):
                 required=True)):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_reminder=reminder_time)
         await interaction.response.send_message(f"Queue reminder set to {format_duration(reminder_time)}", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Queue reminder set", f"{format_duration(reminder_time)}")
     
     @queue_settings.subcommand(name="set_queue_periods", description="Set queue ready periods")
     async def set_queue_periods(self, interaction: nextcord.Interaction, 
@@ -374,6 +392,8 @@ class Queues(commands.Cog):
         log.pretty(periods_json)
         await interaction.response.send_message(
             f"Queue periods set to `{periods_str}`\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')} to update", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Queue periods set", f"```\n{periods_json}```")
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
@@ -395,6 +415,8 @@ class Queues(commands.Cog):
     async def set_text_channel(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_text_channel=interaction.channel.id)
         await interaction.response.send_message("Text channel set successfully", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set text channel", f"<#{interaction.channel.id}>")
     
     @queue_settings.subcommand(name="set_voice", description="Set queueing voice channel")
     async def set_voice_channel(self, interaction: nextcord.Interaction, voice_channel: nextcord.VoiceChannel):
@@ -403,6 +425,8 @@ class Queues(commands.Cog):
         
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel.id)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Set voice channel", f"<#{voice_channel.id}>")
 
 
 def setup(bot):

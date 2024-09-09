@@ -29,10 +29,10 @@ from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 import unicodedata
 
-from nextcord import Embed, Guild, Role
+from nextcord import Embed, Guild, Role, Interaction
 
-from config import VALORS_THEME1
-from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
+from config import VALORS_THEME1, VALORS_THEME2
+from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers, BotSettings
 from utils.logger import Logger as log
 
 
@@ -210,6 +210,13 @@ def create_ping_bars(ping):
     for i in range(bar_count):
         draw.rectangle([i*5, 15-i*5-5, i*5+3, 15], fill=bar_color)
     return img
+
+async def log_moderation(interaction: Interaction, channel_id: int, title: str, message: str | None=None):
+    log_channel = interaction.guild.get_channel(channel_id)
+    embed = Embed(title=title, description=message, color=VALORS_THEME2)
+    embed.set_author(name=interaction.user.name, icon_url=interaction.user.avatar.url)
+    embed.timestamp = datetime.now(timezone.utc)
+    await log_channel.send(embed=embed)
 
 async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_stats: List[MMBotUserMatchStats]):
     width, height = 800, 221
