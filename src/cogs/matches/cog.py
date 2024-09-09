@@ -161,15 +161,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
             log.error(f"Error in displaying last match stats: {repr(e)}")
             await interaction.followup.send("An error occurred while generating the match stats.", ephemeral=True)
 
-
-    ###########################
-    # MM SETTINGS SUBCOMMANDS #
-    ###########################
-    @nextcord.slash_command(name="mm", description="Match making commands", guild_ids=[GUILD_ID])
-    async def match_making(self, interaction: nextcord.Interaction):
-        pass
-
-    @match_making.subcommand(name="revoke_abandon", description="Revoke a user's current abandon")
+    @nextcord.slash_command(name="revoke_abandon", description="Revoke a user's current abandon", guild_ids=[GUILD_ID])
     async def revoke_abandon(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
         count_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, user.id)
         cooldown = abandon_cooldown(count_abandons, last_abandon)
@@ -178,6 +170,14 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         await self.bot.store.ignore_abandon(interaction.guild.id, user.id)
         log.debug(f"{interaction.user.display_name} revoked {user.display_name}'s abandon")
         await interaction.response.send_message(f"{user.mention} had their cooldown revoked successfully.", ephemeral=True)
+
+
+    ###########################
+    # MM SETTINGS SUBCOMMANDS #
+    ###########################
+    @nextcord.slash_command(name="mm", description="Match making commands", guild_ids=[GUILD_ID])
+    async def match_making(self, interaction: nextcord.Interaction):
+        pass
 
     @match_making.subcommand(name="settings", description="Match making settings")
     async def mm_settings(self, interaction: nextcord.Interaction):
