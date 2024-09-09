@@ -307,7 +307,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
             f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.", ephemeral=True)
         log.info(f"Match Making Rating for {user.mention} {action} `{new_mmr}`. Previous MMR was `{old_mmr}`.")
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Member mmr adjusted", f"before: {old_mmr}\nafter: {new_mmr}")
+        await log_moderation(interaction, settings.log_channel, "Member mmr adjusted", f"{user.mention}\nbefore: {old_mmr}\nafter: {new_mmr}")
     
     @nextcord.slash_command(name="manual_register", description="Manually register a guild member with a platform ID", guild_ids=[GUILD_ID])
     async def manual_register(self,
