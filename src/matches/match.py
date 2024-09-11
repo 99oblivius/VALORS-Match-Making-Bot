@@ -338,7 +338,7 @@ class Match:
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
 
-    async def start_requeue_players(self, settings: BotSettings, requeue_players: List[MMBotMatchPlayers]):
+    async def start_requeue_players(self, settings: BotSettings, requeue_players: List[int]):
         guild = self.bot.get_guild(settings.guild_id)
 
         queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
@@ -352,17 +352,16 @@ class Match:
             self.bot.queue_manager.remove_user(user.user_id)
             await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
         
-        for player in requeue_players:
-            self.bot.queue_manager.add_user(player.user_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
+        for player_id in requeue_players:
+            self.bot.queue_manager.add_user(player_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
             await self.bot.store.upsert_queue_user(
-                    user_id=player.user_id, 
+                    user_id=player_id, 
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
                     queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
-            log.debug(f"{guild.get_member(player.user_id).user.display_name} has auto queued up")
+            log.debug(f"{guild.get_member(player_id).user.display_name} has auto queued up")
             
         if total_users_and_players >= MATCH_PLAYER_COUNT:
-            self.bot.queue_manager.remove_user(player.user_id)
             for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
 
             match_id = await self.bot.store.unqueue_add_match_users(settings, settings.mm_queue_channel)
