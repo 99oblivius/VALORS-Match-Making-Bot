@@ -92,7 +92,7 @@ class Queues(commands.Cog):
         stamp = int(expiration.timestamp())
         await interaction.response.send_message(f"{description} {user.mention} block successfully until <t:{stamp}:D> <t:{stamp}:R>.", ephemeral=True)
 
-        await log_moderation(interaction, settings.log_channel, "Member blocked", f"{user.mention}{f' until <t:{expiration}:f> <t:{expiration}:R>' if period else ''}")
+        await log_moderation(interaction, settings.log_channel, "Member blocked", f"{user.mention}{f' until <t:{int(expiration.timestamp())}:f> <t:{int(expiration.timestamp())}:R>' if period else ''}")
     
     @nextcord.slash_command(name="unblock", description="(Unblock a user from queuing", guild_ids=[GUILD_ID])
     async def unblock_from_queue(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
