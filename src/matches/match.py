@@ -19,6 +19,7 @@
 import asyncio
 import copy
 import traceback
+from time import perf_counter_ns
 from datetime import datetime, timezone
 from functools import wraps
 from typing import List
@@ -93,7 +94,7 @@ class Match:
         if hasattr(self, 'no_server_message') and self.no_server_message:
             self.no_server_message = await self.no_server_message.edit(embed=embed, view=view)
         else:
-            self.no_server_message = await self.match_thread.send(embed=embed, view=view)
+            self.no_server_message = await self.match_channel.send(embed=embed, view=view)
         await done_event.wait()
     
     async def estimate_user_server_ping(self, user_id: int, serveraddr: str, ping_data: Dict[Tuple[int, str], Dict[str, float]]) -> int:
@@ -368,9 +369,9 @@ class Match:
                 guild = self.bot.get_guild(self.guild_id)
                 match = await self.bot.store.get_match(self.match_id)
                 if match and match.match_thread:
-                    match_thread = guild.get_thread(match.match_thread)
-                    if match_thread:
-                        await self.match_thread.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
+                    match_channel = guild.get_channel(match.match_thread)
+                    if match_channel:
+                        await self.match_channel.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
                 event = asyncio.Event()
                 await event.wait()
         return wrapper
@@ -389,12 +390,20 @@ class Match:
         self.state = await self.load_state()
         settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
         guild = self.bot.get_guild(self.guild_id)
-        queue_channel = guild.get_channel(settings.mm_queue_channel)
+        match_category = guild.get_channel(settings.mm_match_category)
         text_channel = guild.get_channel(settings.mm_text_channel)
 
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         self.compute_user_platform_map()
+
+        player_overwrites = {
+            guild.get_member(player.user_id):
+                nextcord.PermissionOverwrite(
+                    view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                ) for player in self.players
+        }
+
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
@@ -405,14 +414,19 @@ class Match:
             server = await self.bot.store.get_server(host, port)
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
         
+        
 
-        self.match_thread  = guild.get_thread(self.match.match_thread)
+        self.match_channel  = guild.get_channel(self.match.match_thread)
         log_channel   = guild.get_channel(settings.mm_log_channel)
-        a_thread      = guild.get_thread(self.match.a_thread)
-        b_thread      = guild.get_thread(self.match.b_thread)
+        a_channel     = guild.get_channel(self.match.a_thread)
+        b_channel     = guild.get_channel(self.match.b_thread)
 
         a_vc          = guild.get_channel(self.match.a_vc)
         b_vc          = guild.get_channel(self.match.b_vc)
+        if a_vc:
+            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.A]
+        if b_vc:
+            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.B]
 
         try:
             if self.match.log_message:
@@ -420,27 +434,28 @@ class Match:
         except Exception: pass
         try:
             if self.match.match_message: 
-                match_message  = await self.match_thread.fetch_message(self.match.match_message)
+                match_message  = await self.match_channel.fetch_message(self.match.match_message)
         except Exception: pass
         try:
             if self.match.a_message: 
-                a_message      = await self.match_thread.fetch_message(self.match.a_message)
+                a_message      = await self.match_channel.fetch_message(self.match.a_message)
         except Exception: pass
         try:
             if self.match.b_message: 
-                b_message      = await self.match_thread.fetch_message(self.match.b_message)
+                b_message      = await self.match_channel.fetch_message(self.match.b_message)
         except Exception: pass
 
         if check_state(MatchState.NOT_STARTED):
             await self.increment_state()
         
-        if check_state(MatchState.CREATE_MATCH_THREAD):
-            self.match_thread = await queue_channel.create_thread(
+        if check_state(MatchState.CREATE_MATCH_CHANNEL):
+            overwrites = copy.copy(player_overwrites)
+            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(send_messages=False) })
+            self.match_channel = await match_category.create_text_channel(
                 name=f"Match - #{self.match_id}",
-                auto_archive_duration=1440,
-                invitable=False,
+                overwrites=overwrites,
                 reason=f"Match - #{self.match_id}")
-            await self.bot.store.update(MMBotMatches, id=self.match_id, match_thread=self.match_thread.id)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, match_thread=self.match_channel.id)
             await self.increment_state()
         
         if check_state(MatchState.ACCEPT_PLAYERS):
@@ -451,7 +466,7 @@ class Match:
             embed.add_field(name=f"Attendance - {format_duration(settings.mm_accept_period)} to accept", value=format_mm_attendance(self.players))
             done_event = asyncio.Event()
             view = AcceptView(self.bot, done_event)
-            await self.match_thread.send(''.join(add_mention), embed=embed, view=view)
+            await self.match_channel.send(''.join(add_mention), embed=embed, view=view)
 
             async def notify_unaccepted_players(delay: int=30):
                 await asyncio.sleep(delay)
@@ -462,7 +477,7 @@ class Match:
                         if member:
                             embed = nextcord.Embed(
                                 title="Queue Popped!", 
-                                description=f"{format_duration(settings.mm_accept_period - delay)} left to ACCEPT\n{self.match_thread.mention}!", 
+                                description=f"{format_duration(settings.mm_accept_period - delay)} left to ACCEPT\n{self.match_channel.mention}!", 
                                 color=0x18ff18)
                             try:
                                 await member.send(embed=embed)
@@ -480,7 +495,7 @@ class Match:
                 requeue_players = view.accepted_players
                 self.state = MatchState.CLEANUP - 1
                 embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
-                await self.match_thread.send(embed=embed)
+                await self.match_channel.send(embed=embed)
                 player_ids = [p.user_id for p in self.players]
                 dodged_mentions = ' '.join((f'<@{userid}>' for userid in player_ids if userid not in view.accepted_players))
                 await text_channel.send(f"{dodged_mentions}\nDid not accept the last match in time.\nRemaining players will be re-queued automatically.")
@@ -489,7 +504,11 @@ class Match:
 
         if check_state(MatchState.MAKE_TEAMS):
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
+            start = perf_counter_ns()
             a_players, b_players, a_mmr, b_mmr = get_teams(users)
+            stop = perf_counter_ns()
+            delay = (stop - start) / 1000000
+            log.debug(f"Teams generated in {delay:.6f}ms")
             await self.bot.store.set_players_team(
                 match_id=self.match_id, 
                 user_teams={Team.A: a_players, Team.B: b_players})
@@ -516,58 +535,59 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
-            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.players if player.team == Team.A }
-            player_overwrites.update({
-                guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
-                guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
-            })
-            
-            a_vc = await queue_channel.category.create_voice_channel(
+            overwrites = copy.copy(player_overwrites)
+            player_overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            a_vc = await match_category.create_stage_channel(
                 name=f"[{self.match_id}] Team A",
-                overwrites=player_overwrites,
-                reason=f"[{self.match_id}] Team A")
+                topic=f"[{self.match_id}] Team A",
+                overwrites=overwrites,
+                reason=f"[{self.match_id}] Team A",
+                rtc_region=nextcord.VoiceRegion.us_east)
+            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.A]
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_vc=a_vc.id)
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_B):
-            player_overwrites = { guild.get_member(player.user_id): nextcord.PermissionOverwrite(connect=True) for player in self.players if player.team == Team.B }
-            player_overwrites.update({
-                guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=False),
-                guild.get_role(settings.mm_staff_role): nextcord.PermissionOverwrite(view_channel=True, connect=True)
-            })
-            b_vc = await queue_channel.category.create_voice_channel(
+            overwrites = copy.copy(player_overwrites)
+            player_overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            b_vc = await match_category.create_stage_channel(
                 name=f"[{self.match_id}] ] Team B",
-                overwrites=player_overwrites,
-                reason=f"[{self.match_id}] Team B")
+                topic=f"[{self.match_id}] Team B",
+                overwrites=overwrites,
+                reason=f"[{self.match_id}] Team B",
+                rtc_region=nextcord.VoiceRegion.us_east)
+            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.B]
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_vc=b_vc.id)
             await self.increment_state()
         
-        if check_state(MatchState.MAKE_TEAM_THREAD_A):
-            a_thread = await queue_channel.create_thread(
+        if check_state(MatchState.MAKE_TEAM_CHANNEL_A):
+            overwrites = copy.copy(player_overwrites)
+            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
+            a_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team A",
-                auto_archive_duration=1440,
-                invitable=False,
+                overwrites=overwrites,
                 reason=f"[{self.match_id}] Team A")
-            await self.bot.store.update(MMBotMatches, id=self.match_id, a_thread=a_thread.id)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, a_thread=a_channel.id)
             await self.increment_state()
         
-        if check_state(MatchState.MAKE_TEAM_THREAD_B):
-            b_thread = await queue_channel.create_thread(
+        if check_state(MatchState.MAKE_TEAM_CHANNEL_B):
+            overwrites = copy.copy(player_overwrites)
+            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
+            b_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team B",
-                auto_archive_duration=1440,
-                invitable=False,
+                overwrites=overwrites,
                 reason=f"[{self.match_id}] Team B")
-            await self.bot.store.update(MMBotMatches, id=self.match_id, b_thread=b_thread.id)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, b_thread=b_channel.id)
             await self.increment_state()
         
         if check_state(MatchState.BANNING_START):
-            await self.match_thread.purge(bulk=True)
-            embed = nextcord.Embed(title="Team A ban first", description=f"<#{a_thread.id}>", color=A_THEME)
+            await self.match_channel.purge(bulk=True)
+            embed = nextcord.Embed(title="Team A ban first", description=f"<#{a_channel.id}>", color=A_THEME)
             embed.add_field(name="Team A", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
-            match_message = await self.match_thread.send(embed=embed)
+            match_message = await self.match_channel.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
         
@@ -577,7 +597,7 @@ class Match:
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
-            a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
+            a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
@@ -588,12 +608,12 @@ class Match:
             embed = nextcord.Embed(title="You banned", color=A_THEME)
             await a_message.edit(embed=embed, view=view)
             embed = nextcord.Embed(title="A banned", color=A_THEME)
-            await b_thread.send(embed=embed, view=view)
+            await b_channel.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, a_bans=bans)
             await self.increment_state()
         
         if check_state(MatchState.BAN_SWAP):
-            embed = nextcord.Embed(title="Team B ban second", description=f"<#{b_thread.id}>", color=B_THEME)
+            embed = nextcord.Embed(title="Team B ban second", description=f"<#{b_channel.id}>", color=B_THEME)
             embed.add_field(name="Team A", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
@@ -607,7 +627,7 @@ class Match:
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
             view = await BanView.create_showable(self.bot, self.guild_id, self.match)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
-            b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
+            b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
             await asyncio.sleep(time_to_ban)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
@@ -618,7 +638,7 @@ class Match:
             embed = nextcord.Embed(title="You banned", color=B_THEME)
             await b_message.edit(embed=embed, view=view)
             embed = nextcord.Embed(title="B banned", color=B_THEME)
-            await a_thread.send(embed=embed, view=view)
+            await a_channel.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_bans=bans)
             await self.increment_state()
         
@@ -631,7 +651,7 @@ class Match:
             await self.increment_state()
             
         if check_state(MatchState.PICKING_START):
-            embed = nextcord.Embed(title="Team A pick map", description=f"<#{a_thread.id}>", color=A_THEME)
+            embed = nextcord.Embed(title="Team A pick map", description=f"<#{a_channel.id}>", color=A_THEME)
             embed.add_field(name="Team A", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
@@ -645,7 +665,7 @@ class Match:
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=A_THEME)
             view = await MapPickView.create_showable(self.bot, self.guild_id, self.match)
-            a_message = await a_thread.send(''.join(add_mention), embed=embed, view=view)
+            a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
@@ -657,12 +677,12 @@ class Match:
             embed.set_thumbnail(map_pick.media)
             await a_message.edit(embed=embed, view=view)
             embed.title = "A picked"
-            await b_thread.send(embed=embed, view=view)
+            await b_channel.send(embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick.map)
             await self.increment_state()
         
         if check_state(MatchState.PICK_SWAP):
-            embed = nextcord.Embed(title="Team B pick side", description=f"<#{b_thread.id}>", color=B_THEME)
+            embed = nextcord.Embed(title="Team B pick side", description=f"<#{b_channel.id}>", color=B_THEME)
             embed.add_field(name="Team A", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
             embed.add_field(name="Team B", 
@@ -676,7 +696,7 @@ class Match:
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.B)
             embed = nextcord.Embed(title="Pick your side", description=format_duration(time_to_pick), color=B_THEME)
             view = await SidePickView.create_showable(self.bot, self.guild_id, self.match)
-            b_message = await b_thread.send(''.join(add_mention), embed=embed, view=view)
+            b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  b_message=b_message.id, phase=Phase.B_PICK)
             await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
@@ -690,12 +710,12 @@ class Match:
             if side_pick == Side.T: a_side = Side.CT
             elif side_pick == Side.CT: a_side = Side.T
             embed = nextcord.Embed(title="You are", color=B_THEME)
-            await a_thread.send(embed=embed, view=ChosenSideView(a_side))
+            await a_channel.send(embed=embed, view=ChosenSideView(a_side))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
 
         if check_state(MatchState.MATCH_STARTING):
-            await self.match_thread.purge(bulk=True)
+            await self.match_channel.purge(bulk=True)
             match_map = await self.bot.store.get_match_map(self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
             embed = nextcord.Embed(title="Starting", description="Setting up server", color=VALORS_THEME1)
@@ -705,14 +725,14 @@ class Match:
             embed.add_field(name=f"Team B - {match_sides[1].name}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-            match_message = await self.match_thread.send(embed=embed)
+            match_message = await self.match_channel.send(embed=embed)
 
             embed = nextcord.Embed(
                 title="Match starting!",
-                description=f"Return to {self.match_thread.mention}",
+                description=f"Return to {self.match_channel.mention}",
                 color=VALORS_THEME1)
-            await a_thread.send(embed=embed)
-            await b_thread.send(embed=embed)
+            await a_channel.send(embed=embed)
+            await b_channel.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
          
@@ -845,7 +865,7 @@ class Match:
             log.info(f"[{self.match_id}] Switching to SND")
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
-            await self.match_thread.send(embed=embed)
+            await self.match_channel.send(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.LOG_MATCH_HAPPENING):
@@ -857,11 +877,9 @@ class Match:
         if check_state(MatchState.MATCH_WAIT_FOR_END):
             self.match = await self.bot.store.get_match(self.match_id)
             team_scores = [0, 0]
-            users_match_stats = {}
             last_users_match_stats = {}
             disconnection_tracker = { player.user_id: 0 for player in self.players }
             last_round_number = self.match.a_score + self.match.b_score if self.match.a_score else 0
-            abandoned_users = []
             changed_users = {}
             players_dict = {}
             
@@ -974,7 +992,7 @@ class Match:
             embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
             
             try:
-                await self.match_thread.send(embed=embed)
+                await self.match_channel.send(embed=embed)
             except AttributeError:
                 pass
             # channel = guild.get_channel(settings.leaderboard_channel)
@@ -989,17 +1007,17 @@ class Match:
             # asyncio.create_task(message.edit(embeds=embeds))
             asyncio.create_task(update_leaderboard(self.bot.store, guild))
             await asyncio.sleep(10)
-            # match_thread
+            # match_channel
             try:
-                if self.match_thread: await self.match_thread.delete()
+                if self.match_channel: await self.match_channel.delete()
             except nextcord.HTTPException: pass
-            # a_thread
+            # a_channel
             try:
-                if a_thread: await a_thread.delete()
+                if a_channel: await a_channel.delete()
             except nextcord.HTTPException: pass
-            # b_thread
+            # b_channel
             try:
-                if b_thread: await b_thread.delete()
+                if b_channel: await b_channel.delete()
             except nextcord.HTTPException: pass
             # move users back
             guild = self.bot.get_guild(self.guild_id)

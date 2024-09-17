@@ -809,14 +809,14 @@ class Database:
             return result.scalars().first()
     
     @log_db_operation
-    async def get_thread_match(self, thread_id: int) -> MMBotMatches:
+    async def get_match_channel(self, channel_id: int) -> MMBotMatches:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches)
                 .where(or_(
-                    MMBotMatches.match_thread == thread_id,
-                    MMBotMatches.a_thread == thread_id,
-                    MMBotMatches.b_thread == thread_id)))
+                    MMBotMatches.match_thread == channel_id,
+                    MMBotMatches.a_thread == channel_id,
+                    MMBotMatches.b_thread == channel_id)))
             return result.scalars().first()
 
     @log_db_operation

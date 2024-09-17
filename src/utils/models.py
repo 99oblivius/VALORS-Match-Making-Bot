@@ -104,6 +104,7 @@ class BotSettings(Base):
     staff_channel      = Column(BigInteger)
     log_channel        = Column(BigInteger)
     
+    mm_match_category  = Column(BigInteger)
     mm_queue_channel   = Column(BigInteger)
     mm_queue_message   = Column(BigInteger)
     mm_queue_periods   = Column(Text)

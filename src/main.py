@@ -46,6 +46,8 @@ class Bot(commands.Bot):
         self.queue_manager: QueueManager  = QueueManager(self)
         self.rcon_manager: RCONManager    = RCONManager(self)
         self.command_cache: CommandCache  = CommandCache(self)
+
+        self.match_stages = {}
     
     def __del__(self):
         del self.store

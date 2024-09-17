@@ -60,7 +60,7 @@ class SidePickView(nextcord.ui.View):
     
     async def pick_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         # what phase
-        match = await self.bot.store.get_thread_match(interaction.channel.id)
+        match = await self.bot.store.get_match_channel(interaction.channel.id)
         if match.phase != Phase.B_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         

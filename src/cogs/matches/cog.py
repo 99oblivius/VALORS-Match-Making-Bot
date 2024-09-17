@@ -66,6 +66,13 @@ class Matches(commands.Cog):
         matches = await self.bot.store.get_ongoing_matches()
         loop = asyncio.get_event_loop()
         load_ongoing_matches(loop, self.bot, GUILD_ID, matches)
+    
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState):
+        match_stages = self.bot.match_stages
+        if after.channel.id in match_stages and member.id in match_stages[after.channel.id]:
+            asyncio.create_task(member.edit(suppress=False))
+            
 
     #####################
     # MM SLASH COMMANDS #
@@ -81,7 +88,7 @@ class Matches(commands.Cog):
             await msg.delete()
             return
         if match_id == -1:
-            match = await self.bot.store.get_thread_match(interaction.channel.id)
+            match = await self.bot.store.get_match_channel(interaction.channel.id)
             if match: match_id = match.id
         else:
             match = await self.bot.store.get_match(match_id)
@@ -110,10 +117,10 @@ class Matches(commands.Cog):
     
     @nextcord.slash_command(name="abandon", description="Abandon a match", guild_ids=[GUILD_ID])
     async def mm_abandon(self, interaction: nextcord.Interaction):
-        match = await self.bot.store.get_thread_match(interaction.channel.id)
+        match = await self.bot.store.get_match_channel(interaction.channel.id)
         if not match:
             return await interaction.response.send_message(
-                "You must use this command in a match thread", ephemeral=True)
+                "You must use this command in a match channel", ephemeral=True)
 
         previous_abandons, _ = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)       
         cooldown = abandon_cooldown(previous_abandons + 1)

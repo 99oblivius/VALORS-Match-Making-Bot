@@ -35,7 +35,7 @@ class NoServerFoundView(nextcord.ui.View):
         label="Retry",
         emoji="🔄",
         style=nextcord.ButtonStyle.primary,
-        custom_id="mm_thread_refresh_button")
+        custom_id="mm_refresh_button")
     async def refresh_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
@@ -52,7 +52,7 @@ class NoServerFoundView(nextcord.ui.View):
         label="Terminate",
         emoji="🛑",
         style=nextcord.ButtonStyle.danger,
-        custom_id="mm_thread_terminate_button")
+        custom_id="mm_terminate_button")
     async def terminate_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)

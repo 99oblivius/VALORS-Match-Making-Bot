@@ -24,7 +24,7 @@ class MatchState(IntEnum):
         return self.name
     
     NOT_STARTED             = auto()
-    CREATE_MATCH_THREAD     = auto()
+    CREATE_MATCH_CHANNEL    = auto()
     ACCEPT_PLAYERS          = auto()
 
     MAKE_TEAMS              = auto()
@@ -32,8 +32,8 @@ class MatchState(IntEnum):
     
     MAKE_TEAM_VC_A          = auto()
     MAKE_TEAM_VC_B          = auto()
-    MAKE_TEAM_THREAD_A      = auto()
-    MAKE_TEAM_THREAD_B      = auto()
+    MAKE_TEAM_CHANNEL_A     = auto()
+    MAKE_TEAM_CHANNEL_B     = auto()
 
     BANNING_START           = auto()
     A_BANS                  = auto()

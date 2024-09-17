@@ -59,6 +59,13 @@ class Settings(commands.Cog):
     async def settings(self, interaction: nextcord.Interaction):
         pass
 
+    @settings.subcommand(name="set_match_category", description="Set which category contains match channels")
+    async def settings_set_match_category(self, interaction: nextcord.Interaction):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_match_category=interaction.channel.category_id )
+        await interaction.response.send_message("Match category set", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, f"Match category set to <#{interaction.channel.category_id}>")
+
     @settings.subcommand(name="set_logs", description="Set which channel receives bot logs")
     async def settings_set_logs(self, interaction: nextcord.Interaction):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, log_channel=interaction.channel.id)
