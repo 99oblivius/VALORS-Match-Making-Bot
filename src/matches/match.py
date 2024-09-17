@@ -929,18 +929,15 @@ class Match:
                 team_scores,
                 reply)
             
-            try:
-                embed = log_message.embeds[0]
-                embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-                a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
-                                        for player in self.players if player.team == Team.A])
-                b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
-                                        for player in self.players if player.team == Team.B])
-                embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
-                embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
-                asyncio.create_task(log_message.edit(embed=embed))
-            except Exception as e:
-                await self.bot.get_user(313912877662863360).send(f"You broke something dummy\n```{traceback.format_exc()}```")
+            embed = log_message.embeds[0]
+            embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
+            a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+                                    for player in self.players if player.team == Team.A])
+            b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+                                    for player in self.players if player.team == Team.B])
+            embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
+            embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
+            asyncio.create_task(log_message.edit(embed=embed))
 
             await self.increment_state()
         
