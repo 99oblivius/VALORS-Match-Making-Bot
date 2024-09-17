@@ -39,29 +39,26 @@ class AbandonView(nextcord.ui.View):
         custom_id="mm_accept_abandon_button")
     async def abandon(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         loop = asyncio.get_event_loop()
-        match_instance = get_match(self.match.id)
         await interaction.response.defer(ephemeral=True)
-        if match_instance.current_round is None or match_instance.current_round <= 6:
-            if not await cleanup_match(loop, self.match.id):
-                log.debug(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
-                return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
-            log.debug(f"{interaction.user.display_name} abandoned match {self.match.id}")
-            await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id])
-            await interaction.guild.get_thread(self.match.match_thread).send("@here Match Abandoned")
-            await interaction.followup.send(f"Match abandoned", ephemeral=True)
-            
-            settings = await self.bot.store.get_settings(interaction.guild.id)
-            log_channel = interaction.guild.get_channel(settings.mm_log_channel)
-            try:
-                log_message = await log_channel.fetch_message(self.match.log_message)
-                embed = log_message.embeds[0]
-                embed.description = f"Match abandoned by {interaction.user.mention}"
-                await log_message.edit(embed=embed)
-            except Exception: pass
-            await interaction.followup.send("You abandoned the match", ephemeral=True)
-        else:
-            await interaction.followup.send(
-                "You are not allowed to abandon a match past 6 rounds.", ephemeral=True)
+
+        if not await cleanup_match(loop, self.match.id):
+            log.debug(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
+            return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
+        
+        log.debug(f"{interaction.user.display_name} abandoned match {self.match.id}")
+        await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id])
+        await interaction.guild.get_thread(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}")
+        await interaction.followup.send(f"Match abandoned", ephemeral=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        log_channel = interaction.guild.get_channel(settings.mm_log_channel)
+        try:
+            log_message = await log_channel.fetch_message(self.match.log_message)
+            embed = log_message.embeds[0]
+            embed.description = f"Match abandoned by {interaction.user.mention}"
+            await log_message.edit(embed=embed)
+        except Exception: pass
+        await interaction.followup.send("You abandoned the match", ephemeral=True)
     
     @nextcord.ui.button(
         label="No", 
