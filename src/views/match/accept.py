@@ -53,7 +53,7 @@ class AcceptView(nextcord.ui.View):
         async with self.lock:
             await self.bot.store.update(MMBotMatchPlayers, 
                 guild_id=interaction.guild.id, match_id=match.id, user_id=interaction.user.id, accepted=True)
-            log.debug(f"{interaction.user.display_name} accepted match {match.id}")
+            log.info(f"{interaction.user.display_name} accepted match {match.id}")
             players = await self.bot.store.get_players(match.id)
             
             embed = interaction.message.embeds[0]

@@ -88,7 +88,7 @@ class Queues(commands.Cog):
                 color=VALORS_THEME1_1)
             await staff_channel.send(embed=embed)
 
-        log.debug(f"{interaction.user.display_name} blocked {user.display_name} from queueing for {period}")
+        log.info(f"{interaction.user.display_name} blocked {user.display_name} from queueing for {period}")
         stamp = int(expiration.timestamp())
         await interaction.response.send_message(f"{description} {user.mention} block successfully until <t:{stamp}:D> <t:{stamp}:R>.", ephemeral=True)
 
@@ -103,7 +103,7 @@ class Queues(commands.Cog):
         expiration = datetime.now(timezone.utc)
         await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration)
 
-        log.debug(f"{interaction.user.display_name} unblocked {user.display_name} from queue")
+        log.info(f"{interaction.user.display_name} unblocked {user.display_name} from queue")
         await interaction.response.send_message(f"{user.mention} unblocked successfully.", ephemeral=True)
 
         settings = await self.bot.store.get_settings(interaction.guild.id)
@@ -127,7 +127,7 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await self.bot.store.unqueue_user(settings.mm_queue_channel, user_id)
         self.bot.queue_manager.remove_user(user_id)
-        log.debug(f"{user_id} was manually removed from queue")
+        log.info(f"{user_id} was manually removed from queue")
 
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
         asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
@@ -167,7 +167,7 @@ class Queues(commands.Cog):
         
         self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
-        log.debug(f"{interaction.user.display_name} used the ping lfg slash_command")
+        log.info(f"{interaction.user.display_name} used the ping lfg slash_command")
 
     @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[GUILD_ID])
     async def rating_change(self, interaction: nextcord.Interaction):
@@ -388,7 +388,7 @@ class Queues(commands.Cog):
         
         periods_str = json.dumps(periods_json, separators=[',', ':'])
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
-        log.debug(f"{interaction.user.display_name} set queue periods to:")
+        log.info(f"{interaction.user.display_name} set queue periods to:")
         log.pretty(periods_json)
         await interaction.response.send_message(
             f"Queue periods set to `{periods_str}`\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')} to update", ephemeral=True)

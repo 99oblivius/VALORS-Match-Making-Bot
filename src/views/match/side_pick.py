@@ -79,7 +79,7 @@ class SidePickView(nextcord.ui.View):
                 user_id=interaction.user.id, 
                 match_id=match.id, 
                 side=pick)
-            log.debug(f"{interaction.user.display_name} voted for {pick.name}")
+            log.info(f"{interaction.user.display_name} voted for {pick.name}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

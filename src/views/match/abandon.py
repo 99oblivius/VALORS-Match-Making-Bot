@@ -42,10 +42,10 @@ class AbandonView(nextcord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         if not await cleanup_match(loop, self.match.id):
-            log.debug(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
+            log.error(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
             return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
         
-        log.debug(f"{interaction.user.display_name} abandoned match {self.match.id}")
+        log.info(f"{interaction.user.display_name} abandoned match {self.match.id}")
         await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id])
         await interaction.guild.get_thread(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}")
         await interaction.followup.send(f"Match abandoned", ephemeral=True)

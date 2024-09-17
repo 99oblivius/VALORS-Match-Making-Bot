@@ -43,7 +43,7 @@ class MMHideView(nextcord.ui.View):
     @nextcord.ui.button(label="Hide MM", style=nextcord.ButtonStyle.red)
     async def hide_mm(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         await interaction.response.send_message("You have hidden Match Making.", ephemeral=True)
-        log.debug(f"{interaction.user.display_name} hid MM")
+        log.info(f"{interaction.user.display_name} hid MM")
         try: await self.hide_msg.delete()
         except: pass
         await interaction.user.remove_roles(self.verified_role)
@@ -184,7 +184,7 @@ class RegistryButtonView(nextcord.ui.View):
             view.hide_msg = msg
             return
         await interaction.user.add_roles(verified_role)
-        log.debug(f"{interaction.user.display_name} joined MM")
+        log.info(f"{interaction.user.display_name} joined MM")
         message = f"Join a match in <#{settings.mm_queue_channel}>\nInteract with others in <#{settings.mm_text_channel}>"
         embed = nextcord.Embed(
             title="Welcome to Match Making!", 

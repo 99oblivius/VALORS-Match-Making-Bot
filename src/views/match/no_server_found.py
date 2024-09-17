@@ -41,7 +41,7 @@ class NoServerFoundView(nextcord.ui.View):
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if not interaction.user.guild_permissions.administrator or not staff_role in interaction.user.roles:
             return await interaction.response.send_message("This button is intended for staff use only.", ephemeral=True)
-        log.debug(f"Refresh button clicked for match {self.match_id}")
+        log.info(f"Refresh button clicked for match {self.match_id}")
         await interaction.response.defer()
 
         from matches import go_back_to
@@ -75,5 +75,5 @@ class NoServerFoundView(nextcord.ui.View):
         except Exception:
             pass
         await interaction.followup.send("Match terminated", ephemeral=True)
-        log.debug(f"{interaction.user.display_name} terminated match {self.match_id}")
+        log.info(f"{interaction.user.display_name} terminated match {self.match_id}")
         self.done_event.set()

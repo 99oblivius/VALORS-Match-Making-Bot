@@ -169,7 +169,7 @@ class QueueButtonsView(nextcord.ui.View):
             queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
             total_in_queue = len(queue_users)
             if total_in_queue + 1 > MATCH_PLAYER_COUNT:
-                log.debug(f"{interaction.user.display_name} wanted to queue but was overtaken")
+                log.info(f"{interaction.user.display_name} wanted to queue but was overtaken")
                 return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
             self.bot.queue_manager.add_user(interaction.user.id, expiry)
             in_queue = await self.bot.store.upsert_queue_user(
@@ -180,7 +180,7 @@ class QueueButtonsView(nextcord.ui.View):
             if not in_queue:
                 total_in_queue += 1
                 asyncio.create_task(self.bot.queue_manager.notify_queue_count(interaction.guild.id, settings, total_in_queue))
-            log.debug(f"{interaction.user.display_name} has queued up")
+            log.info(f"{interaction.user.display_name} has queued up")
             
             if total_in_queue == MATCH_PLAYER_COUNT:
                 self.bot.queue_manager.remove_user(interaction.user.id)
@@ -198,7 +198,7 @@ class QueueButtonsView(nextcord.ui.View):
             return await interaction.response.send_message("You are not queued up",ephemeral=True)
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
-        log.debug(f"{interaction.user.display_name} has left queue")
+        log.info(f"{interaction.user.display_name} has left queue")
         await self.update_queue_message(interaction)
     
     async def stats_callback(self, interaction: nextcord.Interaction):
@@ -232,11 +232,11 @@ class QueueButtonsView(nextcord.ui.View):
                 return await interaction.response.send_message(
 f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
 Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
-            log.debug(f"{interaction.user.display_name} wanted to ping LFG role")
+            log.info(f"{interaction.user.display_name} wanted to ping LFG role")
         
         self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
         await channel.send(f"All <@&{settings.mm_lfg_role}> members are being summoned by {interaction.user.mention}", allowed_mentions=nextcord.AllowedMentions(roles=True, users=False))
-        log.debug(f"{interaction.user.display_name} pinged LFG role")
+        log.info(f"{interaction.user.display_name} pinged LFG role")
         embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALORS_THEME1)
         msg = await interaction.response.send_message(embed=embed, ephemeral=True)
         await asyncio.sleep(5)
@@ -253,8 +253,8 @@ Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>"
         
         if lfg_role in interaction.user.roles:
             await interaction.user.remove_roles(lfg_role)
-            log.debug(f"{interaction.user.display_name} lost LFG role")
+            log.info(f"{interaction.user.display_name} lost LFG role")
             return await interaction.response.send_message(f"\\- You removed {lfg_role.mention} from yourself", ephemeral=True)
         await interaction.user.add_roles(lfg_role)
-        log.debug(f"{interaction.user.display_name} gained LFG role")
+        log.info(f"{interaction.user.display_name} gained LFG role")
         await interaction.response.send_message(f"+ You added {lfg_role.mention} to yourself", ephemeral=True)
