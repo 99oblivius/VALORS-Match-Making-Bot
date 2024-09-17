@@ -70,7 +70,12 @@ class Matches(commands.Cog):
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState):
         match_stages = self.bot.match_stages
-        if after.channel.id in match_stages and member.id in match_stages[after.channel.id]:
+        if (before.channel != after.channel 
+            and not before.channel 
+            and after.channel 
+            and after.channel.id in match_stages 
+            and member.id in match_stages[after.channel.id]
+        ):
             asyncio.create_task(member.edit(suppress=False))
             
 

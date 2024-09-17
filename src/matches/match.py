@@ -397,13 +397,6 @@ class Match:
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         self.compute_user_platform_map()
 
-        player_overwrites = {
-            guild.get_member(player.user_id):
-                nextcord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, speak=True, stream=True, connect=True
-                ) for player in self.players
-        }
-
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
@@ -423,10 +416,11 @@ class Match:
 
         a_vc          = guild.get_channel(self.match.a_vc)
         b_vc          = guild.get_channel(self.match.b_vc)
+        player_ids = [u.user_id for u in self.players]
         if a_vc:
-            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.A]
+            self.bot.match_stages[a_vc.id] = player_ids
         if b_vc:
-            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.B]
+            self.bot.match_stages[b_vc.id] = player_ids
 
         try:
             if self.match.log_message:
@@ -449,7 +443,12 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.CREATE_MATCH_CHANNEL):
-            overwrites = copy.copy(player_overwrites)
+            overwrites = {
+                guild.get_member(player.user_id):
+                    nextcord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                    ) for player in self.players
+            }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(send_messages=False) })
             self.match_channel = await match_category.create_text_channel(
                 name=f"Match - #{self.match_id}",
@@ -535,8 +534,13 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
-            overwrites = copy.copy(player_overwrites)
-            player_overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            overwrites = {
+                guild.get_member(player.user_id):
+                    nextcord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                    ) for player in self.players
+            }
+            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
             a_vc = await match_category.create_stage_channel(
                 name=f"[{self.match_id}] Team A",
                 topic=f"[{self.match_id}] Team A",
@@ -548,10 +552,15 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_B):
-            overwrites = copy.copy(player_overwrites)
-            player_overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            overwrites = {
+                guild.get_member(player.user_id):
+                    nextcord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                    ) for player in self.players
+            }
+            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
             b_vc = await match_category.create_stage_channel(
-                name=f"[{self.match_id}] ] Team B",
+                name=f"[{self.match_id}] Team B",
                 topic=f"[{self.match_id}] Team B",
                 overwrites=overwrites,
                 reason=f"[{self.match_id}] Team B",
@@ -561,7 +570,12 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_A):
-            overwrites = copy.copy(player_overwrites)
+            overwrites = {
+                guild.get_member(player.user_id):
+                    nextcord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                    ) for player in self.players if player.team == Team.A
+            }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
             a_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team A",
@@ -571,7 +585,12 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_B):
-            overwrites = copy.copy(player_overwrites)
+            overwrites = {
+                guild.get_member(player.user_id):
+                    nextcord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
+                    ) for player in self.players if player.team == Team.B
+            }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
             b_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team B",
