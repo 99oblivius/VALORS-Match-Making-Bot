@@ -136,11 +136,9 @@ class Match:
         return estimated_pings
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
-        found_player_ids = {p.user_id: False for p in self.players}
         for platform_id, player_data in players_dict.items():
             user_id = next((uid for uid, pids in self.user_platform_map.items() if platform_id in pids), None)
             if user_id:
-                found_player_ids[user_id] = True
                 player = next(p for p in self.players if p.user_id == user_id)
                 
                 await self.ensure_correct_team(player, platform_id, player_data)
@@ -153,8 +151,6 @@ class Match:
             else:
                 log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                 await self.bot.rcon_manager.kick_player(self.match.serveraddr, platform_id)
-        
-        return found_player_ids
     
     async def upsert_user_stats(self, changed_users, last_users_match_stats, players_dict):
         changed_users.clear()
@@ -215,42 +211,6 @@ class Match:
             "deaths": deaths,
             "assists": assists
         })
-
-    def check_disconnections(self, found_player_ids, disconnection_tracker, abandoned_users):
-        for pid, found in found_player_ids.items():
-            if not found:
-                disconnection_tracker[pid] += 1
-                VariableLog.debug(disconnection_tracker[pid], message=f"[{self.match_id}] Disconnect {pid}")
-                if disconnection_tracker[pid] >= 5:
-                    abandoned_users.append(pid)
-
-    async def handle_abandons(self, abandoned_users, users_summary_data):
-        await self.bot.store.add_match_abandons(self.guild_id, self.match_id, abandoned_users)
-        abandonee_match_update = {}
-        abandonee_summary_update = {}
-        
-        played_games = await self.bot.store.get_users_played_games(abandoned_users, self.guild_id)
-        for abandonee_id in abandoned_users:
-            player = next((p for p in self.players if p.user_id == abandonee_id), None)
-            if player:
-                await self.match_thread.send(f"<@{player.user_id}> has abandoned the match for being disconnected 5 rounds in a row.")
-                ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
-                enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
-                stats = self.persistent_player_stats[abandonee_id]
-                
-                mmr_change = calculate_mmr_change(
-                    {}, 
-                    abandoned=True, 
-                    ally_team_avg_mmr=ally_mmr, 
-                    enemy_team_avg_mmr=enemy_mmr, 
-                    placements=played_games[abandonee_id] <= PLACEMENT_MATCHES)
-                stats.update({"mmr_change": mmr_change})
-                
-                abandonee_match_update[abandonee_id] = stats
-                abandonee_summary_update[abandonee_id] = {"mmr": users_summary_data[abandonee_id].mmr + stats['mmr_change']}
-
-        await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, abandonee_match_update)
-        await self.bot.store.set_users_summary_stats(self.guild_id, abandonee_summary_update)
 
     def update_summary_stats(self, summary_data, match_stats):
         return {
@@ -949,7 +909,7 @@ class Match:
                     if not 'InspectList' in players_data: continue
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
 
-                    found_player_ids = await self.process_players(
+                    await self.process_players(
                         players_dict, 
                         disconnection_tracker, 
                         is_new_round)
@@ -958,45 +918,29 @@ class Match:
                         changed_users,
                         last_users_match_stats,
                         players_dict)
-                    
-                    if is_new_round:
-                        self.check_disconnections(
-                            found_player_ids, 
-                            disconnection_tracker, 
-                            abandoned_users)
-                    
-                    if abandoned_users:
-                        await self.handle_abandons(
-                            abandoned_users, 
-                            users_match_stats, 
-                            users_summary_data, 
-                            self.match_thread)
-                        self.state = MatchState.MATCH_CLEANUP - 1
-                        break
                 except Exception as e:
                     tb = traceback.extract_tb(e.__traceback__)
                     _, line_number, func_name, _ = tb[-1]
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
                     print("[Reply] ", reply)
             
-            if not abandoned_users:
-                await self.finalize_match(
-                    users_summary_data, 
-                    team_scores,
-                    reply)
-                
-                try:
-                    embed = log_message.embeds[0]
-                    embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-                    a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
-                                            for player in self.players if player.team == Team.A])
-                    b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
-                                            for player in self.players if player.team == Team.B])
-                    embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
-                    embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
-                    asyncio.create_task(log_message.edit(embed=embed))
-                except Exception as e:
-                    await self.bot.get_user(313912877662863360).send(f"You broke something dummy\n```{traceback.format_exc()}```")
+            await self.finalize_match(
+                users_summary_data, 
+                team_scores,
+                reply)
+            
+            try:
+                embed = log_message.embeds[0]
+                embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
+                a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+                                        for player in self.players if player.team == Team.A])
+                b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+                                        for player in self.players if player.team == Team.B])
+                embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
+                embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
+                asyncio.create_task(log_message.edit(embed=embed))
+            except Exception as e:
+                await self.bot.get_user(313912877662863360).send(f"You broke something dummy\n```{traceback.format_exc()}```")
 
             await self.increment_state()
         
