@@ -76,7 +76,8 @@ class Matches(commands.Cog):
             and member.voice.requested_to_speak_at is None
             and after.suppress
         ):
-            asyncio.create_task(member.edit(suppress=False))
+            await asyncio.sleep(0.5)
+            await member.edit(suppress=False)
 
     #####################
     # MM SLASH COMMANDS #
