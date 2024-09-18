@@ -211,7 +211,7 @@ class MMBotWarnedUsers(Base):
     guild_id      = Column(BigInteger, nullable=False)
     user_id       = Column(BigInteger, nullable=False)
     moderator_id  = Column(BigInteger, nullable=True)
-    match_id      = Column(Integer, nullable=True)
+    match_id      = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=True)
     message       = Column(Text, nullable=False)
     type          = Column(sq_Enum(Warn), nullable=False, default=Warn.WARNING)
     ignored       = Column(Boolean, nullable=False, default=False)
@@ -219,8 +219,8 @@ class MMBotWarnedUsers(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ['guild_id', 'user_id', 'moderator_id', 'match_id'], 
-            ['mm_bot_users.guild_id', 'mm_bot_users.user_id', 'mm_bot_users.user_id', 'mm_bot_matches.id']),
+            ['guild_id', 'user_id'], 
+            ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
 class MMBotUserMatchStats(Base):
@@ -279,14 +279,14 @@ class MMBotUserAbandons(Base):
     id         = Column(Integer, primary_key=True, nullable=False)
     guild_id   = Column(BigInteger, nullable=False)
     user_id    = Column(BigInteger, nullable=False)
-    match_id   = Column(Integer, nullable=False)
+    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
     ignored    = Column(Boolean, nullable=False, default=False)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ['guild_id', 'user_id', 'match_id'], 
-            ['mm_bot_users.guild_id', 'mm_bot_users.user_id', 'mm_bot_matches.id']),
+            ['guild_id', 'user_id'], 
+            ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
 class MMBotMaps(Base):
