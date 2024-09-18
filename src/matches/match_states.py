@@ -53,6 +53,7 @@ class MatchState(IntEnum):
     
     MATCH_FIND_SERVER       = auto()
     SET_SERVER_MODS         = auto()
+    MATCH_CHANGE_TO_LOBBY   = auto()
     MATCH_WAIT_FOR_PLAYERS  = auto()
     MATCH_START_SND         = auto()
 
