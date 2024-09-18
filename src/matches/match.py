@@ -294,7 +294,7 @@ class Match:
         team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
         self.match.a_score = team_a_score
         self.match.b_score = team_b_score
-        await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score, end_timestamp=datetime.now(timezone.utc))
+        await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score)
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
@@ -416,11 +416,11 @@ class Match:
 
         a_vc          = guild.get_channel(self.match.a_vc)
         b_vc          = guild.get_channel(self.match.b_vc)
-        player_ids = [u.user_id for u in self.players]
+        
         if a_vc:
-            self.bot.match_stages[a_vc.id] = player_ids
+            self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.A]
         if b_vc:
-            self.bot.match_stages[b_vc.id] = player_ids
+            self.bot.match_stages[b_vc.id] = [u.user_id for u in self.players if u.team == Team.B]
 
         try:
             if self.match.log_message:
@@ -537,8 +537,8 @@ class Match:
             overwrites = {
                 guild.get_member(player.user_id):
                     nextcord.PermissionOverwrite(
-                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
-                    ) for player in self.players
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
+                    ) for player in self.players if player.team == Team.A
             }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
             a_vc = await match_category.create_stage_channel(
@@ -555,8 +555,8 @@ class Match:
             overwrites = {
                 guild.get_member(player.user_id):
                     nextcord.PermissionOverwrite(
-                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
-                    ) for player in self.players
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
+                    ) for player in self.players if player.team == Team.B
             }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
             b_vc = await match_category.create_stage_channel(
@@ -1025,6 +1025,7 @@ class Match:
             # embeds = create_leaderboard_embeds(guild, data, previous_data, ranks)
             # asyncio.create_task(message.edit(embeds=embeds))
             asyncio.create_task(update_leaderboard(self.bot.store, guild))
+            await self.bot.store.update(MMBotMatches, id=self.match_id, end_timestamp=datetime.now(timezone.utc))
             await asyncio.sleep(10)
             # match_channel
             try:
