@@ -62,6 +62,11 @@ class Side(Enum):
 class Platform(Enum):
     STEAM = "steam"
 
+class Warn(Enum):
+    WARNING = "warning"
+    LATE = "late"
+    LANGUAGE = "language"
+
 
 class UserPlatformMappings(Base):
     __tablename__ = 'user_platform_mappings'
@@ -199,6 +204,25 @@ class MMBotBlockedUsers(Base):
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
+class MMBotWarnedUsers(Base):
+    __tablename__ = 'mm_bot_warned_users'
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    guild_id      = Column(BigInteger, nullable=False)
+    user_id       = Column(BigInteger, nullable=False)
+    moderator_id  = Column(BigInteger, nullable=True)
+    match_id      = Column(Integer, nullable=True)
+    message       = Column(Text, nullable=False)
+    type          = Column(sq_Enum(Warn), nullable=False, default=Warn.WARNING)
+    ignored       = Column(Boolean, nullable=False, default=False)
+    timestamp     = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['guild_id', 'user_id', 'moderator_id', 'match_id'], 
+            ['mm_bot_users.guild_id', 'mm_bot_users.user_id', 'mm_bot_users.user_id', 'mm_bot_matches.id']),
+    )
+
 class MMBotUserMatchStats(Base):
     __tablename__ = 'mm_bot_user_match_stats'
 
@@ -255,12 +279,14 @@ class MMBotUserAbandons(Base):
     id         = Column(Integer, primary_key=True, nullable=False)
     guild_id   = Column(BigInteger, nullable=False)
     user_id    = Column(BigInteger, nullable=False)
-    match_id   = Column(Integer, ForeignKey('mm_bot_matches.id'), nullable=False)
+    match_id   = Column(Integer, nullable=False)
     ignored    = Column(Boolean, nullable=False, default=False)
     timestamp  = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+        ForeignKeyConstraint(
+            ['guild_id', 'user_id', 'match_id'], 
+            ['mm_bot_users.guild_id', 'mm_bot_users.user_id', 'mm_bot_matches.id']),
     )
 
 class MMBotMaps(Base):
