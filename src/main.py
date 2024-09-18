@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 import atexit
 import redis
 from utils.logger import Logger as log
-log.set_level(1)
+log.set_level(log.INFO)
 
 import nextcord
 from nextcord.ext import commands
