@@ -807,7 +807,7 @@ class Match:
                 await self.bot.rcon_manager.add_mod(serveraddr, mod.resource_id)
             await self.increment_state()
         
-        if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
+        if check_state(MatchState.MATCH_CHANGE_TO_LOBBY):
             self.match = await self.bot.store.get_match(self.match_id)
             pin = 5
             server_name = f"VALORS MM - {self.match_id}"
@@ -830,7 +830,9 @@ class Match:
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             await match_message.edit(embed=embed)
-
+        
+        if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
+            embed = match_message.embeds[0]
             current_players = set()
             server_players = set()
     
