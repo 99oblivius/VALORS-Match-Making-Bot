@@ -53,7 +53,7 @@ class Moderation(commands.Cog):
             message=message,
             match_id=match_id,
             moderator_id=interaction.user.id,
-            type=Warn.WARNING)
+            warn_type=Warn.WARNING)
         
         failed_to_send = False
         embed = nextcord.Embed(title="You have been warned", description=f"```\n{message}```", color=0xff6600)
@@ -71,38 +71,39 @@ class Moderation(commands.Cog):
         user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to add a warning to"),
         warn_filter: str = nextcord.SlashOption(name="filter", description="Filter by warn type", required=False),
     ):
-        warned_users = await self.bot.store.get_user_warnings(guild_id=interaction.guild.id, user_id=user.id, type=warn_filter)
+        all_warnings = await self.bot.store.get_user_warnings(guild_id=interaction.guild.id, user_id=user.id, warn_filter=warn_filter)
         grouped_users = defaultdict(list)
-        for user in warned_users:
-            grouped_users[user.type].append(user)
+        for warn in all_warnings:
+            grouped_users[warn.type].append(warn)
         
         embed = nextcord.Embed(
-            title="Warned Users Summary",
+            title="User Infractions Summary",
+            description=f"{user.mention}",
             color=0xff6600,
             timestamp=datetime.now(timezone.utc))
 
         for warn_type, warnings in grouped_users.items():
             user_list = []
             for warn in warnings:
-                user_info = f"<@{warn.user_id}>"
+                user_info = f"{f'Match #{warn.match_id}' if warn.match_id else ''}<t:{int(warn.timestamp.timestamp())}:f>"
                 if warn.moderator_id:
-                    user_info += f" - by <@{user.moderator_id}>"
-                user_info += f"\n{warn.message}"
+                    user_info += f" - by <@{warn.moderator_id}>"
+                user_info += f"\n```\n{warn.message}```"
                 user_list.append(user_info)
             
             value = "\n".join(user_list)[:1024]
             
             embed.add_field(
-                name=f"{warn_type.name} ({len(warnings)})",
+                name=f"{warn_type.value.capitalize()} ({len(warnings)})",
                 value=value,
                 inline=False)
         
-        embed.set_footer(text=f"Total Warnings: {len(warned_users)}")
+        embed.set_footer(text=f"Total Warnings: {len(all_warnings)}")
         settings = await self.bot.store.get_settings(interaction.guild.id)
         moderation_category = interaction.guild.get_channel(settings.staff_channel).category
-        await interaction.response.send_message(ephemeral=interaction.channel.category.id != moderation_category.id)
+        await interaction.response.send_message(embed=embed, ephemeral=interaction.channel.category.id != moderation_category.id)
 
-    @moderation_infractions.on_autocomplete("filter")
+    @moderation_infractions.on_autocomplete("warn_filter")
     async def autocomplete_infractions(self, interaction: nextcord.Interaction, warn_filter):
         matches = process.extract(warn_filter, ((w, w.value.capitalize()) for w in Warn), limit=25, processor=lambda x: x[1].lower())
         await interaction.response.send_autocomplete(choices=dict(matches))
