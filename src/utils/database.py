@@ -1453,3 +1453,15 @@ class Database:
 
             await session.commit()
             return warning_id
+
+    @log_db_operation
+    async def get_user_warnings(self, guild_id: int, user_id: int, warn_filter: List[Warn] | None = None) -> List[MMBotWarnedUsers]:
+        async with self._session_maker() as session:
+            query = (select(MMBotWarnedUsers)
+                .where(
+                    MMBotWarnedUsers.guild_id == guild_id,
+                    MMBotWarnedUsers.user_id == user_id))
+            if warn_filter:
+                query = query.where(MMBotWarnedUsers.type.in_(warn_filter))
+            result = await session.execute(query)
+            return result.scalars().all()
