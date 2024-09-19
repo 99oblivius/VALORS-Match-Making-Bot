@@ -883,7 +883,7 @@ class Match:
                         except nextcord.NotFound: pass
                     
                     mentions = None
-                    if current_time - start_time % player_mention_interval < message_update_interval:
+                    if current_time - start_time % player_mention_interval < message_update_interval and current_time - start_time > 1:
                         if missing_players:
                             mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
                     
@@ -893,6 +893,9 @@ class Match:
                         color=color)
                     current_message = await self.match_channel.send(mentions, embed=embed)
                     await asyncio.sleep(max(message_update_interval - time() - current_time, 0))
+                
+                try: await current_message.delete()
+                except nextcord.NotFound: pass
 
             timer_task = asyncio.create_task(run_matchmaking_timer())
 
