@@ -45,7 +45,8 @@ class Moderation(commands.Cog):
     async def moderation_warn(self, interaction: nextcord.Interaction, 
         user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to add a warning to"),
         message: str = nextcord.SlashOption(description="The warn message. The user will see this."),
-        match_id: int = nextcord.SlashOption(description="Match number the warn is assigned to.", default=None, required=False)
+        match_id: int = nextcord.SlashOption(description="Match number the warn is assigned to.", default=None, required=False),
+        silent: bool = nextcord.SlashOption(choices={"Yes": True, "No": False}, default=False, required=False, description="Should the user not be messaged?")
     ):
         await self.bot.store.upsert_warning(
             guild_id=interaction.guild.id, 
@@ -56,11 +57,12 @@ class Moderation(commands.Cog):
             warn_type=Warn.WARNING)
         
         failed_to_send = False
-        embed = nextcord.Embed(title="You have been warned", description=f"```\n{message}```", color=0xff6600)
-        try:
-            await user.send(embed=embed)
-        except (nextcord.HTTPException, nextcord.Forbidden):
-            failed_to_send = True
+        if not silent:
+            embed = nextcord.Embed(title="You have been warned", description=f"```\n{message}```", color=0xff6600)
+            try:
+                await user.send(embed=embed)
+            except (nextcord.HTTPException, nextcord.Forbidden):
+                failed_to_send = True
 
         await interaction.response.send_message(f"{user.mention} has been warned and was{' **NOT** ' if failed_to_send else ' '} notified.", ephemeral=True)
         settings = await self.bot.store.get_settings(interaction.guild.id)
@@ -71,13 +73,17 @@ class Moderation(commands.Cog):
         user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to add a warning to"),
         warn_filter: str = nextcord.SlashOption(name="filter", description="Filter by warn type", required=False),
     ):
-        all_warnings = await self.bot.store.get_user_warnings(guild_id=interaction.guild.id, user_id=user.id, warn_filter=warn_filter)
+        warn_filters = None
+        if warn_filter:
+            warn_filters = [next((w for w in Warn if w.value.lower() == warn_filter.lower()))]
+
+        all_warnings = await self.bot.store.get_user_warnings(guild_id=interaction.guild.id, user_id=user.id, warn_filters=warn_filters)
         grouped_users = defaultdict(list)
         for warn in all_warnings:
             grouped_users[warn.type].append(warn)
         
         embed = nextcord.Embed(
-            title="User Infractions Summary",
+            title=f"User Infractions Summary{f' by {','.join((w.value.capitalize() for w in warn_filters))}' if warn_filters else ''}",
             description=f"{user.mention}",
             color=0xff6600,
             timestamp=datetime.now(timezone.utc))
@@ -105,8 +111,7 @@ class Moderation(commands.Cog):
 
     @moderation_infractions.on_autocomplete("warn_filter")
     async def autocomplete_infractions(self, interaction: nextcord.Interaction, warn_filter):
-        matches = process.extract(warn_filter, ((w, w.value.capitalize()) for w in Warn), limit=25, processor=lambda x: x[1].lower())
-        await interaction.response.send_autocomplete(choices=dict(matches))
+        await interaction.response.send_autocomplete(choices=[w.value.capitalize() for w in Warn])
 
 
 def setup(bot):
