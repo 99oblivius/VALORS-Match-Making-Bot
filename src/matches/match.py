@@ -320,7 +320,7 @@ class Match:
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
                     queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
-            log.debug(f"{guild.get_member(player_id).user.display_name} has auto queued up")
+            log.debug(f"{guild.get_member(player_id).display_name} has auto queued up")
             
         if total_users_and_players >= MATCH_PLAYER_COUNT:
             for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
@@ -847,8 +847,8 @@ class Match:
             async def run_matchmaking_timer():
                 current_message = None
                 start_time = datetime.now()
-                end_time = start_time + timedelta(minutes=settings.mm_join_period)
-                message_update_interval = 30
+                end_time = start_time + timedelta(seconds=settings.mm_join_period + 1)
+                message_update_interval = 60
                 player_mention_interval = 300
 
                 def get_missing_players():
@@ -862,7 +862,7 @@ class Match:
                         description = f"## {format_duration(remaining_time)}\nFailure to abide will result in moderative actions."
                         color = 0xff0000
                     else:
-                        overtime =  (current_time - end_time).total_seconds()
+                        overtime = (current_time - end_time).total_seconds()
                         description = f"You are {format_duration(overtime)} late and have gained a warning."
                         color = 0xff6600
 
@@ -894,7 +894,7 @@ class Match:
                     current_message = await self.match_channel.send(mentions, embed=embed)
                     await asyncio.sleep(message_update_interval)
 
-            timer_task = asyncio.create_task(run_matchmaking_timer(self.match_channel))
+            timer_task = asyncio.create_task(run_matchmaking_timer())
 
             while len(server_players) < MATCH_PLAYER_COUNT:
                 await asyncio.sleep(3)

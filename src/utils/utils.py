@@ -32,7 +32,7 @@ import unicodedata
 from nextcord import Embed, Guild, Role, Interaction
 
 from config import VALORS_THEME1, VALORS_THEME2
-from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers, BotSettings
+from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
 from utils.logger import Logger as log
 
 
@@ -47,7 +47,7 @@ def format_duration(seconds):
         value = seconds // count
         seconds -= value * count
         if value == 1: name = name.rstrip('s')
-        if value != 0: result.append(f"{value} {name}")
+        if value != 0: result.append(f"{value:.0f} {name}")
     return ' '.join(result) if result else "0 seconds"
 
 def format_mm_attendance(users: List[MMBotMatchPlayers]):
