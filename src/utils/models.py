@@ -114,6 +114,7 @@ class BotSettings(Base):
     mm_queue_message   = Column(BigInteger)
     mm_queue_periods   = Column(Text)
     mm_accept_period   = Column(SmallInteger, nullable=False, default=180)
+    mm_join_period     = Column(SmallInteger, nullable=False, default=900)
     mm_maps_range      = Column(SmallInteger, nullable=False, default=10)
     mm_maps_phase      = Column(SmallInteger, nullable=False, default=0)
 

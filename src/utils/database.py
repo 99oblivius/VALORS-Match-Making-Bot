@@ -1405,3 +1405,51 @@ class Database:
                 }
                 for notification in result.scalars()
             }
+
+##############
+# MODERATION #
+##############
+
+    @log_db_operation
+    async def upsert_warning(self, 
+        guild_id: int, 
+        user_id: int, 
+        message: str = None, 
+        match_id: int = None, 
+        warn_type: Warn = Warn.WARNING, 
+        moderator_id: int = None,
+        identifier: int = None
+    ) -> int:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotWarnedUsers)
+                .where(MMBotWarnedUsers.id == identifier))
+            existing_warning = result.scalar_one_or_none()
+
+            if existing_warning:
+                values = {}
+                if message: values['message'] = message
+                if match_id: values['match_id'] = match_id
+                if warn_type: values['warn_type'] = warn_type
+                if moderator_id: values['moderator_id'] = moderator_id
+
+                result = await session.execute(
+                    update(MMBotWarnedUsers)
+                    .where(MMBotWarnedUsers.id == existing_warning.id)
+                    .values(**values)
+                    .returning(MMBotWarnedUsers.id))
+                warning_id = result.scalar_one()
+            else:
+                new_warning = MMBotWarnedUsers(
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    match_id=match_id,
+                    message=message,
+                    type=warn_type,
+                    moderator_id=moderator_id)
+                session.add(new_warning)
+                await session.flush()
+                warning_id = new_warning.id
+
+            await session.commit()
+            return warning_id

@@ -20,7 +20,7 @@ import asyncio
 import copy
 import traceback
 from time import perf_counter_ns
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from typing import List
 from typing import Dict, Tuple
@@ -830,27 +830,84 @@ class Match:
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             await match_message.edit(embed=embed)
+            await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
             embed = match_message.embeds[0]
             current_players = set()
             server_players = set()
-    
+            done_event = asyncio.Event()
+            warnings_issued = {}
+
+            async def run_matchmaking_timer():
+                current_message = None
+                start_time = datetime.now()
+                end_time = start_time + timedelta(minutes=settings.mm_join_period)
+                message_update_interval = 30
+                player_mention_interval = 300
+
+                def get_missing_players():
+                    return [p for p in self.players if not any(m.platform_id in server_players for m in p.user_platform_mappings)]
+
+                while not done_event.is_set():
+                    missing_players = get_missing_players()
+                    current_time = datetime.now()
+                    if current_time < end_time:
+                        remaining_time = (end_time - current_time).total_seconds()
+                        description = f"## {format_duration(remaining_time)}\nFailure to abide will result in moderative actions."
+                        color = 0xff0000
+                    else:
+                        overtime =  (current_time - end_time).total_seconds()
+                        description = f"You are {format_duration(overtime)} late and have gained a warning."
+                        color = 0xff6600
+
+                        for player in missing_players:
+                            if player.user_id not in warnings_issued:
+                                warnings_issued[player.user_id] = { 'warn_id': None }
+                                log.info(f"{player.user_id} was issued a warning for being {format_duration(overtime)} late to a match.")
+                            warnings_issued[player.user_id]['overtime'] = overtime
+                            warnings_issued[player.user_id]['warn_id'] = await self.bot.store.upsert_warning(
+                                guild_id=self.guild_id,
+                                user_id=player.user_id,
+                                message=f"Late by {format_duration(overtime)}",
+                                match_id=self.match_id,
+                                warn_type=Warn.LATE,
+                                indentifier=warnings_issued[player.user_id]['warn_id'])
+                    if current_message:
+                        try: await current_message.delete()
+                        except nextcord.NotFound: pass
+                    
+                    mentions = None
+                    if (current_time - start_time).total_seconds() % player_mention_interval < message_update_interval:
+                        if missing_players:
+                            mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
+                    
+                    embed = nextcord.Embed(
+                        title="Join the server",
+                        description=description,
+                        color=color)
+                    current_message = await self.match_channel.send(mentions, embed=embed)
+                    await asyncio.sleep(message_update_interval)
+
+            timer_task = asyncio.create_task(run_matchmaking_timer(self.match_channel))
+
             while len(server_players) < MATCH_PLAYER_COUNT:
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 try:
                     players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
-                    if not 'InspectList' in players_data: continue
-                    current_players = { str(player['UniqueId']) for player in players_data['InspectList'] }
+                    if 'InspectList' not in players_data:
+                        continue
+                    
+                    current_players = {str(player['UniqueId']) for player in players_data['InspectList']}
                     
                     new_players = current_players - server_players
                     if new_players:
-                        if len(current_players) < 10:
+                        if len(current_players) < MATCH_PLAYER_COUNT:
                             embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
                         else:
-                            embed.title = f"Match"
+                            embed.title = "Match"
                             embed.description = "Match started"
-                        asyncio.create_task(match_message.edit(embed=embed))
+                        await match_message.edit(embed=embed)
                         log.info(f"[{self.match_id}] New players joined: {new_players}")
 
                         tasks = []
@@ -874,6 +931,18 @@ class Match:
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
                     print("[players_data] ", players_data)
 
+            done_event.set()
+            await timer_task
+
+            for uid, data in warnings_issued.items():
+                embed = nextcord.Embed(
+                    title="You were issued a warning", 
+                    description=f"You gained a warning for being late by {format_duration(data['overtime'])} to Match #{self.match_id}.", 
+                    color=0xff6600)
+                try:
+                    asyncio.create_task(self.bot.get_user(uid).send(embed=embed))
+                except Exception:
+                    pass
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):

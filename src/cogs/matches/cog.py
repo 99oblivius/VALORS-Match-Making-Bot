@@ -227,13 +227,31 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
 
         settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Accept period changed", f"{format_duration(seconds)}")
-    
+
     @set_mm_accept_period.on_autocomplete("seconds")
     async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not seconds or not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[180])
         await interaction.response.send_autocomplete(choices=[seconds, settings.mm_accept_period])
+
+    @mm_settings.subcommand(name="join_period", description="Set match join period")
+    async def set_mm_join_period(self, interaction: nextcord.Interaction, 
+        minutes: int=nextcord.SlashOption(min_value=0, max_value=30)):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=minutes)
+        log.debug(f"{interaction.user.display_name} set the join period to:")
+        log.pretty(minutes)
+        await interaction.response.send_message(f"Join period set to `{format_duration(minutes * 60)}`", ephemeral=True)
+
+        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(minutes)}")
+    
+    @set_mm_join_period.on_autocomplete("minutes")
+    async def autocomplete_join_period(self, interaction: nextcord.Interaction, minutes):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        if not minutes or not settings.mm_queue_periods:
+            return await interaction.response.send_autocomplete(choices=[15])
+        await interaction.response.send_autocomplete(choices=[minutes, settings.mm_join_period])
 
     @mm_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
     async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
