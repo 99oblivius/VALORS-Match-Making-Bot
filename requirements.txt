@@ -1,6 +1,6 @@
 aiohttp
-python-dotenv
 nextcord
+python-dotenv
 plotly
 kaleido
 pytz
