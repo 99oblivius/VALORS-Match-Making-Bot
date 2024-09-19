@@ -19,7 +19,7 @@
 import asyncio
 import copy
 import traceback
-from time import perf_counter_ns
+from time import perf_counter_ns, time
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from typing import List
@@ -846,8 +846,8 @@ class Match:
 
             async def run_matchmaking_timer():
                 current_message = None
-                start_time = datetime.now()
-                end_time = start_time + timedelta(seconds=settings.mm_join_period + 1)
+                start_time = time()
+                end_time = start_time + settings.mm_join_period
                 message_update_interval = 60
                 player_mention_interval = 300
 
@@ -856,13 +856,13 @@ class Match:
 
                 while not done_event.is_set():
                     missing_players = get_missing_players()
-                    current_time = datetime.now()
+                    current_time = time()
                     if current_time < end_time:
-                        remaining_time = (end_time - current_time).total_seconds()
+                        remaining_time = int(end_time - current_time)
                         description = f"## {format_duration(remaining_time)}\nFailure to abide will result in moderative actions."
                         color = 0xff0000
                     else:
-                        overtime = (current_time - end_time).total_seconds()
+                        overtime = int(current_time - end_time)
                         description = f"You are {format_duration(overtime)} late and have gained a warning."
                         color = 0xff6600
 
@@ -883,7 +883,7 @@ class Match:
                         except nextcord.NotFound: pass
                     
                     mentions = None
-                    if (current_time - start_time).total_seconds() % player_mention_interval < message_update_interval:
+                    if current_time - start_time % player_mention_interval < message_update_interval:
                         if missing_players:
                             mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
                     
@@ -892,7 +892,7 @@ class Match:
                         description=description,
                         color=color)
                     current_message = await self.match_channel.send(mentions, embed=embed)
-                    await asyncio.sleep(message_update_interval)
+                    await asyncio.sleep(max(message_update_interval - time() - current_time, 0))
 
             timer_task = asyncio.create_task(run_matchmaking_timer())
 
