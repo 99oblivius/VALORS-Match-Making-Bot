@@ -79,8 +79,8 @@ class Moderation(commands.Cog):
 
         all_warnings = await self.bot.store.get_user_warnings(guild_id=interaction.guild.id, user_id=user.id, warn_filters=warn_filters)
         grouped_users = defaultdict(list)
-        for warn in all_warnings:
-            grouped_users[warn.type].append(warn)
+        for warning in sorted(all_warnings, key=lambda x: x.timestamp, reverse=True):
+            grouped_users[warning.type].append(warning)
         
         embed = nextcord.Embed(
             title=f"User Infractions Summary{f' by {','.join((w.value.capitalize() for w in warn_filters))}' if warn_filters else ''}",
