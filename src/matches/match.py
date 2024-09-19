@@ -396,6 +396,11 @@ class Match:
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         self.compute_user_platform_map()
+        for p in self.players:
+            if not guild.get_member(p.user_id):
+                self.state = MatchState.CLEANUP
+                await guild.get_channel(settings.mm_text_channel).send(
+                    "```diff\n- A player has left the discord server during match initialization. -\nMatch canceled```")
 
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
