@@ -396,6 +396,19 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
 
         await interaction.response.send_message(f"User <@{old_user_id}> was moved to <@{new_user_id}> with success!", ephemeral=True)
         await log_moderation(interaction, settings.log_channel, "User data transfer", f"User <@{old_user_id}> was moved to <@{new_user_id}> with success!")
+    
+    @settings.subcommand(name="transfer_guild_data", description="Transfer all data to another guild")
+    async def settings_transfer_guild(self, interaction: nextcord.Interaction, new_guild_id):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        try:
+            await self.bot.store.transfer_guild_data(interaction.guild.id, int(new_guild_id))
+        except Exception as e:
+            await log_moderation(interaction, settings.log_channel, "Guild data transfer", f"Guild FAILED to move.")
+            return await interaction.response.send_message(f"There was a failure in the transfer:\n{repr(e)}", ephemeral=True)
+
+        await interaction.response.send_message(f"Guild was moved to guild {new_guild_id} with success!", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, "Guild data transfer", f"Guild was moved to {new_guild_id} with success!")
+
 
 def setup(bot):
     bot.add_cog(Settings(bot))

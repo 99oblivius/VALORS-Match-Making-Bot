@@ -229,9 +229,9 @@ class Database:
 
             return ping_data
 
-###########
-# GET BOT #
-###########
+########
+# BOT #
+########
     @log_db_operation
     async def get_settings(self, guild_id: int) -> BotSettings | None:
         async with self._session_maker() as session:
@@ -278,6 +278,56 @@ class Database:
                 .values({"user_id": user_id, "guild_id": guild_id, "platform": platform, "platform_id": platform_id})
                 .on_conflict_do_update(index_elements=["user_id", "platform", "guild_id"], set_={"platform": platform, "platform_id": platform_id}))
             await session.commit()
+    
+    @log_db_operation
+    async def transfer_guild_data(self, source_guild_id: int, destination_guild_id: int):
+        async with self._session_maker() as session:
+            async with session.begin():
+                guilds = await session.execute(
+                    select(BotSettings).where(BotSettings.guild_id.in_([source_guild_id, destination_guild_id]))
+                )
+                if len(guilds.all()) != 2:
+                    raise ValueError("Both source and destination guilds must exist in the BotSettings table")
+
+                tables = [
+                    BotSettings, 
+                    BotRegions, 
+                    MMBotRanks, 
+                    UserPlatformMappings, 
+                    MMBotUsers, 
+                    MMBotQueueUsers, 
+                    MMBotBlockedUsers, 
+                    MMBotWarnedUsers, 
+                    MMBotUserMatchStats, 
+                    MMBotUserSummaryStats, 
+                    MMBotUserAbandons, 
+                    MMBotMatchPlayers, 
+                    MMBotUserBans, 
+                    MMBotUserMapPicks, 
+                    MMBotUserSidePicks, 
+                    MMBotUserNotifications, 
+                    MMBotMaps, 
+                    MMBotMods
+                ]
+
+                for table in tables:
+                    source_data = await session.execute(
+                        select(table).where(table.guild_id == source_guild_id))
+                    source_data = source_data.all()
+
+                    for row in source_data:
+                        row_dict = {c.key: getattr(row[0], c.key) for c in inspect(table).mapper.column_attrs}
+                        row_dict['guild_id'] = destination_guild_id
+
+                        await session.execute(
+                            delete(table).where(
+                                table.guild_id == destination_guild_id,
+                                *[getattr(table, key) == value for key, value in row_dict.items() if key != 'guild_id' and key in inspect(table).primary_key]))
+
+                        stmt = insert(table).values(**row_dict)
+                        await session.execute(stmt)
+
+                log.info(f"Transferred guild data from {source_guild_id} to {destination_guild_id}")
 
 
 ########
@@ -583,7 +633,7 @@ class Database:
             await session.commit()
 
     @log_db_operation
-    async def transfer_user(self, guild_id: int, old_user_id: int, new_user_id: int) -> bool:
+    async def transfer_user(self, guild_id: int, old_user_id: int, new_user_id: int):
         async with self._session_maker() as session:
             async with session.begin():
                 old_user = await session.execute(
