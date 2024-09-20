@@ -205,7 +205,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
             shuffled_maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
             map_list = [m.map for m in shuffled_maps]
             
-            log.debug(f"{interaction.user.display_name} shuffled the map pool:")
+            log.info(f"{interaction.user.display_name} shuffled the map pool:")
             
             await interaction.followup.send(
                 f"Maps have been successfully shuffled. New order:\n`{', '.join(map_list)}`", ephemeral=True)
@@ -221,8 +221,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
         seconds: int=nextcord.SlashOption(min_value=0, max_value=1800)):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_accept_period=seconds)
-        log.debug(f"{interaction.user.display_name} set the accept period to:")
-        log.pretty(seconds)
+        log.info(f"{interaction.user.display_name} set the accept period to: {seconds}")
         await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
 
         settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
@@ -238,20 +237,20 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     @mm_settings.subcommand(name="join_period", description="Set match join period")
     async def set_mm_join_period(self, interaction: nextcord.Interaction, 
         minutes: int=nextcord.SlashOption(min_value=0, max_value=30)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=minutes * 60)
-        log.debug(f"{interaction.user.display_name} set the join period to:")
-        log.pretty(minutes)
-        await interaction.response.send_message(f"Join period set to `{format_duration(minutes * 60)}`", ephemeral=True)
+        seconds = minutes * 60
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=seconds)
+        log.info(f"{interaction.user.display_name} set the join period to: {seconds}")
+        await interaction.response.send_message(f"Join period set to `{format_duration(seconds)}`", ephemeral=True)
 
         settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(minutes * 60)}")
+        await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(seconds)}")
     
     @set_mm_join_period.on_autocomplete("minutes")
     async def autocomplete_join_period(self, interaction: nextcord.Interaction, minutes):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not minutes or not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[15])
-        await interaction.response.send_autocomplete(choices=[minutes, (settings.mm_join_period / 60)])
+        await interaction.response.send_autocomplete(choices=[minutes, int(settings.mm_join_period / 60)])
 
     @mm_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
     async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
@@ -274,7 +273,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
-        log.debug(f"{interaction.user.display_name} set the map pool to:")
+        log.info(f"{interaction.user.display_name} set the map pool to:")
         log.pretty(m)
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
@@ -309,7 +308,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
                 "The file you provided did not contain a valid json string\ne.g. `{\"RconPlus\": \"UGC3462586\",}`", ephemeral=True)
         
         await self.bot.store.set_mods(guild_id=interaction.guild.id, mods=[(k, v) for k, v in m.items()])
-        log.debug(f"{interaction.user.display_name} set the mods to:")
+        log.info(f"{interaction.user.display_name} set the mods to:")
         log.pretty(m)
         await interaction.response.send_message(
             f"Mods successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
