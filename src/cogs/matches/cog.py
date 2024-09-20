@@ -67,17 +67,17 @@ class Matches(commands.Cog):
         loop = asyncio.get_event_loop()
         load_ongoing_matches(loop, self.bot, GUILD_ID, matches)
     
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState):
-        match_stages = self.bot.match_stages
-        if (after.channel 
-            and after.channel.id in match_stages 
-            and member.id in match_stages[after.channel.id]
-            and member.voice.requested_to_speak_at is None
-            and after.suppress
-        ):
-            await asyncio.sleep(0.5)
-            await member.edit(suppress=False)
+    # @commands.Cog.listener()
+    # async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState):
+    #     match_stages = self.bot.match_stages
+    #     if (after.channel 
+    #         and after.channel.id in match_stages 
+    #         and member.id in match_stages[after.channel.id]
+    #         and member.voice.requested_to_speak_at is None
+    #         and after.suppress
+    #     ):
+    #         await asyncio.sleep(1)
+    #         await member.edit(suppress=False)
 
     #####################
     # MM SLASH COMMANDS #
