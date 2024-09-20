@@ -546,9 +546,8 @@ class Match:
                     ) for player in self.players if player.team == Team.A
             }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
-            a_vc = await match_category.create_stage_channel(
+            a_vc = await match_category.create_voice_channel(
                 name=f"[{self.match_id}] Team A",
-                topic=f"[{self.match_id}] Team A",
                 overwrites=overwrites,
                 reason=f"[{self.match_id}] Team A",
                 rtc_region=nextcord.VoiceRegion.us_east)
@@ -564,9 +563,8 @@ class Match:
                     ) for player in self.players if player.team == Team.B
             }
             overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
-            b_vc = await match_category.create_stage_channel(
+            b_vc = await match_category.create_voice_channel(
                 name=f"[{self.match_id}] Team B",
-                topic=f"[{self.match_id}] Team B",
                 overwrites=overwrites,
                 reason=f"[{self.match_id}] Team B",
                 rtc_region=nextcord.VoiceRegion.us_east)
@@ -847,7 +845,7 @@ class Match:
             async def run_matchmaking_timer():
                 current_message = None
                 start_time = time()
-                end_time = start_time + settings.mm_join_period
+                end_time = start_time + settings.mm_join_period + 1
                 message_update_interval = 60
                 player_mention_interval = 300
 
@@ -892,12 +890,12 @@ class Match:
                         description=description,
                         color=color)
                     current_message = await self.match_channel.send(mentions, embed=embed)
-                    await asyncio.sleep(max(message_update_interval - time() - current_time, 0))
+                    await asyncio.sleep(max(message_update_interval - (time() - current_time), 0))
                 
                 try: await current_message.delete()
                 except nextcord.NotFound: pass
 
-            timer_task = asyncio.create_task(run_matchmaking_timer())
+            asyncio.create_task(run_matchmaking_timer())
 
             while len(server_players) < MATCH_PLAYER_COUNT:
                 await asyncio.sleep(3)
@@ -940,7 +938,6 @@ class Match:
                     print("[players_data] ", players_data)
 
             done_event.set()
-            await timer_task
 
             for uid, data in warnings_issued.items():
                 embed = nextcord.Embed(
