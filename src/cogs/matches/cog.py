@@ -238,13 +238,13 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     @mm_settings.subcommand(name="join_period", description="Set match join period")
     async def set_mm_join_period(self, interaction: nextcord.Interaction, 
         minutes: int=nextcord.SlashOption(min_value=0, max_value=30)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=minutes)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=minutes * 60)
         log.debug(f"{interaction.user.display_name} set the join period to:")
         log.pretty(minutes)
         await interaction.response.send_message(f"Join period set to `{format_duration(minutes * 60)}`", ephemeral=True)
 
         settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(minutes)}")
+        await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(minutes * 60)}")
     
     @set_mm_join_period.on_autocomplete("minutes")
     async def autocomplete_join_period(self, interaction: nextcord.Interaction, minutes):
