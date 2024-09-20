@@ -384,6 +384,18 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
                 return ["Invalid Steam ID format"]
         else:
             return ["Unsupported platform for ID validation"]
+    
+    @settings.subcommand(name="transfer_user_data", description="Transfer all of a discord user's data to another discord account")
+    async def settings_transfer_user(self, interaction: nextcord.Interaction, old_user_id, new_user_id):
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        try:
+            await self.bot.store.transfer_user(interaction.guild.id, int(old_user_id), int(new_user_id))
+        except Exception as e:
+            await log_moderation(interaction, settings.log_channel, "User data transfer", f"User <@{old_user_id}> FAILED to move to <@{new_user_id}>.")
+            return await interaction.response.send_message(f"There was a failure in the transfer:\n{repr(e)}", ephemeral=True)
+
+        await interaction.response.send_message(f"User <@{old_user_id}> was moved to <@{new_user_id}> with success!", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, "User data transfer", f"User <@{old_user_id}> was moved to <@{new_user_id}> with success!")
 
 def setup(bot):
     bot.add_cog(Settings(bot))

@@ -582,6 +582,60 @@ class Database:
             
             await session.commit()
 
+    @log_db_operation
+    async def transfer_user(self, guild_id: int, old_user_id: int, new_user_id: int) -> bool:
+        async with self._session_maker() as session:
+            async with session.begin():
+                old_user = await session.execute(
+                    select(MMBotUsers).where(
+                        MMBotUsers.guild_id == guild_id,
+                        MMBotUsers.user_id == old_user_id))
+                new_user = await session.execute(
+                    select(MMBotUsers).where(
+                        MMBotUsers.guild_id == guild_id,
+                        MMBotUsers.user_id == new_user_id))
+                
+                if not old_user.scalar_one_or_none() or not new_user.scalar_one_or_none():
+                    raise ValueError("Both old and new users must exist in the database")
+
+                tables_columns = [
+                    (UserPlatformMappings, ['user_id']),
+                    (MMBotQueueUsers, ['user_id']),
+                    (MMBotBlockedUsers, ['user_id', 'blocked_by']),
+                    (MMBotWarnedUsers, ['user_id', 'moderator_id']),
+                    (MMBotUserMatchStats, ['user_id']),
+                    (MMBotUserAbandons, ['user_id']),
+                    (MMBotMatchPlayers, ['user_id']),
+                    (MMBotUserBans, ['user_id']),
+                    (MMBotUserMapPicks, ['user_id']),
+                    (MMBotUserSidePicks, ['user_id']),
+                    (MMBotUserNotifications, ['user_id'])
+                ]
+
+                for table, columns in tables_columns:
+                    for column in columns:
+                        await session.execute(
+                            update(table)
+                            .where(
+                                table.guild_id == guild_id,
+                                getattr(table, column) == old_user_id)
+                            .values(**{column: new_user_id}))
+                
+                await session.execute(
+                    delete(MMBotUserSummaryStats)
+                    .where(
+                        MMBotUserSummaryStats.guild_id == guild_id,
+                        MMBotUserSummaryStats.user_id == new_user_id))
+                
+                await session.execute(
+                    update(MMBotUserSummaryStats)
+                    .where(
+                        MMBotUserSummaryStats.guild_id == guild_id,
+                        MMBotUserSummaryStats.user_id == old_user_id)
+                    .values(user_id=new_user_id))
+
+                log.info(f"Transferred user data from {old_user_id} to {new_user_id} in guild {guild_id}")
+
 
 ############
 # ABANDONS #
