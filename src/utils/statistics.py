@@ -405,16 +405,18 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
         embed.add_field(name="Recent Performance", value="No recent matches found", inline=False)
 
     if recent_matches:
-        recent_matches_str = "\n".join([
-            f"\u001b[{'32' if match.win else '31'}m{'W' if match.win else 'L'}\u001b[0m | "
-            f"K: \u001b[36m{match.kills:>2}\u001b[0m | "
-            f"D: \u001b[31m{match.deaths:>2}\u001b[0m | "
-            f"A: \u001b[33m{match.assists:>2}\u001b[0m | "
-            f"MMR: \u001b[{'32' if (match.mmr_change or 0) > 0 else '31' if (match.mmr_change or 0) < 0 else '35'}m"
-            f"{f'{match.mmr_change:+.2f}' if match.mmr_change else 'In-game'}\u001b[0m"
-            for match in recent_matches
-        ])
-        embed.add_field(name="Recent Matches", value=f"```ansi\n{recent_matches_str}```", inline=False)
+        recent_matches_str = ""
+        for n, match in enumerate(recent_matches):
+            recent_matches_str += (
+                f"\u001b[{'32' if match.win else '31'}m{'W' if match.win else 'L'}\u001b[0m | "
+                f"K: \u001b[36m{match.kills:>2}\u001b[0m | "
+                f"D: \u001b[31m{match.deaths:>2}\u001b[0m | "
+                f"A: \u001b[33m{match.assists:>2}\u001b[0m | "
+                f"MMR: \u001b[{'32' if (match.mmr_change or 0) > 0 else '31' if (match.mmr_change or 0) < 0 else '35'}m"
+                f"{f'{match.mmr_change:+.2f}' if match.mmr_change else ('In-game' if n == 0 else 'Abandon')}\u001b[0m"
+                "\n"
+            )
+        embed.add_field(name="Recent Matches", value=f"```ansi\n{recent_matches_str[:-1]}```", inline=False)
     else:
         embed.add_field(name="Recent Matches", value="No recent matches found", inline=False)
     
