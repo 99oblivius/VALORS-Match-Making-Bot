@@ -249,7 +249,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}`
     async def autocomplete_join_period(self, interaction: nextcord.Interaction, minutes):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if not minutes or not settings.mm_queue_periods:
-            return await interaction.response.send_autocomplete(choices=[15])
+            return await interaction.response.send_autocomplete(choices=[int(settings.mm_join_period / 60)])
         await interaction.response.send_autocomplete(choices=[minutes, int(settings.mm_join_period / 60)])
 
     @mm_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
