@@ -118,12 +118,12 @@ class ForceAbandonView(nextcord.ui.View):
 
         cancel_button = nextcord.ui.Button(
             label="Cancel", emoji="❌", style=nextcord.ButtonStyle.secondary)
-        cancel_button.callback = cancel_callback()
+        cancel_button.callback = cancel_callback
         view.add_item(cancel_button)
 
         cancel_button = nextcord.ui.Button(
             label="Confirm", emoji="✔️", style=nextcord.ButtonStyle.danger)
-        cancel_button.callback = confirm_callback()
+        cancel_button.callback = confirm_callback
         view.add_item(confirm_callback)
 
         embed = nextcord.Embed(
