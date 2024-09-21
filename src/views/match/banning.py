@@ -86,7 +86,7 @@ class BanView(nextcord.ui.View):
                 match_id=match.id, 
                 user_id=interaction.user.id, 
                 map=bans[slot_id])
-            log.info(f"{interaction.user.display_name} removed ban vote for {bans[slot_id]}")
+            log.info(f"{interaction.user.display_name} removed ban vote for {bans[slot_id].map}")
         else:
             # already voted max times
             if len(user_bans) > 1:
@@ -99,7 +99,7 @@ class BanView(nextcord.ui.View):
                 match_id=match.id, 
                 map=bans[slot_id].map, 
                 phase=match.phase)
-            log.info(f"{interaction.user.display_name} wants to ban {bans[slot_id]}")
+            log.info(f"{interaction.user.display_name} wants to ban {bans[slot_id].map}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 

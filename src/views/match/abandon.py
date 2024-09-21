@@ -48,7 +48,6 @@ class AbandonView(nextcord.ui.View):
         log.info(f"{interaction.user.display_name} abandoned match {self.match.id}")
         await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id])
         await interaction.guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}")
-        await interaction.followup.send(f"Match abandoned", ephemeral=True)
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         log_channel = interaction.guild.get_channel(settings.mm_log_channel)
