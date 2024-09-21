@@ -49,6 +49,7 @@ from views.match.banning import BanView, ChosenBansView
 from views.match.map_pick import ChosenMapView, MapPickView
 from views.match.side_pick import ChosenSideView, SidePickView
 from views.match.no_server_found import NoServerFoundView
+from views.match.force_abandon import ForceAbandonView
 from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side
 from .match_states import MatchState
 from .ranked_teams import get_teams
@@ -841,26 +842,32 @@ class Match:
             server_players = set()
             done_event = asyncio.Event()
             warnings_issued = {}
+            abandon_view = ForceAbandonView(self.bot, self.match)
 
             async def run_matchmaking_timer():
-                current_message = None
+                current_message: nextcord.Message | None = None
                 start_time = time()
                 end_time = start_time + settings.mm_join_period + 1
-                message_update_interval = 60
-                player_mention_interval = 300
+                message_update_interval = 10
+                message_post_interval = 60
+                player_mention_delays = sorted([settings.mm_join_period - 120, settings.mm_join_period - 60])
 
                 def get_missing_players():
                     return [p for p in self.players if not any(m.platform_id in server_players for m in p.user_platform_mappings)]
 
                 while not done_event.is_set():
                     missing_players = get_missing_players()
+                    abandon_view.missing_players = missing_players
+
                     current_time = time()
+                    elapsed_time = current_time - start_time
+                    remaining_time = end_time - current_time
+                    overtime = current_time - end_time
+
                     if current_time < end_time:
-                        remaining_time = int(end_time - current_time)
                         description = f"## {format_duration(remaining_time)}\nFailure to abide will result in moderative actions."
                         color = 0xff0000
                     else:
-                        overtime = int(current_time - end_time)
                         description = f"You are {format_duration(overtime)} late and have gained a warning."
                         color = 0xff6600
 
@@ -876,20 +883,30 @@ class Match:
                                 match_id=self.match_id,
                                 warn_type=Warn.LATE,
                                 indentifier=warnings_issued[player.user_id]['warn_id'])
-                    if current_message:
-                        try: await current_message.delete()
-                        except nextcord.NotFound: pass
                     
                     mentions = None
-                    if current_time - start_time % player_mention_interval < message_update_interval and current_time - start_time > 1:
+                    if elapsed_time > player_mention_delays[0]:
+                        player_mention_delays.pop(0)
                         if missing_players:
                             mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
                     
-                    embed = nextcord.Embed(
-                        title="Join the server",
-                        description=description,
-                        color=color)
-                    current_message = await self.match_channel.send(mentions, embed=embed)
+                    embed = nextcord.Embed(title="Join the server", description=description, color=color)
+                    
+                    view = abandon_view if overtime > 300 else None
+                    if elapsed_time % message_post_interval < message_update_interval:
+                        if current_message:
+                            try:
+                                await current_message.delete()
+                            except nextcord.NotFound:
+                                pass
+                        
+                        current_message = await self.match_channel.send(view=view, embed=embed, content=mentions)
+                    elif current_message:
+                        try:
+                            await current_message.edit(view=view, embed=embed, content=mentions)
+                        except Exception:
+                            pass
+                    
                     await asyncio.sleep(max(message_update_interval - (time() - current_time), 0))
                 
                 try: await current_message.delete()
@@ -937,8 +954,6 @@ class Match:
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
                     print("[players_data] ", players_data)
 
-            done_event.set()
-
             for uid, data in warnings_issued.items():
                 embed = nextcord.Embed(
                     title="You were issued a warning", 
@@ -948,6 +963,8 @@ class Match:
                     asyncio.create_task(self.bot.get_user(uid).send(embed=embed))
                 except Exception:
                     pass
+            
+            await abandon_view.wait_abandon()
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):
