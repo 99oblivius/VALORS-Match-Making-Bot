@@ -23,7 +23,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple
 import random
 
-from sqlalchemy import delete, desc, func, inspect, or_, text, update
+from sqlalchemy import delete, desc, func, inspect, or_, text, update, case, bindparam
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -739,23 +739,46 @@ class Database:
             return count, last_abandon
 
     @log_db_operation
-    async def add_match_abandons(self, guild_id: int, match_id: int, abandoned_user_ids: List[int]) -> None:
+    async def add_match_abandons(self, guild_id: int, match_id: int, abandoned_user_ids: List[int], mmr_losses: List[int]) -> None:
+        if len(abandoned_user_ids) != len(mmr_losses):
+            raise ValueError("Length of abandoned_user_ids must match length of mmr_losses")
+
         async with self._session_maker() as session:
             async with session.begin():
                 abandons = [
                     {
-                        'guild_id': guild_id,
-                        'user_id': user_id,
-                        'match_id': match_id,
-                    }
-                    for user_id in abandoned_user_ids
+                        'guild_id': guild_id, 
+                        'user_id': user_id, 
+                        'match_id': match_id
+                    } for user_id in abandoned_user_ids
                 ]
                 await session.execute(insert(MMBotUserAbandons).values(abandons))
+
+                mmr_updates = [
+                    {'user_id': uid, 'mmr_change': mmr_loss}
+                    for uid, mmr_loss in zip(abandoned_user_ids, mmr_losses)
+                ]
                 await session.execute(
                     update(MMBotUserMatchStats)
                     .where(MMBotUserMatchStats.match_id == match_id)
-                    .values(abandoned=True))
-            await session.commit()
+                    .values(
+                        abandoned=True,
+                        mmr_change=case(
+                            *((
+                                MMBotUserMatchStats.user_id == update['user_id'], 
+                                update['mmr_change']
+                            ) for update in mmr_updates),
+                            else_=MMBotUserMatchStats.mmr_change)))
+                
+                await session.execute(
+                    update(MMBotUserSummaryStats)
+                    .where(MMBotUserSummaryStats.user_id.in_(abandoned_user_ids))
+                    .values(mmr=case(
+                        *((
+                            MMBotUserSummaryStats.user_id == update['user_id'], 
+                            MMBotUserSummaryStats.mmr + update['mmr_change']
+                        ) for update in mmr_updates),
+                        else_=MMBotUserSummaryStats.mmr)))
 
 #########
 # QUEUE #

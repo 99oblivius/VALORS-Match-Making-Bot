@@ -148,8 +148,8 @@ class Matches(commands.Cog):
             title="Abandon", 
             description=f"""Are you certain you want to abandon this match?
 _You abandoned a total of `{previous_abandons}` times in the last 2 months._
-_You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss}` mmr_""")
-        await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match), ephemeral=True)
+_You will have a cooldown of `{format_duration(cooldown)}` and lose `{mmr_loss[1:]}` mmr_""")
+        await interaction.response.send_message(embed=embed, view=AbandonView(self.bot, match, mmr_loss), ephemeral=True)
 
     @nextcord.slash_command(name="last_match", description="Display stats from the last match", guild_ids=[GUILD_ID])
     async def display_last_match(self, interaction: nextcord.Interaction):

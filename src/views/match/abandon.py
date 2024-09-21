@@ -26,11 +26,12 @@ from utils.models import *
 
 
 class AbandonView(nextcord.ui.View):
-    def __init__(self, bot, match=None, *args, **kwargs):
+    def __init__(self, bot, match=None, mmr_loss=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.timeout = None
         self.match = match
+        self.mmr_loss = mmr_loss
     
     @nextcord.ui.button(
         label="Yes", 
@@ -46,7 +47,7 @@ class AbandonView(nextcord.ui.View):
             return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
         
         log.info(f"{interaction.user.display_name} abandoned match {self.match.id}")
-        await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id])
+        await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id], [self.mmr_loss])
         await interaction.guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}")
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
