@@ -850,7 +850,8 @@ class Match:
                 end_time = start_time + settings.mm_join_period + 1
                 message_update_interval = 10
                 message_post_interval = 60
-                player_mention_delays = sorted([settings.mm_join_period - 120, settings.mm_join_period - 60])
+                force_abandon_view_delay = 300
+                player_mention_delays = sorted([settings.mm_join_period - 120, settings.mm_join_period - 60, settings.mm_join_period])
 
                 def get_missing_players():
                     return [p for p in self.players if not any(m.platform_id in server_players for m in p.user_platform_mappings)]
@@ -862,7 +863,7 @@ class Match:
                     current_time = time()
                     elapsed_time = current_time - start_time
                     remaining_time = end_time - current_time
-                    overtime = current_time - end_time
+                    overtime = current_time - end_time + 1
 
                     if current_time < end_time:
                         description = f"## {format_duration(remaining_time)}\nFailure to abide will result in moderative actions."
@@ -882,17 +883,15 @@ class Match:
                                 message=f"Late by {format_duration(overtime)}",
                                 match_id=self.match_id,
                                 warn_type=Warn.LATE,
-                                indentifier=warnings_issued[player.user_id]['warn_id'])
+                                identifier=warnings_issued[player.user_id]['warn_id'])
                     
                     mentions = None
-                    if elapsed_time > player_mention_delays[0]:
-                        player_mention_delays.pop(0)
-                        if missing_players:
-                            mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
+                    if missing_players:
+                        mentions = "\n".join(f"‼️ <@{player.user_id}>" for player in missing_players)
                     
                     embed = nextcord.Embed(title="Join the server", description=description, color=color)
                     
-                    view = abandon_view if overtime > 300 else None
+                    view = abandon_view if overtime > force_abandon_view_delay else None
                     if elapsed_time % message_post_interval < message_update_interval:
                         if current_message:
                             try:
@@ -900,7 +899,12 @@ class Match:
                             except nextcord.NotFound:
                                 pass
                         
-                        current_message = await self.match_channel.send(view=view, embed=embed, content=mentions)
+                        mention = False
+                        if player_mention_delays and elapsed_time > player_mention_delays[0]:
+                            player_mention_delays.pop(0)
+                            mention = True
+                        
+                        current_message = await self.match_channel.send(view=view, embed=embed, content=mentions if mention else None)
                     elif current_message:
                         try:
                             await current_message.edit(view=view, embed=embed, content=mentions)
@@ -953,6 +957,8 @@ class Match:
                     _, line_number, func_name, _ = tb[-1]
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
                     print("[players_data] ", players_data)
+            
+            done_event.set()
 
             for uid, data in warnings_issued.items():
                 embed = nextcord.Embed(
