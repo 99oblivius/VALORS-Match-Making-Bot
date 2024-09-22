@@ -123,9 +123,8 @@ class Moderation(commands.Cog):
         
         await self.bot.store.update(MMBotWarnedUsers, id=warning_id, ignored=True)
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        moderation_category = interaction.guild.get_channel(settings.staff_channel).category
-        await interaction.response.send_message(f"Warning `{warning_id}` was removed successfully.", ephemeral=interaction.channel.category.id != moderation_category.id)
-        await log_moderation(interaction, settings.log_channel, f"Removed warning", f"id: {warning_id}\ntype: {warning.type.value.capitalize()}\nmatch: {warning.match_id}\n```\n{warning.message}")
+        await interaction.response.send_message(f"Warning `{warning_id}` was removed successfully.", ephemeral=interaction.channel.id != settings.staff_channel)
+        await log_moderation(interaction, settings.log_channel, f"Removed warning", f"id: {warning_id}\ntype: {warning.type.value.capitalize()}\nmatch: {warning.match_id}\n```\n{warning.message}```")
 
 
 def setup(bot):
