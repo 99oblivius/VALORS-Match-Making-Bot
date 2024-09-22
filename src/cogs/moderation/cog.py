@@ -25,7 +25,7 @@ from nextcord.ext import commands
 
 from config import *
 from utils.logger import Logger as log
-from utils.models import Warn
+from utils.models import Warn, MMBotWarnedUsers
 from utils.utils import format_duration, log_moderation
 
 
@@ -91,7 +91,7 @@ class Moderation(commands.Cog):
         for warn_type, warnings in grouped_users.items():
             user_list = []
             for warn in warnings:
-                user_info = f"{f'Match #{warn.match_id}' if warn.match_id else ''}<t:{int(warn.timestamp.timestamp())}:f>"
+                user_info = f"id: {warn.id} |{f' Match #{warn.match_id} |' if warn.match_id else ''} <t:{int(warn.timestamp.timestamp())}:f>"
                 if warn.moderator_id:
                     user_info += f" - by <@{warn.moderator_id}>"
                 user_info += f"\n```\n{warn.message}```"
@@ -112,6 +112,20 @@ class Moderation(commands.Cog):
     @moderation_infractions.on_autocomplete("warn_filter")
     async def autocomplete_infractions(self, interaction: nextcord.Interaction, warn_filter):
         await interaction.response.send_autocomplete(choices=[w.value.capitalize() for w in Warn])
+    
+    @moderation.subcommand(name="unwarn", description="Remove a warning")
+    async def moderation_remove_warn(self, interaction: nextcord.Interaction, 
+        warning_id: int = nextcord.SlashOption(min_value=0, description="Unique idendentifier for the warning to remove")
+    ):
+        warning = await self.bot.store.get_warning(warning_id)
+        if not warning:
+            return await interaction.response.send_message(f"Warning `{warning_id}` does not exist.", ephemeral=True)
+        
+        await self.bot.store.update(MMBotWarnedUsers, id=warning_id, ignored=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        moderation_category = interaction.guild.get_channel(settings.staff_channel).category
+        await interaction.response.send_message(f"Warning `{warning_id}` was removed successfully.", ephemeral=interaction.channel.category.id != moderation_category.id)
+        await log_moderation(interaction, settings.log_channel, f"Removed warning", f"id: {warning_id}\ntype: {warning.type.value.capitalize()}\nmatch: {warning.match_id}\n```\n{warning.message}")
 
 
 def setup(bot):

@@ -1587,8 +1587,15 @@ class Database:
             query = (select(MMBotWarnedUsers)
                 .where(
                     MMBotWarnedUsers.guild_id == guild_id,
-                    MMBotWarnedUsers.user_id == user_id))
+                    MMBotWarnedUsers.user_id == user_id,
+                    MMBotWarnedUsers.ignored == False))
             if warn_filters:
                 query = query.where(MMBotWarnedUsers.type.in_(warn_filters))
             result = await session.execute(query)
             return result.scalars().all()
+
+    @log_db_operation
+    async def get_warning(self, warning_id: int) -> MMBotWarnedUsers:
+        async with self._session_maker() as session:
+            result = await session.execute(select(MMBotWarnedUsers).where(MMBotWarnedUsers.id == warning_id))
+            return result.scalar_one_or_none()
