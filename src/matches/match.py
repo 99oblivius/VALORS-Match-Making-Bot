@@ -833,7 +833,7 @@ class Match:
             embed.add_field(name="TDM Server", value=f"`{server_name}`", inline=False)
             embed.add_field(name="Pin", value=f"`{pin}`")
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
-            await match_message.edit(embed=embed)
+            match_message = await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_WAIT_FOR_PLAYERS):
@@ -882,7 +882,7 @@ class Match:
                                 user_id=player.user_id,
                                 message=f"Late by {format_duration(overtime)}",
                                 match_id=self.match_id,
-                                warn_type=Warn.LATE,
+                                type=Warn.LATE,
                                 identifier=warnings_issued[player.user_id]['warn_id'])
                     
                     mentions = None
