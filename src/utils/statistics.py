@@ -548,7 +548,7 @@ async def update_leaderboard(store, guild: Guild):
         except:
             pass
 
-async def create_late_rankings_embed(guild: nextcord.Guild, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
+async def create_late_rankings_embed(guild: Guild, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
     embed = Embed(
         title="Tardiness Rankings",
         description=f"Page {current_page} of {total_pages}",
@@ -571,5 +571,47 @@ async def create_late_rankings_embed(guild: nextcord.Guild, rankings: List[dict]
         embed.add_field(name="Rankings", value=f"```ansi\n{rankings_text}```", inline=False)
     else:
         embed.add_field(name="Rankings", value="No data available", inline=False)
+
+    return embed
+
+async def create_rankings_embed(guild: Guild, title: str, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
+    embed = nextcord.Embed(
+        title=title,
+        description=f"Page {current_page} of {total_pages}",
+        color=0xff6600
+    )
+
+    rankings_text = ""
+    for i, rank in enumerate(rankings, start=(current_page - 1) * 10 + 1):
+        user = guild.get_member(rank['user_id'])
+        if not user:
+            continue
+
+        rankings_text += (
+            f"{i}. {user.display_name}\n"
+            f"Matches: \u001b[1m{rank['total_matches']:>4}\u001b[0m | "
+            f"#: \u001b[1m{rank.get('missed_accepts', rank.get('abandons')):>3}\u001b[0m | "
+            f"Rate:  \u001b[1m{rank.get('missed_rate', rank.get('abandon_rate')):>6.2%}\u001b[0m\n\n"
+        )
+
+    if rankings_text:
+        embed.add_field(name="Rankings", value=f"```ansi\n{rankings_text}```", inline=False)
+    else:
+        embed.add_field(name="Rankings", value="No data available", inline=False)
+
+    return embed
+
+async def create_user_infraction_embed(title: str, user: nextcord.User | nextcord.Member, infractions: List[Dict[str, Any]]) -> Embed:
+    embed = nextcord.Embed(
+        title=f"{title} for {user.display_name}",
+        color=0xff6600
+    )
+
+    infractions_text = ""
+    for infraction in infractions:
+        infractions_text += f"Match #{infraction['match_id']} - <t:{int(infraction['timestamp'].timestamp())}:f>\n"
+
+    embed.add_field(name=f"Last {len(infractions)} {title}", value=infractions_text or "No data available", inline=False)
+    embed.set_footer(text=f"Total {title}: {len(infractions)}")
 
     return embed

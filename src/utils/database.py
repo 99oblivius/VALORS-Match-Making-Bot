@@ -688,6 +688,57 @@ class Database:
 
                 log.info(f"Transferred user data from {old_user_id} to {new_user_id} in guild {guild_id}")
 
+    @log_db_operation
+    async def get_user_missed_accepts(self, guild_id: int, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            query = (
+                select(MMBotMatchPlayers.match_id, MMBotMatchPlayers.accepted, MMBotMatches.start_timestamp)
+                .join(MMBotMatches, MMBotMatchPlayers.match_id == MMBotMatches.id)
+                .where(MMBotMatchPlayers.guild_id == guild_id,
+                    MMBotMatchPlayers.user_id == user_id,
+                    MMBotMatchPlayers.accepted == False)
+                .order_by(desc(MMBotMatches.start_timestamp))
+                .limit(limit))
+
+            result = await session.execute(query)
+            return [{"match_id": row.match_id, "timestamp": row.start_timestamp} for row in result]
+
+
+    @log_db_operation
+    async def get_missed_accept_rankings(self, guild_id: int, limit: int = 100, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+        async with self._session_maker() as session:
+            subquery = (
+                select(MMBotMatchPlayers.user_id,
+                    func.count(MMBotMatchPlayers.match_id).label('total_matches'),
+                    func.sum(case((MMBotMatchPlayers.accepted == False, 1), else_=0)).label('missed_accepts'))
+                .where(MMBotMatchPlayers.guild_id == guild_id)
+                .group_by(MMBotMatchPlayers.user_id)
+                .subquery())
+
+            query = (
+                select(subquery.c.user_id,
+                    subquery.c.total_matches,
+                    subquery.c.missed_accepts,
+                    (subquery.c.missed_accepts / subquery.c.total_matches).label('missed_rate'))
+                .where(subquery.c.missed_accepts > 0)
+                .order_by(desc('missed_rate')))
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await session.execute(count_query)
+            total_count = total_count.scalar_one()
+
+            query = query.offset(offset).limit(limit)
+            result = await session.execute(query)
+            
+            rankings = [{
+                "user_id": row.user_id,
+                "total_matches": row.total_matches,
+                "missed_accepts": row.missed_accepts,
+                "missed_rate": row.missed_rate
+            } for row in result]
+
+            return rankings, total_count
+
 
 ############
 # ABANDONS #
@@ -781,6 +832,55 @@ class Database:
                             MMBotUserSummaryStats.mmr + update['mmr_change']
                         ) for update in mmr_updates),
                         else_=MMBotUserSummaryStats.mmr)))
+
+    @log_db_operation
+    async def get_user_abandons(self, guild_id: int, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            query = (
+                select(MMBotUserMatchStats.match_id, MMBotUserMatchStats.timestamp)
+                .where(MMBotUserMatchStats.guild_id == guild_id,
+                    MMBotUserMatchStats.user_id == user_id,
+                    MMBotUserMatchStats.abandoned == True)
+                .order_by(desc(MMBotUserMatchStats.timestamp))
+                .limit(limit))
+
+            result = await session.execute(query)
+            return [{"match_id": row.match_id, "timestamp": row.timestamp} for row in result]
+
+    @log_db_operation
+    async def get_abandon_rankings(self, guild_id: int, limit: int = 100, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+        async with self._session_maker() as session:
+            subquery = (
+                select(MMBotUserMatchStats.user_id,
+                    func.count(MMBotUserMatchStats.match_id).label('total_matches'),
+                    func.sum(case((MMBotUserMatchStats.abandoned == True, 1), else_=0)).label('abandons'))
+                .where(MMBotUserMatchStats.guild_id == guild_id)
+                .group_by(MMBotUserMatchStats.user_id)
+                .subquery())
+
+            query = (
+                select(subquery.c.user_id,
+                    subquery.c.total_matches,
+                    subquery.c.abandons,
+                    (subquery.c.abandons / subquery.c.total_matches).label('abandon_rate'))
+                .where(subquery.c.abandons > 0)
+                .order_by(desc('abandons')))
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await session.execute(count_query)
+            total_count = total_count.scalar_one()
+
+            query = query.offset(offset).limit(limit)
+            result = await session.execute(query)
+            
+            rankings = [{
+                "user_id": row.user_id,
+                "total_matches": row.total_matches,
+                "abandons": row.abandons,
+                "abandon_rate": row.abandon_rate
+            } for row in result]
+
+            return rankings, total_count
 
 #########
 # QUEUE #

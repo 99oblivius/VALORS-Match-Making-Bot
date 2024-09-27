@@ -25,7 +25,7 @@ from nextcord.ext import commands
 
 from config import *
 from views.moderation.pagination import PaginationView
-from utils.statistics import create_late_rankings_embed
+from utils.statistics import create_late_rankings_embed, create_rankings_embed, create_user_infraction_embed
 from utils.logger import Logger as log
 from utils.models import Warn, MMBotWarnedUsers
 from utils.utils import (
@@ -190,6 +190,70 @@ class Moderation(commands.Cog):
         view = PaginationView(self.moderation_late_rankings, page, total_pages)
         
         await interaction.response.send_message(embed=embed, view=view)
+
+    @moderation.subcommand(name="missed_accept_rankings", description="View rankings of users who missed accepts")
+    async def moderation_missed_accept_rankings(self, interaction: nextcord.Interaction,
+        page: int = nextcord.SlashOption(description="Page number", min_value=1, default=1)
+    ):
+        PAGE_SIZE = 10
+        offset = (page - 1) * PAGE_SIZE
+
+        rankings, total_count = await self.bot.store.get_missed_accept_rankings(interaction.guild.id, limit=PAGE_SIZE, offset=offset)
+        total_pages = math.ceil(total_count / PAGE_SIZE)
+
+        if not rankings:
+            return await interaction.response.send_message("No missed accept rankings available.", ephemeral=True)
+
+        embed = await create_rankings_embed(interaction.guild, "Missed Accept Rankings", rankings, page, total_pages)
+        
+        view = PaginationView(self.moderation_missed_accept_rankings, page, total_pages)
+        
+        await interaction.response.send_message(embed=embed, view=view)
+
+    @moderation.subcommand(name="abandon_rankings", description="View rankings of users who abandoned matches")
+    async def moderation_abandon_rankings(self, interaction: nextcord.Interaction,
+        page: int = nextcord.SlashOption(description="Page number", min_value=1, default=1)
+    ):
+        PAGE_SIZE = 10
+        offset = (page - 1) * PAGE_SIZE
+
+        rankings, total_count = await self.bot.store.get_abandon_rankings(interaction.guild.id, limit=PAGE_SIZE, offset=offset)
+        total_pages = math.ceil(total_count / PAGE_SIZE)
+
+        if not rankings:
+            return await interaction.response.send_message("No abandon rankings available.", ephemeral=True)
+
+        embed = await create_rankings_embed(interaction.guild, "Abandon Rankings", rankings, page, total_pages)
+        
+        view = PaginationView(self.moderation_abandon_rankings, page, total_pages)
+        
+        await interaction.response.send_message(embed=embed, view=view)
+
+    @moderation.subcommand(name="user_missed_accepts", description="View missed accepts for a specific user")
+    async def moderation_user_missed_accepts(self, interaction: nextcord.Interaction,
+        user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to check")
+    ):
+        missed_accepts = await self.bot.store.get_user_missed_accepts(interaction.guild.id, user.id)
+        
+        if not missed_accepts:
+            return await interaction.response.send_message(f"{user.display_name} has no missed accepts.", ephemeral=True)
+
+        embed = await create_user_infraction_embed("Missed Accepts", user, missed_accepts)
+        
+        await interaction.response.send_message(embed=embed)
+
+    @moderation.subcommand(name="user_abandons", description="View abandons for a specific user")
+    async def moderation_user_abandons(self, interaction: nextcord.Interaction,
+        user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to check")
+    ):
+        abandons = await self.bot.store.get_user_abandons(interaction.guild.id, user.id)
+        
+        if not abandons:
+            return await interaction.response.send_message(f"{user.display_name} has no abandons.", ephemeral=True)
+
+        embed = await create_user_infraction_embed("Abandons", user, abandons)
+        
+        await interaction.response.send_message(embed=embed)
 
 
 def setup(bot):
