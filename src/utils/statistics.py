@@ -32,7 +32,7 @@ from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES
 from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings
-from utils.utils import get_rank_color, get_rank_role, next_rank_role, replace_wide_chars_with_space
+from utils.utils import get_rank_color, get_rank_role, next_rank_role, replace_wide_chars_with_space, format_duration
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
     with ThreadPoolExecutor() as pool:
@@ -547,3 +547,24 @@ async def update_leaderboard(store, guild: Guild):
             await message.delete()
         except:
             pass
+
+async def create_late_rankings_embed(guild: nextcord.Guild, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
+    embed = Embed(
+        title="Late User Rankings",
+        description=f"Page {current_page} of {total_pages}",
+        color=0xff6600)
+
+    for i, rank in enumerate(rankings, start=(current_page - 1) * 10 + 1):
+        user = guild.get_member(rank['user_id'])
+        if not user:
+            continue
+
+        name = f"{i}. {user.display_name}"
+        value = (
+            f"Games: {rank['games']} | "
+            f"Lates: {rank['late_count']} | "
+            f"Late Rate: {rank['late_rate']:.2%} | "
+            f"Total Late Time: {format_duration(int(rank['total_late_time']))}")
+        embed.add_field(name=name, value=value, inline=False)
+
+    return embed

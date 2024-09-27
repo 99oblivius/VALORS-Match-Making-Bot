@@ -18,16 +18,23 @@
 
 from datetime import datetime, timezone
 from collections import defaultdict
-from fuzzywuzzy import process
+import math
 
 import nextcord
 from nextcord.ext import commands
 
 from config import *
+from views.moderation.pagination import PaginationView
+from utils.statistics import create_late_rankings_embed
 from utils.logger import Logger as log
 from utils.models import Warn, MMBotWarnedUsers
-from utils.utils import format_duration, log_moderation
-
+from utils.utils import (
+    format_duration, 
+    log_moderation, 
+    add_stats_field, 
+    get_ratio_color, 
+    get_ratio_interpretation
+)
 
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -125,6 +132,64 @@ class Moderation(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await interaction.response.send_message(f"Warning `{warning_id}` was removed successfully.", ephemeral=interaction.channel.id != settings.staff_channel)
         await log_moderation(interaction, settings.log_channel, f"Removed warning", f"id: {warning_id}\ntype: {warning.type.value.capitalize()}\nmatch: {warning.match_id}\n```\n{warning.message}```")
+    
+    @moderation.subcommand(name="late_ratio", description="View user's punctuality ratio")
+    async def moderation_late_ratio(self, interaction: nextcord.Interaction, 
+        user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to check"),
+    ):
+        punctuality_ratio = await self.bot.store.get_punctuality_ratio(interaction.guild.id, user.id)
+        
+        embed = nextcord.Embed(
+            title=f"Punctuality Ratio for {user.display_name}",
+            color=get_ratio_color(punctuality_ratio),
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+        
+        embed.add_field(name="Punctuality Ratio", value=f"{punctuality_ratio:.2%}", inline=False)
+        embed.add_field(name="Interpretation", value=get_ratio_interpretation(punctuality_ratio), inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    @moderation.subcommand(name="late_details", description="View detailed late statistics for a user")
+    async def moderation_late_details(self, interaction: nextcord.Interaction, 
+        user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user to check"),
+    ):
+        late_stats = await self.bot.store.get_late_stats(interaction.guild.id, user.id)
+        
+        embed = nextcord.Embed(
+            title=f"Late Statistics for {user.display_name}",
+            color=0xff6600,
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
+        
+        embed.add_field(name="Total Games", value=late_stats['total_games'], inline=True)
+        embed.add_field(name="Total Lates", value=late_stats['total_lates'], inline=True)
+        embed.add_field(name="Late Rate", value=f"{late_stats['rate']:.2%}", inline=True)
+        embed.add_field(name="Total Late Time", value=format_duration(late_stats['total_late_time']), inline=False)
+        
+        add_stats_field(embed, "Games Between Lates", late_stats['games_between'])
+        add_stats_field(embed, "Late Durations", late_stats['late_durations'], is_duration=True)
+        await interaction.response.send_message(embed=embed)
+
+    @moderation.subcommand(name="late_rankings", description="View rankings of late users")
+    async def moderation_late_rankings(self, interaction: nextcord.Interaction,
+        page: int = nextcord.SlashOption(description="Page number", min_value=1, default=1)
+    ):
+        PAGE_SIZE = 10
+        offset = (page - 1) * PAGE_SIZE
+
+        rankings, total_count = await self.bot.store.get_late_rankings(interaction.guild.id, limit=PAGE_SIZE, offset=offset)
+        total_pages = math.ceil(total_count / PAGE_SIZE)
+
+        if not rankings:
+            return await interaction.response.send_message("No late rankings available.", ephemeral=True)
+
+        embed = await create_late_rankings_embed(interaction.guild, rankings, page, total_pages)
+        
+        view = PaginationView(self.moderation_late_rankings, page, total_pages)
+        
+        await interaction.response.send_message(embed=embed, view=view)
 
 
 def setup(bot):

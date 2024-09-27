@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple
 import random
+from statistics import mean, median, stdev
 
 from sqlalchemy import delete, desc, func, inspect, or_, text, update, case, bindparam
 from sqlalchemy.dialects.postgresql import insert
@@ -33,6 +34,7 @@ from sqlalchemy.orm import joinedload, selectinload, sessionmaker
 from config import DATABASE_URL
 from matches import MatchState
 from utils.logger import Logger as log
+from utils.utils import extract_late_time
 from .models import *
 
 
@@ -1459,6 +1461,19 @@ class Database:
 
             result = await session.execute(query)
             return result.scalar_one()
+    
+    @log_db_operation
+    async def get_user_games(self, user_id: int, guild_id: int | None = None) -> List[MMBotUserMatchStats]:
+        async with self._session_maker() as session:
+            query = select(MMBotUserMatchStats).where(
+                MMBotUserMatchStats.user_id == user_id,
+                MMBotUserMatchStats.abandoned == False)
+
+            if guild_id is not None:
+                query = query.where(MMBotUserMatchStats.guild_id == guild_id)
+
+            result = await session.execute(query)
+            return result.scalars().all()
 
     @log_db_operation
     async def get_users_played_games(self, user_ids: List[int], guild_id: int | None = None) -> Dict[int, int]:
@@ -1599,3 +1614,145 @@ class Database:
         async with self._session_maker() as session:
             result = await session.execute(select(MMBotWarnedUsers).where(MMBotWarnedUsers.id == warning_id))
             return result.scalar_one_or_none()
+
+    @log_db_operation
+    async def get_punctuality_ratio(self, guild_id: int, user_id: int) -> float:
+        async with self._session_maker() as session:
+            late_warnings_count = await session.execute(
+                select(func.count(MMBotWarnedUsers.id))
+                .where(
+                    MMBotWarnedUsers.guild_id == guild_id,
+                    MMBotWarnedUsers.user_id == user_id,
+                    MMBotWarnedUsers.type == Warn.LATE,
+                    MMBotWarnedUsers.ignored == False))
+            late_warnings = late_warnings_count.scalar_one()
+
+            games_played = await session.execute(
+                select(MMBotUserSummaryStats.games)
+                .where(
+                    MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.user_id == user_id))
+            total_games = games_played.scalar_one()
+
+            if total_games == 0:
+                return 1.0
+            return 1 - (late_warnings / total_games)
+
+    @log_db_operation
+    async def get_late_stats(self, guild_id: int, user_id: int) -> Dict[str, Any]:
+        async with self._session_maker() as session:
+            late_warnings = await session.execute(
+                select(MMBotWarnedUsers)
+                .where(
+                    MMBotWarnedUsers.guild_id == guild_id,
+                    MMBotWarnedUsers.user_id == user_id,
+                    MMBotWarnedUsers.type == Warn.LATE,
+                    MMBotWarnedUsers.ignored == False)
+                .order_by(MMBotWarnedUsers.timestamp))
+            late_warnings = late_warnings.scalars().all()
+
+            user_games = await self.get_user_games(user_id, guild_id)
+            user_games.sort(key=lambda x: x.timestamp)
+            total_games = len(user_games)
+            total_late_warnings = len(late_warnings)
+
+            if total_games == 0:
+                return {
+                    "rate": 0.0,
+                    "total_games": 0,
+                    "total_lates": 0,
+                    "total_late_time": 0,
+                    "games_between": {
+                        "average": None, "median": None, "std_dev": None,
+                        "q1": None, "q3": None, "min": None, "max": None
+                    },
+                    "late_durations": {
+                        "average": None, "median": None, "std_dev": None,
+                        "q1": None, "q3": None, "min": None, "max": None
+                    }
+                }
+
+            games_between_warnings = []
+            late_durations = []
+            last_warning_index = -1
+            total_late_time = 0
+            for warning in late_warnings:
+                warning_index = next((i for i, game in enumerate(user_games) if game.timestamp > warning.timestamp), total_games)
+                games_between = warning_index - last_warning_index - 1
+                if games_between > 0:
+                    games_between_warnings.append(games_between)
+                last_warning_index = warning_index
+                
+                late_time = extract_late_time(warning.message)
+                late_durations.append(late_time)
+                total_late_time += late_time
+
+            def calculate_stats(data):
+                if not data:
+                    return {
+                        "average": None, "median": None, "std_dev": None,
+                        "q1": None, "q3": None, "min": None, "max": None
+                    }
+                sorted_data = sorted(data)
+                return {
+                    "average": mean(data),
+                    "median": median(data),
+                    "std_dev": stdev(data) if len(data) > 1 else None,
+                    "q1": sorted_data[len(sorted_data)//4],
+                    "q3": sorted_data[3*len(sorted_data)//4],
+                    "min": min(data),
+                    "max": max(data)
+                }
+
+            return {
+                "rate": total_late_warnings / total_games if total_games > 0 else 0,
+                "total_games": total_games,
+                "total_lates": total_late_warnings,
+                "total_late_time": total_late_time,
+                "games_between": calculate_stats(games_between_warnings),
+                "late_durations": calculate_stats(late_durations)
+            }
+
+    @log_db_operation
+    async def get_late_rankings(self, guild_id: int, limit: int = 100, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+        async with self._session_maker() as session:
+            late_warnings = (
+                select(MMBotWarnedUsers.user_id,
+                    func.count(MMBotWarnedUsers.id).label('late_count'),
+                    func.array_agg(MMBotWarnedUsers.message).label('late_messages'))
+                .where(MMBotWarnedUsers.guild_id == guild_id,
+                    MMBotWarnedUsers.type == Warn.LATE,
+                    MMBotWarnedUsers.ignored == False)
+                .group_by(MMBotWarnedUsers.user_id)
+                .subquery())
+
+            query = (
+                select(MMBotUserSummaryStats.user_id,
+                    MMBotUserSummaryStats.games,
+                    late_warnings.c.late_count,
+                    late_warnings.c.late_messages)
+                .join(late_warnings, MMBotUserSummaryStats.user_id == late_warnings.c.user_id)
+                .where(MMBotUserSummaryStats.guild_id == guild_id,
+                    MMBotUserSummaryStats.games > 0,
+                    late_warnings.c.late_count > 0)
+                .order_by(desc(late_warnings.c.late_count)))
+
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await session.execute(count_query)
+            total_count = total_count.scalar_one()
+
+            query = query.offset(offset).limit(limit)
+
+            result = await session.execute(query)
+            rankings = []
+            for row in result:
+                total_late_time = sum(extract_late_time(message) for message in row.late_messages)
+                rankings.append({
+                    "user_id": row.user_id,
+                    "games": row.games,
+                    "late_count": row.late_count,
+                    "total_late_time": total_late_time,
+                    "late_rate": row.late_count / row.games
+                })
+
+            return rankings, total_count

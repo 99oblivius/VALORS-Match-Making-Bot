@@ -50,6 +50,59 @@ def format_duration(seconds):
         if value != 0: result.append(f"{value:.0f} {name}")
     return ' '.join(result) if result else "0 seconds"
 
+def extract_late_time(message: str) -> int:
+    if not message.startswith("Late by "):
+        return 0
+    
+    duration_str = message[8:]  # Remove "Late by " prefix
+    total_seconds = 0
+    parts = duration_str.split()
+    
+    for i in range(0, len(parts), 2):
+        value = int(parts[i])
+        unit = parts[i+1].rstrip('s')  # Remove 's' from plural units
+        
+        if unit == "day":
+            total_seconds += value * 86400
+        elif unit == "hour":
+            total_seconds += value * 3600
+        elif unit == "minute":
+            total_seconds += value * 60
+        elif unit == "second":
+            total_seconds += value
+    return total_seconds
+
+def get_ratio_color(ratio):
+    if ratio >= 0.95:
+        return 0x00ff00  # Green
+    elif ratio >= 0.80:
+        return 0xffff00  # Yellow
+    else:
+        return 0xff0000  # Red
+
+def get_ratio_interpretation(ratio):
+    if ratio >= 0.95:
+        return "Excellent punctuality! Keep it up!"
+    elif ratio >= 0.80:
+        return "Good punctuality, but there's room for improvement."
+    else:
+        return "Punctuality needs significant improvement."
+
+def add_stats_field(embed, name, stats, is_duration=False):
+    value = f"Average: {format_stat(stats['average'], is_duration)}\n"
+    value += f"Median: {format_stat(stats['median'], is_duration)}\n"
+    value += f"Min: {format_stat(stats['min'], is_duration)}\n"
+    value += f"Max: {format_stat(stats['max'], is_duration)}\n"
+    value += f"Standard Deviation: {format_stat(stats['std_dev'], is_duration)}"
+    embed.add_field(name=name, value=value, inline=False)
+
+def format_stat(value, is_duration):
+    if value is None:
+        return "N/A"
+    if is_duration:
+        return format_duration(int(value))
+    return f"{value:.0f}"
+
 def format_mm_attendance(users: List[MMBotMatchPlayers]):
     return "\n".join([f"{'🟢' if user.accepted else '🔴'} <@{user.user_id}>" for user in users])
 
