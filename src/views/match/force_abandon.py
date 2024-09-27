@@ -78,7 +78,7 @@ class ForceAbandonView(nextcord.ui.View):
                         
                         mmr_change = calculate_mmr_change(
                             {}, 
-                            abandoned=True, 
+                            abandoned_count=previous_abandons + 1, 
                             ally_team_avg_mmr=ally_mmr, 
                             enemy_team_avg_mmr=enemy_mmr, 
                             placements=played_games[player.user_id] <= PLACEMENT_MATCHES)

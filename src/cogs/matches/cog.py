@@ -140,7 +140,7 @@ class Matches(commands.Cog):
         played_games = await self.bot.store.get_user_played_games(interaction.user.id, interaction.guild.id)
         mmr_loss = calculate_mmr_change(
             {}, 
-            abandoned=True, 
+            abandoned_count=previous_abandons + 1, 
             ally_team_avg_mmr=ally_mmr if ally_mmr else 0, 
             enemy_team_avg_mmr=enemy_mmr if enemy_mmr else 0, 
             placements=played_games <= PLACEMENT_MATCHES)

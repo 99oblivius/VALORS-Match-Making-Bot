@@ -68,7 +68,7 @@ def calculate_mmr_change(
     ally_team_avg_mmr: int=0,
     enemy_team_avg_mmr: int=0,
     win: bool=False,
-    abandoned: bool=False,
+    abandoned_count: int=0,
     placements: bool=False
 ) -> int:
     kills = player_stats.get('kills', 0)
@@ -76,7 +76,8 @@ def calculate_mmr_change(
     assists = player_stats.get('assists', 0)
     
     base_change = BASE_MMR_CHANGE
-    if abandoned: base_change = BASE_MMR_CHANGE * 2  # Double penalty for abandoning
+    if abandoned_count > 0:
+        base_change = BASE_MMR_CHANGE * abandoned_count / 2 + 0.5
 
     s = 400
     closeness_ratio = 4/9
