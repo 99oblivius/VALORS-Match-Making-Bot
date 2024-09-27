@@ -1557,7 +1557,7 @@ class Database:
                 values = {}
                 if message: values['message'] = message
                 if match_id: values['match_id'] = match_id
-                if warn_type: values['warn_type'] = warn_type
+                if warn_type: values['type'] = warn_type
                 if moderator_id: values['moderator_id'] = moderator_id
 
                 result = await session.execute(

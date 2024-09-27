@@ -882,7 +882,7 @@ class Match:
                                 user_id=player.user_id,
                                 message=f"Late by {format_duration(overtime)}",
                                 match_id=self.match_id,
-                                type=Warn.LATE,
+                                warn_type=Warn.LATE,
                                 identifier=warnings_issued[player.user_id]['warn_id'])
                     
                     mentions = None
