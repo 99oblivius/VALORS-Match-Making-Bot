@@ -36,7 +36,7 @@ from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserM
 from utils.logger import Logger as log
 
 
-def format_duration(seconds):
+def format_duration(seconds, short: bool=False):
     intervals = (
         ('days', 86400),
         ('hours', 3600),
@@ -46,8 +46,11 @@ def format_duration(seconds):
     for name, count in intervals:
         value = seconds // count
         seconds -= value * count
-        if value == 1: name = name.rstrip('s')
-        if value != 0: result.append(f"{value:.0f} {name}")
+        if short:
+            if value != 0: result.append(f"{value:.0f}{name[0]}")
+        else:
+            if value == 1: name = name.rstrip('s')
+            if value != 0: result.append(f"{value:.0f} {name}")
     return ' '.join(result) if result else "0 seconds"
 
 def extract_late_time(message: str) -> int:

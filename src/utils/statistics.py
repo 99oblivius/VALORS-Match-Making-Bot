@@ -550,21 +550,26 @@ async def update_leaderboard(store, guild: Guild):
 
 async def create_late_rankings_embed(guild: nextcord.Guild, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
     embed = Embed(
-        title="Late User Rankings",
+        title="Tardiness Rankings",
         description=f"Page {current_page} of {total_pages}",
         color=0xff6600)
 
+    rankings_text = ""
     for i, rank in enumerate(rankings, start=(current_page - 1) * 10 + 1):
         user = guild.get_member(rank['user_id'])
         if not user:
             continue
 
-        name = f"{i}. {user.display_name}"
-        value = (
-            f"Games: {rank['games']} | "
-            f"Lates: {rank['late_count']} | "
-            f"Late Rate: {rank['late_rate']:.2%} | "
-            f"Total Late Time: {format_duration(int(rank['total_late_time']))}")
-        embed.add_field(name=name, value=value, inline=False)
+        rankings_text += (
+            f"{i}. {user.display_name}\n"
+            f"Count: \u001b[1m{rank['late_count']:>3}\u001b[0m | "
+            f"Ratio: \u001b[1m{rank['late_rate']:>6.2%}\u001b[0m | "
+            f"Time: \u001b[1m{format_duration(int(rank['total_late_time']), short=True):>8}\u001b[0m\n\n"
+        )
+
+    if rankings_text:
+        embed.add_field(name="Rankings", value=f"```ansi\n{rankings_text}```", inline=False)
+    else:
+        embed.add_field(name="Rankings", value="No data available", inline=False)
 
     return embed
