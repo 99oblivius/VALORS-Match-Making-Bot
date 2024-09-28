@@ -337,7 +337,7 @@ class Match:
             new_mmr = await calculate_placements_mmr(user_avg_score, guild_avg_scores, mmr)
             users_placement_summary[member.id] = { 'mmr': new_mmr }
             asyncio.create_task(self.send_placements_reward_message(member, new_mmr))
-            log.info(f"User {player.user_id} has completed their placements and received {placements_reward} mmr")
+            log.info(f"User {player.user_id} has completed their placements and received {new_mmr - mmr} mmr")
         if users_placement_summary:
             await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
 

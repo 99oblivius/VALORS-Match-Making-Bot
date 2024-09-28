@@ -21,7 +21,8 @@ from typing import List
 import numpy as np
 
 from config import BASE_MMR_CHANGE, STARTING_MMR
-from utils.models import MMBotMaps, MMBotUserMapPicks, Side, MMBotUserMatchStats
+from utils.models import MMBotMaps, MMBotUserMapPicks, Side
+from utils.utils import lerp
 
 
 def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:

@@ -35,6 +35,8 @@ from config import VALORS_THEME1, VALORS_THEME2
 from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
 from utils.logger import Logger as log
 
+def lerp(a, b, t) -> float:
+    return a + (b - a) * t
 
 def format_duration(seconds, short: bool=False):
     intervals = (
