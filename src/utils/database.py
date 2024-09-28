@@ -31,7 +31,7 @@ from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload, sessionmaker
 
-from config import DATABASE_URL
+from config import DATABASE_URL, PLACEMENT_MATCHES
 from matches import MatchState
 from utils.logger import Logger as log
 from utils.utils import extract_late_time
@@ -452,7 +452,7 @@ class Database:
                 select(MMBotUserSummaryStats)
                 .where(
                     MMBotUserSummaryStats.guild_id == guild_id,
-                    MMBotUserSummaryStats.games > 0)
+                    MMBotUserSummaryStats.games > PLACEMENT_MATCHES)
                 .order_by(desc(MMBotUserSummaryStats.mmr)))
             return [
                 {
@@ -520,7 +520,7 @@ class Database:
                     (MMBotUserMatchStats.match_id == subquery.c.latest_match_id))
                 .where(
                     MMBotUserSummaryStats.guild_id == guild_id,
-                    MMBotUserSummaryStats.games > 0)
+                    MMBotUserSummaryStats.games > PLACEMENT_MATCHES)
                 .order_by(desc(MMBotUserSummaryStats.mmr)))
 
             result = await session.execute(query)

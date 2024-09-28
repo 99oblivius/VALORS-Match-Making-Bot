@@ -42,7 +42,7 @@ from config import (
 )
 from utils.logger import Logger as log, VariableLog
 from utils.models import *
-from utils.utils import format_duration, format_mm_attendance, generate_score_image, create_queue_embed
+from utils.utils import format_duration, format_mm_attendance, generate_score_image, create_queue_embed, get_rank_role
 from utils.statistics import update_leaderboard
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
@@ -50,7 +50,7 @@ from views.match.map_pick import ChosenMapView, MapPickView
 from views.match.side_pick import ChosenSideView, SidePickView
 from views.match.no_server_found import NoServerFoundView
 from views.match.force_abandon import ForceAbandonView
-from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side
+from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side, calculate_placements_mmr
 from .match_states import MatchState
 from .ranked_teams import get_teams
 
@@ -97,6 +97,27 @@ class Match:
         else:
             self.no_server_message = await self.match_channel.send(embed=embed, view=view)
         await done_event.wait()
+    
+    async def send_placements_reward_message(self, member: nextcord.Member, new_mmr: int):
+        guild = member.guild
+        ranks = await self.bot.store.get_ranks(guild.id)
+        rank_role: nextcord.Role = await get_rank_role(guild, ranks, new_mmr)
+        embed = nextcord.Embed(
+            title="You completed your placement matches!",
+            description=f"Congratulations you were placed in `{rank_role.name}`!",
+            color=rank_role.color)
+        try:
+            await member.send(embed=embed)
+        except (nextcord.Forbidden, nextcord.HTTPException):
+            pass
+        settings: BotSettings = await self.bot.store.get_settings(guild.id)
+
+        embed = nextcord.Embed(
+            title=f"Placements completed!",
+            description=f"{member.mention} finished their {PLACEMENT_MATCHES} placement games.\nThey will start their adventure in {rank_role.mention}!",
+            color=rank_role.color,
+            timestamp=datetime.now(timezone.utc))
+        await guild.get_channel(settings.mm_text_channel).send(embed=embed)
     
     async def estimate_user_server_ping(self, user_id: int, serveraddr: str, ping_data: Dict[Tuple[int, str], Dict[str, float]]) -> int:
         user_server = (user_id, serveraddr)
@@ -236,6 +257,7 @@ class Match:
         
         final_updates = {}
         users_summary_stats = {}
+        placement_completions = []
 
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
@@ -249,6 +271,8 @@ class Match:
         for player in self.players:
             user_id = player.user_id
             if user_id in self.persistent_player_stats:
+                member = guild.get_member(user_id)
+                games_played = played_games[player.user_id]
                 current_stats = self.persistent_player_stats[user_id]
                 ct_start = current_stats['ct_start']
                 win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
@@ -261,31 +285,37 @@ class Match:
                 mmr_change = calculate_mmr_change(current_stats, 
                     ally_team_score=ally_score, enemy_team_score=enemy_score, 
                     ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win,
-                    placements=played_games[player.user_id] <= PLACEMENT_MATCHES)
+                    placements=games_played <= PLACEMENT_MATCHES)
                 
                 current_stats.update({"win": win, "mmr_change": mmr_change})
 
                 summary_data = users_summary_data[user_id]
                 new_mmr = summary_data.mmr + current_stats['mmr_change']
+                if games_played == PLACEMENT_MATCHES:
+                    placement_completions.append((member, new_mmr))
+                elif games_played >= PLACEMENT_MATCHES:
+                    new_rank_id = next((r.role_id for r in sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True) if new_mmr >= r.mmr_threshold), None)
 
-                new_rank_id = next((r.role_id for r in sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True) if new_mmr >= r.mmr_threshold), None)
-
-                member = guild.get_member(user_id)
-                if member:
-                    current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
-                
-                    if new_rank_id not in current_rank_role_ids:
-                        
-                        roles_to_remove = [guild.get_role(role_id) for role_id in current_rank_role_ids]
-                        roles_to_remove = [role for role in roles_to_remove if role is not None]
-                        if roles_to_remove:
-                            asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
-                            log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
-                        
-                        new_role = guild.get_role(new_rank_id)
-                        if new_role:
-                            asyncio.create_task(member.add_roles(new_role, reason="Updating MMR rank"))
-                            log.info(f"Role {new_role.name} added to {member.display_name}")
+                    if member:
+                        current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+                    
+                        if new_rank_id not in current_rank_role_ids:
+                            
+                            rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
+                            roles_to_remove = [role for role in roles_to_remove if role is not None]
+                            if roles_to_remove:
+                                asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                                log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
+                            
+                            new_role = guild.get_role(new_rank_id)
+                            if new_role:
+                                asyncio.create_task(member.add_roles(new_role, reason="Updating MMR rank"))
+                                log.info(f"Role {new_role.name} added to {member.display_name}")
+                else:
+                    if member:
+                        current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+                        rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
+                        asyncio.create_task(member.remove_roles(*rank_roles))
 
                 users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
                 final_updates[user_id] = current_stats
@@ -299,6 +329,17 @@ class Match:
 
         await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, final_updates)
         await self.bot.store.set_users_summary_stats(self.guild_id, users_summary_stats)
+
+        users_placement_summary = {}
+        guild_avg_scores = sorted([stats['avg_score'] for stats in await self.bot.store.get_leaderboard(self.guild_id)])
+        for member, mmr in placement_completions:
+            user_avg_score = (await self.bot.store.get_avg_stats_last_n_games(self.guild_id, member.id, PLACEMENT_MATCHES))['avg_score']
+            new_mmr = await calculate_placements_mmr(user_avg_score, guild_avg_scores, mmr)
+            users_placement_summary[member.id] = { 'mmr': new_mmr }
+            asyncio.create_task(self.send_placements_reward_message(member, new_mmr))
+            log.info(f"User {player.user_id} has completed their placements and received {placements_reward} mmr")
+        if users_placement_summary:
+            await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
 
     async def start_requeue_players(self, settings: BotSettings, requeue_players: List[int]):
         guild = self.bot.get_guild(settings.guild_id)

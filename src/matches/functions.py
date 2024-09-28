@@ -18,9 +18,10 @@
 
 import random
 from typing import List
+import numpy as np
 
 from config import BASE_MMR_CHANGE, STARTING_MMR
-from utils.models import MMBotMaps, MMBotUserMapPicks, Side
+from utils.models import MMBotMaps, MMBotUserMapPicks, Side, MMBotUserMatchStats
 
 
 def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:
@@ -83,7 +84,7 @@ def calculate_mmr_change(
     closeness_ratio = 4/9
 
     if placements:
-        kd_rate = BASE_MMR_CHANGE / 4 * (5 + (kills+assists/5) - deaths) / 10
+        kd_rate = BASE_MMR_CHANGE / 3 * ((kills+assists/5) - deaths) / 10
     else:
         kd_rate = BASE_MMR_CHANGE / 6 * ((kills+assists/5) - deaths) / 10
     r_ab = ally_team_avg_mmr - enemy_team_avg_mmr
@@ -96,4 +97,25 @@ def calculate_mmr_change(
     new_r += kd_rate
     return new_r
 
-
+def calculate_placements_mmr(user_avg_score: int, guild_avg_scores: List[int], initial_mmr: int) -> int:
+    guild_mean = np.mean(guild_avg_scores)
+    guild_std = np.std(guild_avg_scores)
+    
+    mmr_ranges = [
+        (-9999, -250),
+        (guild_mean - 2*guild_std, -250),
+        (guild_mean - guild_std, -100),
+        (guild_mean, 0),
+        (guild_mean + guild_std, 150),
+        (guild_mean + 2*guild_std, 300),
+        (9999, 300)
+    ]
+    
+    for n, (value, lower_mmr) in enumerate(mmr_ranges):
+        nvalue, upper_mmr = mmr_ranges[n+1]
+        if value <= user_avg_score < nvalue:
+            normalized_score = (user_avg_score - value) / (nvalue - value)
+            mmr_change = lerp(lower_mmr, upper_mmr, normalized_score)
+            break
+    
+    return max(STARTING_MMR - 300, min(STARTING_MMR + 450, initial_mmr + mmr_change))
