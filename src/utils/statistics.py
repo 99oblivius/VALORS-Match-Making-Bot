@@ -379,9 +379,16 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
 
     rank_role = None if summary_data.games < PLACEMENT_MATCHES else get_rank_role(guild, ranks, summary_data.mmr)
     next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)
+    description = f"Currently in {rank_role.mention}\n"
+    if summary_data.games < PLACEMENT_MATCHES:
+        description = "Unranked"
+    elif next_role:
+        description += f"-# {floor(mmr_difference)} away from {next_role.mention}"
+    else:
+        description += f"-# King of the mountain"
     embed = Embed(
         title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
-        description=f"Currently in {rank_role.mention}\n-# {floor(mmr_difference)} away from {next_role.mention}" if rank_role else "Unranked", 
+        description=description,
         color=rank_role.color if rank_role else 0)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
