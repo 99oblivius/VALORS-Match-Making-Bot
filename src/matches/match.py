@@ -302,7 +302,7 @@ class Match:
                         if new_rank_id not in current_rank_role_ids:
                             
                             rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
-                            roles_to_remove = [role for role in roles_to_remove if role is not None]
+                            roles_to_remove = [role for role in rank_roles if role is not None]
                             if roles_to_remove:
                                 asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
                                 log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
