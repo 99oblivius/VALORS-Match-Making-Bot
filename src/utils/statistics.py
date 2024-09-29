@@ -31,7 +31,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from config import VALORS_THEME1, VALORS_THEME1_1, VALORS_THEME1_2, VALORS_THEME2, REGION_TIMEZONES, PLACEMENT_MATCHES
-from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings
+from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings, MMBotUsers
 from utils.utils import get_rank_color, get_rank_role, next_rank_role, replace_wide_chars_with_space, format_duration
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
@@ -368,7 +368,7 @@ def create_graph(graph_type: str,
 
     return fig
 
-def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summary_data, avg_stats, recent_matches, ranks) -> Embed:
+def create_stats_embed(guild: Guild, user: User | Member, user_data: MMBotUsers, leaderboard_data, summary_data, avg_stats, recent_matches, ranks) -> Embed:
     ranked_players = 0
     ranked_position = None
     for player in leaderboard_data:
@@ -382,10 +382,11 @@ def create_stats_embed(guild: Guild, user: User | Member, leaderboard_data, summ
     description = f"Currently in {rank_role.mention}\n"
     if summary_data.games < PLACEMENT_MATCHES:
         description = "Unranked"
-    elif next_role:
+    elif next_role and not user_data.role_message:
         description += f"-# {floor(mmr_difference)} away from {next_role.mention}"
-    else:
-        description += f"-# King of the mountain"
+    if user_data.role_message:
+        description += f"-# {user_data.role_message}"
+    
     embed = Embed(
         title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
         description=description,

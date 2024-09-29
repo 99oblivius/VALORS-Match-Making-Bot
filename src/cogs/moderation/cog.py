@@ -255,6 +255,5 @@ class Moderation(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-
 def setup(bot):
     bot.add_cog(Moderation(bot))

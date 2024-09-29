@@ -20,6 +20,9 @@ import json
 
 import nextcord
 from nextcord.ext import commands
+from config import GUILD_ID
+from utils.utils import log_moderation
+from utils.models import MMBotUsers
 
 
 class ModCommands(commands.Cog):
@@ -55,6 +58,16 @@ class ModCommands(commands.Cog):
         except Exception as e:
             await interaction.response.send_message(
                 f"Failed... ```{repr(e)}```\nCopy paste from [embedbuilder](<https://glitchii.github.io/embedbuilder/>)", ephemeral=True)
+
+    @nextcord.slash_command(name="role_message", description="Set a user's special stats message (only eligible for players who have reached Mythic!)", guild_ids=[GUILD_ID])
+    async def role_message(self, interaction: nextcord.Interaction,
+        user: nextcord.User | nextcord.Member = nextcord.SlashOption(description="Which user"),
+        message: str = nextcord.SlashOption(description="The message to display", max_length=512)
+    ):
+        await self.bot.store.update(MMBotUsers, guild_id=interaction.guild.id, user_id=user.id, role_message=message)
+        await interaction.response.send_message(f"{user.mention}'s role message was set to:\n{message}", ephemeral=True)            
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, f"Role Status Set", f"{user.mention}'s role message changed to:\n```\n{message}```")
 
 
 def setup(bot):

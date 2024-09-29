@@ -171,6 +171,7 @@ class MMBotUsers(Base):
     display_name  = Column(String(32))
     region        = Column(String(32))
     registered    = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    role_message  = Column(Text, nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'region'], ['bot_regions.guild_id', 'bot_regions.label']),
