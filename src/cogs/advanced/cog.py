@@ -57,7 +57,8 @@ class Advanced(commands.Cog):
         avg_stats = await self.bot.store.get_avg_stats_last_n_games(interaction.guild.id, user.id, 10)
         leaderboard = await self.bot.store.get_leaderboard(interaction.guild.id)
         ranks = await self.bot.store.get_ranks(interaction.guild.id)
-        embed = create_stats_embed(interaction.guild, user, leaderboard, summary_stats, avg_stats, recent_matches, ranks)
+        user_data = await self.bot.store.get_user(interaction.guild.id, user.id)
+        embed = create_stats_embed(interaction.guild, user, user_data, leaderboard, summary_stats, avg_stats, recent_matches, ranks)
 
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
