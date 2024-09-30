@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio
 import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -24,12 +23,13 @@ from typing import Any, Callable, Dict, List, Tuple
 import random
 from statistics import mean, median, stdev
 
-from sqlalchemy import delete, desc, func, inspect, or_, text, update, case, bindparam
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete, desc, func, inspect, or_, text, update, case, and_
+from sqlalchemy.dialects.postgresql import insert, INTERVAL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload, sessionmaker
+from sqlalchemy.sql.functions import concat
 
 from config import DATABASE_URL, PLACEMENT_MATCHES
 from matches import MatchState
@@ -1714,6 +1714,157 @@ class Database:
         async with self._session_maker() as session:
             result = await session.execute(select(MMBotWarnedUsers).where(MMBotWarnedUsers.id == warning_id))
             return result.scalar_one_or_none()
+
+    @log_db_operation
+    async def get_muted(self, muted_id: int) -> MMBotMutedUsers:
+        async with self._session_maker() as session:
+            result = await session.execute(select(MMBotMutedUsers).where(MMBotMutedUsers.id == muted_id))
+            return result.scalar_one_or_none()
+
+    @log_db_operation
+    async def get_user_mutes(self, guild_id: int, user_id: int) -> List[MMBotMutedUsers]:
+        async with self._session_maker() as session:
+            query = (select(MMBotMutedUsers)
+                .where(
+                    MMBotMutedUsers.guild_id == guild_id,
+                    MMBotMutedUsers.user_id == user_id,
+                    MMBotMutedUsers.active == True,
+                    MMBotMutedUsers.ignored == False))
+            result = await session.execute(query)
+            return result.scalars().all()
+
+    @log_db_operation
+    async def get_mutes(self, guild_id: int) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            latest_mutes = (
+                select(MMBotMutedUsers.user_id,
+                    func.max(MMBotMutedUsers.timestamp).label('latest_timestamp'))
+                .where(MMBotMutedUsers.guild_id == guild_id)
+                .group_by(MMBotMutedUsers.user_id)
+                .subquery())
+
+            query = (
+                select(MMBotMutedUsers)
+                .join(latest_mutes, and_(
+                    MMBotMutedUsers.user_id == latest_mutes.c.user_id,
+                    MMBotMutedUsers.timestamp == latest_mutes.c.latest_timestamp))
+                .where(
+                    MMBotMutedUsers.guild_id == guild_id,
+                    MMBotMutedUsers.active == True,
+                    MMBotMutedUsers.ignored == False,
+                    or_(
+                        MMBotMutedUsers.duration.is_(None),
+                        MMBotMutedUsers.timestamp + func.cast(concat(MMBotMutedUsers.duration, ' SECONDS'), INTERVAL) > func.now())))
+
+            result = await session.execute(query)
+            mutes = result.scalars().all()
+
+            return {
+                mute.user_id: {
+                    "id": mute.id,
+                    "moderator_id": mute.moderator_id,
+                    "reason": mute.message,
+                    "duration": mute.duration,
+                    "timestamp": mute.timestamp,
+                    "expiry": (mute.timestamp + timedelta(seconds=mute.duration)) if mute.duration else None
+            } for mute in mutes }
+    
+    @log_db_operation
+    async def get_user_mute_history(self, guild_id: int, user_id: int, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        async with self._session_maker() as session:
+            query = (
+                select(MMBotMutedUsers)
+                .where(
+                    MMBotMutedUsers.guild_id == guild_id,
+                    MMBotMutedUsers.user_id == user_id,
+                    MMBotMutedUsers.ignored == False)
+                .order_by(desc(MMBotMutedUsers.timestamp)))
+            
+            query = query.offset(offset).limit(limit)
+
+            result = await session.execute(query)
+            mutes = result.scalars().all()
+
+            return [{
+                "id": mute.id,
+                "moderator_id": mute.moderator_id,
+                "reason": mute.message,
+                "duration": mute.duration,
+                "timestamp": mute.timestamp,
+                "active": mute.active,
+                "ignored": mute.ignored,
+                "expiry": (mute.timestamp + timedelta(seconds=mute.duration)) if mute.duration else None
+            } for mute in mutes]
+
+    @log_db_operation
+    async def add_mute(self, guild_id: int, user_id: int, moderator_id: int, duration: int | None, reason: str) -> int:
+        async with self._session_maker() as session:
+            async with session.begin():
+                await session.execute(
+                    update(MMBotMutedUsers)
+                    .where(
+                        MMBotMutedUsers.guild_id == guild_id,
+                        MMBotMutedUsers.user_id == user_id,
+                        MMBotMutedUsers.ignored == False,
+                        or_(
+                            MMBotMutedUsers.duration.is_(None),
+                            MMBotMutedUsers.timestamp + func.cast(concat(MMBotMutedUsers.duration, ' SECONDS'), INTERVAL) > func.now()))
+                    .values(active=False))
+
+                new_mute = MMBotMutedUsers(
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    moderator_id=moderator_id,
+                    duration=duration,
+                    message=reason,
+                    ignored=False,
+                    timestamp=func.now())
+                session.add(new_mute)
+                await session.flush()
+                mute_id = new_mute.id
+
+            await session.commit()
+            return mute_id
+    
+    @log_db_operation
+    async def update_mute(self, 
+        guild_id: int | None = None, 
+        user_id: int | None = None, 
+        mute_id: int | None = None, 
+        duration: int | None = None, 
+        reason: str | None = None, 
+        active: bool | None = None,
+        ignored: bool | None = None
+    ):
+        async with self._session_maker() as session:
+            async with session.begin():
+                values = {}
+                if duration is not None:
+                    values["duration"] = duration
+                if reason is not None:
+                    values["message"] = reason
+                if active is not None:
+                    values["active"] = active
+                if ignored is not None:
+                    values["ignored"] = ignored
+
+                query = select(MMBotMutedUsers)
+                
+                if mute_id:
+                    query = query.where(MMBotMutedUsers.id == mute_id)
+                elif guild_id and user_id:
+                    query = query.where(
+                        MMBotMutedUsers.guild_id == guild_id,
+                        MMBotMutedUsers.user_id == user_id)
+
+                query = query.order_by(desc(MMBotMutedUsers.timestamp)).limit(1)
+                
+                result = await session.execute(query)
+                mute = result.scalar_one_or_none()
+
+                for key, value in values.items():
+                    setattr(mute, key, value)
+                await session.commit()
 
     @log_db_operation
     async def get_punctuality_ratio(self, guild_id: int, user_id: int) -> float:

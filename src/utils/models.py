@@ -125,6 +125,7 @@ class BotSettings(Base):
     mm_verified_role   = Column(BigInteger)
     mm_lfg_role        = Column(BigInteger)
     mm_staff_role      = Column(BigInteger)
+    mm_mute_role       = Column(BigInteger)
 
     register_channel     = Column(BigInteger)
     register_message     = Column(BigInteger)
@@ -204,6 +205,25 @@ class MMBotBlockedUsers(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'user_id'], ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
+    )
+
+class MMBotMutedUsers(Base):
+    __tablename__ = 'mm_bot_muted_users'
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    guild_id      = Column(BigInteger, nullable=False)
+    user_id       = Column(BigInteger, nullable=False)
+    moderator_id  = Column(BigInteger, nullable=False)
+    message       = Column(Text, nullable=False)
+    duration      = Column(Integer, nullable=True)
+    active        = Column(Boolean, default=True)
+    ignored       = Column(Boolean, nullable=False, default=False)
+    timestamp     = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['guild_id', 'user_id'], 
+            ['mm_bot_users.guild_id', 'mm_bot_users.user_id']),
     )
 
 class MMBotWarnedUsers(Base):

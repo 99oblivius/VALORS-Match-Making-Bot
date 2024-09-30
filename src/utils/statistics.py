@@ -559,6 +559,20 @@ async def update_leaderboard(store, guild: Guild):
         except:
             pass
 
+async def create_mute_history_embed(guild: Guild, user: User | Member, mute_history: List[Dict[str, Any]], current_page: int, total_pages: int) -> Embed:
+    embed = nextcord.Embed(title=f"Mute History for {user.name}", description=f"Page {current_page} of {total_pages}", color=0xff5500)
+    
+    for i, mute in enumerate(mute_history, start=(current_page - 1) * 10 + 1):
+        moderator = guild.get_member(mute['moderator_id'])
+        duration = format_duration(mute['duration']) if mute['duration'] else "Indefinite time"
+        value = f"Muted by: {moderator.mention if moderator else 'Unknown'}\n"
+        value += f"Date: <t:{int(mute['timestamp'].timestamp())}:f> for {duration}\n"
+        value += f"Reason: {mute['reason'] or 'No reason provided'}\n"
+        embed.add_field(name=f"id:{mute['id']} - {'Active' if mute['active'] else 'Expired'}", value=value, inline=False)
+    embed.set_footer(text=f"has {len(mute_history)} mutes")
+
+    return embed
+
 async def create_late_rankings_embed(guild: Guild, rankings: List[dict], current_page: int, total_pages: int) -> Embed:
     embed = Embed(
         title="Tardiness Rankings",

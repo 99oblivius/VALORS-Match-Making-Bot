@@ -339,6 +339,13 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set staff role", f"{staff.mention}>")
 
+    @queue_settings.subcommand(name="set_mute", description="Set match making mute role")
+    async def settings_set_mute(self, interaction: nextcord.Interaction, mute: nextcord.Role):
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_mute_role=mute.id)
+        await interaction.response.send_message(f"Mute role set to {mute.mention}", ephemeral=True)
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        await log_moderation(interaction, settings.log_channel, "Mute role set", f"<@&{mute.id}>")
+
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
         embed = nextcord.Embed(title="Ready up!", color=VALORS_THEME2)
         view = await QueueButtonsView.create_showable(self.bot)
