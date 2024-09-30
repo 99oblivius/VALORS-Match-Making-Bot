@@ -265,7 +265,7 @@ class Moderation(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @nextcord.slash_command(name="mute", description="Mute a user", guild_ids=[GUILD_ID])
+    @moderation.subcommand(name="mute", description="Mute a user")
     async def mute(self, interaction: nextcord.Interaction, 
         user: nextcord.Member = nextcord.SlashOption(description="User to mute"),
         reason: str = nextcord.SlashOption(description="Reason for mute", autocomplete=True, required=True),
@@ -298,6 +298,14 @@ class Moderation(commands.Cog):
 
         failed_send = False
         if not silent:
+            staff_channel = interaction.guild.get_channel(settings.staff_channel)
+            if staff_channel:
+                embed = nextcord.Embed(
+                    title="Muted", 
+                    description=f"{user.mention} was muted for ```{reason}```", 
+                    color=0xff0055)
+                await staff_channel.send(embed=embed)
+
             embed = nextcord.Embed(title="You have been muted", color=0xff0055)
             embed.add_field(name="Duration", value=format_duration(mute_duration.total_seconds()) if mute_duration else "Indefinite")
             embed.add_field(name="Reason", value=reason)
@@ -329,7 +337,7 @@ class Moderation(commands.Cog):
             return reasons
         return [reason, *(r[0] for r in process.extract(reason, reasons, limit=25))]
 
-    @nextcord.slash_command(name="unmute", description="Unmute a user", guild_ids=[GUILD_ID])
+    @moderation.subcommand(name="unmute", description="Unmute a user")
     async def unmute(self, interaction: nextcord.Interaction, 
         user: nextcord.Member = nextcord.SlashOption(description="User to unmute"),
         silent: bool = nextcord.SlashOption(description="Unmute silently", required=False, default=False)
@@ -357,7 +365,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"{user.mention} has been unmuted.", ephemeral=True)
         await log_moderation(interaction, settings.log_channel, f"Unmuted", f"{user.name}")
 
-    @nextcord.slash_command(name="mute_list", description="List currently muted users", guild_ids=[GUILD_ID])
+    @moderation.subcommand(name="mute_list", description="List currently muted users")
     async def mute_list(self, interaction: nextcord.Interaction):
         mutes = await self.bot.store.get_mutes(interaction.guild_id)
         
@@ -375,7 +383,7 @@ class Moderation(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @nextcord.slash_command(name="mute_history", description="View a user's mute history", guild_ids=[GUILD_ID])
+    @moderation.subcommand(name="mute_history", description="View a user's mute history")
     async def mute_history(self, interaction: nextcord.Interaction, 
         user: nextcord.Member = nextcord.SlashOption(description="User to check"),
         page: int = nextcord.SlashOption(description="Page number", min_value=1, default=1)
@@ -396,7 +404,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
 
 
-    @nextcord.slash_command(name="edit_mute", description="Edit the duration of an active mute", guild_ids=[GUILD_ID])
+    @moderation.subcommand(name="edit_mute", description="Edit the duration of an active mute")
     async def edit_mute(self, interaction: nextcord.Interaction, 
         mute_id: int = nextcord.SlashOption(description="ID of the mute to edit"),
         new_duration: str = nextcord.SlashOption(description="New mute duration (e.g., 1d12h30m or 'indefinite')", required=False),
