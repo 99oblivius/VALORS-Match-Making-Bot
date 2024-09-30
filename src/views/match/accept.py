@@ -42,15 +42,13 @@ class AcceptView(nextcord.ui.View):
         custom_id="mm_accept_button")
     async def accept_button(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         match = await self.bot.store.get_match_channel(interaction.channel.id)
-        players = await self.bot.store.get_players(match.id)
-        if interaction.user.id in [p.user_id for p in players if p.accepted]:
-            msg = await interaction.response.send_message(
-                "You have already accepted the match.\nBut thank you for making sure :)", ephemeral=True)
-            await asyncio.sleep(3)
-            await msg.delete()
-            return
-        
+
         async with self.lock:
+            players = await self.bot.store.get_players(match.id)
+            if interaction.user.id in [p.user_id for p in players if p.accepted]:
+                return await interaction.response.send_message(
+                    "You have already accepted the match.\nBut thank you for making sure :)", ephemeral=True)
+            
             await self.bot.store.update(MMBotMatchPlayers, 
                 guild_id=interaction.guild.id, match_id=match.id, user_id=interaction.user.id, accepted=True)
             log.info(f"{interaction.user.display_name} accepted match {match.id}")
