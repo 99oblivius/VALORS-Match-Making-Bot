@@ -278,7 +278,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
         await interaction.response.send_message(
             f"Maps successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
         
-        await log_moderation(interaction, settings.log_channel, "Map pool changed", f"New pool:\n```\n{', '.join([k for k in m.jeys()])}```")
+        await log_moderation(interaction, settings.log_channel, "Map pool changed", f"New pool:\n```\n{', '.join([k for k in m.keys()])}```")
     
     @mm_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
     async def get_map_pool(self, interaction: nextcord.Interaction):
@@ -314,7 +314,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
             f"Mods successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Mod list changed", f"New mods:\n```\n{', '.join([k for k in m.jeys()])}```")
+        await log_moderation(interaction, settings.log_channel, "Mod list changed", f"New mods:\n```\n{', '.join([k for k in m.keys()])}```")
     
     @mm_settings.subcommand(name="get_mods", description="Get the current mods with their ids")
     async def get_mods(self, interaction: nextcord.Interaction):
