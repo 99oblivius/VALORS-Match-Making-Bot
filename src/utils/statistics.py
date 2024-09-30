@@ -330,6 +330,7 @@ def create_graph(graph_type: str,
         fig = make_subplots(
             rows=2, 
             cols=2, 
+
             subplot_titles=("MMR", "K/D Ratio", "Win Rate", "Score"),
             vertical_spacing=0.1,
             horizontal_spacing=0.05)
@@ -378,11 +379,13 @@ def create_stats_embed(guild: Guild, user: User | Member, user_data: MMBotUsers,
             ranked_position = ranked_players
 
     rank_role = None if summary_data.games < PLACEMENT_MATCHES else get_rank_role(guild, ranks, summary_data.mmr)
-    next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)
-    description = f"Currently in {rank_role.mention}\n"
-    if summary_data.games < PLACEMENT_MATCHES:
+    next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)    
+    if not rank_role or summary_data.games < PLACEMENT_MATCHES:
         description = "Unranked"
-    elif next_role and not user_data.role_message:
+    else:
+        description = f"Currently in {rank_role.mention}\n"
+    
+    if next_role and not user_data.role_message:
         description += f"-# {floor(mmr_difference)} away from {next_role.mention}"
     if user_data.role_message:
         description += f"-# {user_data.role_message}"
