@@ -837,12 +837,12 @@ class Database:
     async def get_user_abandons(self, guild_id: int, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         async with self._session_maker() as session:
             query = (
-                select(MMBotUserMatchStats.match_id, MMBotUserMatchStats.timestamp)
-                .where(MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.user_id == user_id,
-                    MMBotUserMatchStats.abandoned == True)
-                .order_by(desc(MMBotUserMatchStats.timestamp))
-                .limit(limit))
+                select(MMBotUserAbandons.match_id, MMBotUserAbandons.timestamp)
+                .where(MMBotUserAbandons.guild_id == guild_id,
+                    MMBotUserAbandons.user_id == user_id)
+                .order_by(desc(MMBotUserAbandons.timestamp))
+                .limit(limit)
+            )
 
             result = await session.execute(query)
             return [{"match_id": row.match_id, "timestamp": row.timestamp} for row in result]
@@ -850,20 +850,27 @@ class Database:
     @log_db_operation
     async def get_abandon_rankings(self, guild_id: int, limit: int = 100, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
         async with self._session_maker() as session:
-            subquery = (
+            matches_subquery = (
                 select(MMBotUserMatchStats.user_id,
-                    func.count(MMBotUserMatchStats.match_id).label('total_matches'),
-                    func.sum(case((MMBotUserMatchStats.abandoned == True, 1), else_=0)).label('abandons'))
+                    func.count(MMBotUserMatchStats.match_id).label('total_matches'))
                 .where(MMBotUserMatchStats.guild_id == guild_id)
                 .group_by(MMBotUserMatchStats.user_id)
                 .subquery())
 
+            abandons_subquery = (
+                select(MMBotUserAbandons.user_id,
+                    func.count(MMBotUserAbandons.match_id).label('abandons'))
+                .where(MMBotUserAbandons.guild_id == guild_id)
+                .group_by(MMBotUserAbandons.user_id)
+                .subquery())
+
             query = (
-                select(subquery.c.user_id,
-                    subquery.c.total_matches,
-                    subquery.c.abandons,
-                    (subquery.c.abandons / subquery.c.total_matches).label('abandon_rate'))
-                .where(subquery.c.abandons > 0)
+                select(matches_subquery.c.user_id,
+                    matches_subquery.c.total_matches,
+                    func.coalesce(abandons_subquery.c.abandons, 0).label('abandons'),
+                    (func.coalesce(abandons_subquery.c.abandons, 0) / matches_subquery.c.total_matches).label('abandon_rate'))
+                .outerjoin(abandons_subquery, matches_subquery.c.user_id == abandons_subquery.c.user_id)
+                .where(func.coalesce(abandons_subquery.c.abandons, 0) > 0)
                 .order_by(desc('abandons')))
 
             count_query = select(func.count()).select_from(query.subquery())
