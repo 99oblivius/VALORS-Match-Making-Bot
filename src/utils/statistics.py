@@ -384,14 +384,14 @@ def create_stats_embed(guild: Guild, user: User | Member, user_data: MMBotUsers,
         description = "Unranked"
     else:
         description = f"Currently in {rank_role.mention}\n"
+        if next_role and not user_data.role_message:
+            description += f"-# {floor(mmr_difference)} away from {next_role.mention}"
+        if user_data.role_message:
+            description += f"-# {user_data.role_message}"
     
-    if next_role and not user_data.role_message:
-        description += f"-# {floor(mmr_difference)} away from {next_role.mention}"
-    if user_data.role_message:
-        description += f"-# {user_data.role_message}"
-    
+    ranking_position = f'{ranked_position}/{ranked_players}' if rank_role else 'Placements'
     embed = Embed(
-        title=f"[{ranked_position}/{ranked_players}] Stats for {user.display_name}", 
+        title=f"[{ranking_position}] Stats for {user.display_name}", 
         description=description,
         color=rank_role.color if rank_role else 0)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
