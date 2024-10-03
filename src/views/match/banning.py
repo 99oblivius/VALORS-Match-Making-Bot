@@ -79,14 +79,14 @@ class BanView(nextcord.ui.View):
         bans = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
-        if bans[slot_id] in user_bans:
+        if bans[slot_id].map in user_bans:
             # already voted this one
             await self.bot.store.remove(MMBotUserBans, 
                 guild_id=interaction.guild.id, 
                 match_id=match.id, 
                 user_id=interaction.user.id, 
-                map=bans[slot_id])
-            log.info(f"{interaction.user.display_name} removed ban vote for {bans[slot_id].map}")
+                map=bans[slot_id].map)
+            log.info(f"{interaction.user.name} removed ban vote for {bans[slot_id].map}")
         else:
             # already voted max times
             if len(user_bans) > 1:
@@ -99,7 +99,7 @@ class BanView(nextcord.ui.View):
                 match_id=match.id, 
                 map=bans[slot_id].map, 
                 phase=match.phase)
-            log.info(f"{interaction.user.display_name} wants to ban {bans[slot_id].map}")
+            log.info(f"{interaction.user.name} wants to ban {bans[slot_id].map}")
         view = await self.create_showable(self.bot, interaction.guild.id, match)
         await interaction.edit(view=view)
 
