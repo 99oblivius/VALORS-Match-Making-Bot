@@ -42,16 +42,14 @@ class BanView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches):
+    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_map: str):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await instance.bot.store.get_bans(match.id)
         ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
-        last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
 
-        available_maps = [x for x in ban_counts if x[0] != last_played_map]
-        available_maps = shifted_window(available_maps, match.maps_phase, match.maps_range)
+        available_maps = [x for x in ban_counts if x[0] != last_map][:match.maps_range]
         bans = (x for x in available_maps if x[0] not in banned_maps)
         for n, (m, count) in enumerate(bans):
             if m in banned_maps: continue
@@ -64,18 +62,17 @@ class BanView(nextcord.ui.View):
 
     async def ban_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         # what phase
-        match = await self.bot.store.get_match_channel(interaction.channel.id)
+        match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if not match.phase in (Phase.A_BAN, Phase.B_BAN):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         banned_maps = await self.bot.store.get_bans(match.id)
         maps = await self.bot.store.get_maps(interaction.guild.id)
         user_bans = await self.bot.store.get_user_map_bans(match.id, interaction.user.id)
-        last_played_map = await self.bot.store.get_last_played_map(match.queue_channel)
 
-        available_maps = [m for m in maps if m.map != last_played_map]
-        available_maps = shifted_window(available_maps, settings.mm_maps_phase, settings.mm_maps_range)
+        from matches import get_match
+        instance = get_match(match.id)
+        available_maps = [m for m in maps if m.map != instance.last_map][:match.maps_range]
         bans = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         

@@ -93,7 +93,7 @@ class Matches(commands.Cog):
             await msg.delete()
             return
         if match_id == -1:
-            match = await self.bot.store.get_match_channel(interaction.channel.id)
+            match = await self.bot.store.get_match_from_channel(interaction.channel.id)
             if match: match_id = match.id
         else:
             match = await self.bot.store.get_match(match_id)
@@ -122,7 +122,7 @@ class Matches(commands.Cog):
     
     @nextcord.slash_command(name="abandon", description="Abandon a match", guild_ids=[GUILD_ID])
     async def mm_abandon(self, interaction: nextcord.Interaction):
-        match = await self.bot.store.get_match_channel(interaction.channel.id)
+        match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if not match:
             return await interaction.response.send_message(
                 "You must use this command in a match channel", ephemeral=True)
@@ -271,7 +271,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
                 "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)), mm_maps_phase=0)
+        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)))
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
         log.info(f"{interaction.user.display_name} set the map pool to:")
         log.pretty(m)

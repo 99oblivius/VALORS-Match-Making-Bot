@@ -939,8 +939,7 @@ class Database:
                 
                 match = MMBotMatches(
                     queue_channel=channel_id, 
-                    maps_range=settings.mm_maps_range, 
-                    maps_phase=settings.mm_maps_phase)
+                    maps_range=settings.mm_maps_range)
                 session.add(match)
                 await session.flush()
 
@@ -1045,7 +1044,7 @@ class Database:
             return result.scalars().first()
     
     @log_db_operation
-    async def get_match_channel(self, channel_id: int) -> MMBotMatches:
+    async def get_match_from_channel(self, channel_id: int) -> MMBotMatches:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches)
@@ -1213,7 +1212,7 @@ class Database:
 # MATCH PICKS #
 ###############
     @log_db_operation
-    async def get_map_vote_count(self, guild_id: int, match_id: int) -> List[Tuple[str, int]]:
+    async def get_map_vote_counts(self, guild_id: int, match_id: int) -> List[Tuple[str, int]]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(
@@ -1240,7 +1239,7 @@ class Database:
             return result.scalars().all()
 
     @log_db_operation
-    async def get_user_map_pick(self, match_id: int, user_id: int) -> List[str]:
+    async def get_user_map_picks(self, match_id: int, user_id: int) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserMapPicks.map)

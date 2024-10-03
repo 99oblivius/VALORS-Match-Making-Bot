@@ -40,18 +40,15 @@ class MapPickView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches):
+    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_map: str):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await instance.bot.store.get_bans(match.id)
-        pick_counts = await instance.bot.store.get_map_vote_count(guild_id, match.id)
-        last_played_map = await instance.bot.store.get_last_played_map(match.queue_channel)
+        map_picks = await instance.bot.store.get_map_vote_counts(guild_id, match.id)
 
-        available_maps = [x for x in pick_counts if x[0] != last_played_map]
-        available_maps = shifted_window(available_maps, match.maps_phase, match.maps_range)
-        picks = (x for x in available_maps if x[0] not in banned_maps)
-        for n, (m, count) in enumerate(picks):
+        available_maps = [x for x in map_picks if x[0] != last_map][:match.maps_range]
+        for n, (m, count) in enumerate([x for x in available_maps if x[0] not in banned_maps]):
             if m in banned_maps: continue
             button = nextcord.ui.Button(
                 label=f"{m}: {count}", 
@@ -63,25 +60,24 @@ class MapPickView(nextcord.ui.View):
 
     async def pick_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
-        match = await self.bot.store.get_match_channel(interaction.channel.id)
+        match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if match.phase != Phase.A_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         # what button
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         banned_maps = await self.bot.store.get_bans(match.id)
         maps = await self.bot.store.get_maps(interaction.guild.id)
-        user_picks = await self.bot.store.get_user_map_pick(match.id, interaction.user.id)
-        last_played_map = await self.bot.store.get_last_played_map(match.queue_channel)
+        user_picks = await self.bot.store.get_user_map_picks(match.id, interaction.user.id)
 
-        available_maps = [m for m in maps if m.map != last_played_map]
-        available_maps = shifted_window(available_maps, settings.mm_maps_phase, settings.mm_maps_range)
+        from matches import get_match
+        instance = get_match(match.id)
+        available_maps = [m for m in maps if m.map != instance.last_map][:match.maps_range]
         picks = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
         await self.bot.store.remove(MMBotUserMapPicks, 
             match_id=match.id, 
             user_id=interaction.user.id)
-        if picks[slot_id] not in user_picks:
+        if picks[slot_id].map not in user_picks:
             # vote this one
             await self.bot.store.insert(MMBotUserMapPicks, 
                 guild_id=interaction.guild.id, 

@@ -116,7 +116,6 @@ class BotSettings(Base):
     mm_accept_period   = Column(SmallInteger, nullable=False, default=180)
     mm_join_period     = Column(SmallInteger, nullable=False, default=900)
     mm_maps_range      = Column(SmallInteger, nullable=False, default=10)
-    mm_maps_phase      = Column(SmallInteger, nullable=False, default=0)
 
     mm_text_channel    = Column(BigInteger)
     mm_queue_reminder  = Column(Integer, nullable=False, default=180)
@@ -340,7 +339,6 @@ class MMBotMatches(Base):
     match_thread     = Column(BigInteger)
     match_message    = Column(BigInteger)
     maps_range       = Column(BigInteger, nullable=False, default=10)
-    maps_phase       = Column(BigInteger, nullable=False, default=0)
     phase            = Column(sq_Enum(Phase), nullable=False, default=Phase.NONE)
     log_message      = Column(BigInteger)
     a_thread         = Column(BigInteger)

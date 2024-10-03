@@ -117,9 +117,9 @@ def replace_wide_chars_with_space(text):
 def format_team(team: bool) -> str:
     return 'B' if team else 'A'
 
-def shifted_window(l: list, phase: int=0, range: int=1) -> list:
+def shifted_window(l: list, range: int=1) -> list:
     l = l + l[:range - 1]
-    return l[phase:phase + range]
+    return l[0:range]
 
 def generate_auth_url(cache, guild_id: int, user_id: int, platform: str) -> str:
     token = str(uuid.uuid4())

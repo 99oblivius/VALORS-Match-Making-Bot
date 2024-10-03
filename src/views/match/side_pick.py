@@ -35,11 +35,11 @@ class SidePickView(nextcord.ui.View):
         instance = cls(bot, timeout=None)
 
         button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:CT")
-        button.callback = partial(instance.pick_callback, button)
+        button.callback = partial(instance.side_callback, button)
         instance.add_item(button)
 
         button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:T")
-        button.callback = partial(instance.pick_callback, button)
+        button.callback = partial(instance.side_callback, button)
         instance.add_item(button)
         return instance
     
@@ -54,13 +54,13 @@ class SidePickView(nextcord.ui.View):
                 label=f"{side.name}: {count}", 
                 style=nextcord.ButtonStyle.blurple, 
                 custom_id=f"mm_side_picks:{side.name}")
-            button.callback = partial(instance.pick_callback, button)
+            button.callback = partial(instance.side_callback, button)
             instance.add_item(button)
         return instance
     
-    async def pick_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def side_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         # what phase
-        match = await self.bot.store.get_match_channel(interaction.channel.id)
+        match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if match.phase != Phase.B_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
         

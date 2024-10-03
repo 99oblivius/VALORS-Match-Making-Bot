@@ -446,6 +446,7 @@ class Match:
 
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
+        self.last_map: str                = await self.bot.store.get_last_played_map(self.match.queue_channel)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
         serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
@@ -660,7 +661,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_map)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
@@ -689,7 +690,7 @@ class Match:
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_map)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
             b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
@@ -728,7 +729,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=A_THEME)
-            view = await MapPickView.create_showable(self.bot, self.guild_id, self.match)
+            view = await MapPickView.create_showable(self, self.guild_id, self.match, self.last_map)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
