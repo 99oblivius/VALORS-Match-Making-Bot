@@ -85,7 +85,7 @@ class MapPickView(nextcord.ui.View):
                 match_id=match.id, 
                 map=picks[slot_id].map)
             log.info(f"{interaction.user.display_name} voted to pick {picks[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match)
+        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_map)
         await interaction.edit(view=view)
 
 class ChosenMapView(nextcord.ui.View):

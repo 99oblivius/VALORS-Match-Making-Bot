@@ -97,7 +97,7 @@ class BanView(nextcord.ui.View):
                 map=bans[slot_id].map, 
                 phase=match.phase)
             log.info(f"{interaction.user.name} wants to ban {bans[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match)
+        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_map)
         await interaction.edit(view=view)
 
 
