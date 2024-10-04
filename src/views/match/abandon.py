@@ -18,6 +18,7 @@
 
 import asyncio
 
+from datetime import datetime, timedelta, timezone
 import nextcord
 
 from matches import cleanup_match, get_match
@@ -46,9 +47,15 @@ class AbandonView(nextcord.ui.View):
             log.error(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
             return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
         
+        instance = get_match(self.match.id)
+        requeued_msg = ""
+        if instance.match.start_timestamp + timedelta(minutes=15) > datetime.now(timezone.utc):
+            requeued_msg = "\nRemaining players will be re-queued automatically."
+            instance.requeue_players = [p.user_id for p in instance.players if p.user_id != interaction.user.id]
+        
         log.info(f"{interaction.user.display_name} abandoned match {self.match.id}")
         await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id], [self.mmr_loss])
-        await interaction.guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}")
+        await interaction.guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}{requeued_msg}")
         
         settings = await self.bot.store.get_settings(interaction.guild.id)
         log_channel = interaction.guild.get_channel(settings.mm_log_channel)

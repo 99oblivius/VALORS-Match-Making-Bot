@@ -341,13 +341,13 @@ class Match:
         if users_placement_summary:
             await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
 
-    async def start_requeue_players(self, settings: BotSettings, requeue_players: List[int]):
+    async def start_requeue_players(self, settings: BotSettings):
         guild = self.bot.get_guild(settings.guild_id)
 
         queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
         queue_players = sorted(queue_users, key=lambda user: user.timestamp, reverse=True)
         
-        total_users_and_players = len(queue_players) + len(requeue_players)
+        total_users_and_players = len(queue_players) + len(self.requeue_players)
         players_to_requeue = max(0, total_users_and_players - MATCH_PLAYER_COUNT)
         requeue_after = queue_players[:players_to_requeue]
 
@@ -355,7 +355,7 @@ class Match:
             self.bot.queue_manager.remove_user(user.user_id)
             await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
         
-        for player_id in requeue_players:
+        for player_id in self.requeue_players:
             self.bot.queue_manager.add_user(player_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
             await self.bot.store.upsert_queue_user(
                     user_id=player_id, 
@@ -427,7 +427,7 @@ class Match:
         def check_state(state: MatchState):
             return True if self.state == state else False
         
-        requeue_players = []
+        self.requeue_players = []
         
         self.state = await self.load_state()
         settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
@@ -539,7 +539,7 @@ class Match:
             try:
                 await asyncio.wait_for(done_event.wait(), timeout=settings.mm_accept_period)
             except asyncio.TimeoutError:
-                requeue_players = view.accepted_players
+                self.requeue_players = view.accepted_players
                 self.state = MatchState.CLEANUP - 1
                 embed = nextcord.Embed(title="Players failed to accept the match", color=VALORS_THEME1_2)
                 await self.match_channel.send(embed=embed)
@@ -1201,5 +1201,5 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()
 
-            if requeue_players:
-                await self.start_requeue_players(settings, requeue_players)
+            if self.requeue_players:
+                await self.start_requeue_players(settings)

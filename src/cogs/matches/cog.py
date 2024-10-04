@@ -18,7 +18,7 @@
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 
 import nextcord
@@ -96,15 +96,17 @@ class Matches(commands.Cog):
             match = await self.bot.store.get_match_from_channel(interaction.channel.id)
             if match: match_id = match.id
         else:
-            match = await self.bot.store.get_match(match_id)
-            if not match:
+            match_instance = await self.bot.store.get_match(match_id)
+            if not match_instance:
                 return await interaction.response.send_message(f"There is no match #{match_id}", ephemeral=True)
+            match = match_instance.match
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):
             log.debug(f"{interaction.user.display_name} failed to cancel match {match_id}")
             return await interaction.response.send_message(
                 f"Match id `{match_id}` failed to cleanup", ephemeral=True)
+
         log.debug(f"{interaction.user.display_name} canceled match {match_id}")
         await interaction.response.send_message(
             f"Match id {match_id} cleaning up", ephemeral=True)
