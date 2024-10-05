@@ -561,7 +561,30 @@ class Database:
             sides = dict(sides_result.all())
 
             return { 'bans': bans, 'picks': picks, 'sides': sides }
-    
+
+    @log_db_operation
+    async def get_user_last_queue_time_remaining(self, guild_id: int, user_ids: List[int], match_id: int) -> Dict[int, int]:
+        async with self._session_maker() as session:
+            match_start = (
+                select(MMBotMatches.start_timestamp)
+                .where(MMBotMatches.id == match_id)
+                .scalar_subquery())
+
+            query = (
+                select(
+                    MMBotQueueUsers.user_id,
+                    func.coalesce(
+                        func.round(MMBotQueueUsers.queue_expiry - func.extract('epoch', match_start)), 0
+                    ).label('time_remaining'))
+                .where(
+                    MMBotQueueUsers.guild_id == guild_id,
+                    MMBotQueueUsers.user_id.in_(user_ids))
+                .order_by(desc(MMBotQueueUsers.timestamp))
+                .distinct(MMBotQueueUsers.user_id))
+
+            result = await session.execute(query)
+            return { row.user_id: max(0, int(row.time_remaining)) for row in result }
+
     @log_db_operation
     async def get_player_play_periods(self, guild_id: int, user_id: int, limit: int=50) -> List[Tuple[datetime, datetime]]:
         async with self._session_maker() as session:

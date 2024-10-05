@@ -355,13 +355,15 @@ class Match:
             self.bot.queue_manager.remove_user(user.user_id)
             await self.bot.store.unqueue_user(settings.mm_queue_channel, user.user_id)
         
+        durations_left = await self.bot.store.get_user_last_queue_time_remaining(
+            guild.id, self.match_id, self.requeue_players)
         for player_id in self.requeue_players:
-            self.bot.queue_manager.add_user(player_id, int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
+            self.bot.queue_manager.add_user(player_id, int(datetime.now(timezone.utc).timestamp()) + durations_left[player_id] + 300)
             await self.bot.store.upsert_queue_user(
                     user_id=player_id, 
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
-                    queue_expiry=int(datetime.now(timezone.utc).timestamp()) + 60 * 5)
+                    queue_expiry=int(datetime.now(timezone.utc).timestamp()) + durations_left[player_id] + 300)
             log.debug(f"{guild.get_member(player_id).display_name} has auto queued up")
             
         if total_users_and_players >= MATCH_PLAYER_COUNT:
@@ -1149,29 +1151,16 @@ class Match:
                 await self.bot.store.free_server(serveraddr)
                 await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
                 await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
-            embed = nextcord.Embed(title="The match will terminate in 10 seconds", color=VALORS_THEME1)
+            embed = nextcord.Embed(title="The match is terminating", color=VALORS_THEME1)
+            embed.set_footer(text="You will be able to requeue once this channel is deleted")
             
             try:
                 await self.match_channel.send(embed=embed)
             except AttributeError:
                 pass
-            # channel = guild.get_channel(settings.leaderboard_channel)
             
-            # guild = self.bot.get_guild(self.guild_id)
-            # message = await channel.fetch_message(settings.leaderboard_message)
-            # ranks = await self.bot.store.get_ranks(guild.id)
-            
-            # data = await self.bot.store.get_leaderboard(guild.id)
-            # previous_data = await self.bot.store.get_last_mmr_for_users(guild.id)
-            # embeds = create_leaderboard_embeds(guild, data, previous_data, ranks)
-            # asyncio.create_task(message.edit(embeds=embeds))
             asyncio.create_task(update_leaderboard(self.bot.store, guild))
             await self.bot.store.update(MMBotMatches, id=self.match_id, end_timestamp=datetime.now(timezone.utc))
-            await asyncio.sleep(10)
-            # match_channel
-            try:
-                if self.match_channel: await self.match_channel.delete()
-            except nextcord.HTTPException: pass
             # a_channel
             try:
                 if a_channel: await a_channel.delete()
@@ -1197,6 +1186,12 @@ class Match:
             try:
                 if b_vc: await b_vc.delete()
             except nextcord.HTTPException: pass
+
+            # match_channel
+            try:
+                if self.match_channel: await self.match_channel.delete()
+            except nextcord.HTTPException: pass
+
             # complete True
             await self.bot.store.update(MMBotMatches, id=self.match_id, complete=True)
             await self.increment_state()
