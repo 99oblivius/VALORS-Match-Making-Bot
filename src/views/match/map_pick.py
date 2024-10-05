@@ -44,8 +44,8 @@ class MapPickView(nextcord.ui.View):
         instance = cls(bot, timeout=None)
         instance.stop()
 
-        banned_maps = await instance.bot.store.get_bans(match.id)
-        map_picks = await instance.bot.store.get_map_vote_counts(guild_id, match.id)
+        banned_maps = await bot.store.get_bans(match.id)
+        map_picks = await bot.store.get_map_vote_counts(guild_id, match.id)
 
         available_maps = [x for x in map_picks if x[0] != last_map][:match.maps_range]
         for n, (m, count) in enumerate([x for x in available_maps if x[0] not in banned_maps]):
