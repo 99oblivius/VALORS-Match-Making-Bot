@@ -380,7 +380,7 @@ def create_stats_embed(guild: Guild, user: User | Member, user_data: MMBotUsers,
 
     rank_role = None if summary_data.games < PLACEMENT_MATCHES else get_rank_role(guild, ranks, summary_data.mmr)
     next_role, mmr_difference = next_rank_role(guild, ranks, summary_data.mmr)    
-    if not rank_role or summary_data.games < PLACEMENT_MATCHES:
+    if rank_role is None:
         description = "Unranked"
     else:
         description = f"Currently in {rank_role.mention}\n"
@@ -396,7 +396,8 @@ def create_stats_embed(guild: Guild, user: User | Member, user_data: MMBotUsers,
         color=rank_role.color if rank_role else 0)
     embed.set_thumbnail(url=user.avatar.url if user.avatar else user.default_avatar.url)
 
-    embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
+    if summary_data.games >= PLACEMENT_MATCHES:
+        embed.add_field(name="MMR", value=f"{summary_data.mmr:.2f}", inline=True)
     embed.add_field(name="Total Games", value=summary_data.games, inline=True)
     embed.add_field(name="Win Rate", value=f"{(summary_data.wins / summary_data.games * 100):.2f}%" if summary_data.games > 0 else "N/A", inline=True)
     embed.add_field(name="Total Kills", value=summary_data.total_kills, inline=True)
