@@ -50,7 +50,7 @@ from views.match.map_pick import ChosenMapView, MapPickView
 from views.match.side_pick import ChosenSideView, SidePickView
 from views.match.no_server_found import NoServerFoundView
 from views.match.force_abandon import ForceAbandonView
-from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side, calculate_placements_mmr
+from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side, calculate_placements_mmr, update_momentum
 from .match_states import MatchState
 from .ranked_teams import get_teams
 
@@ -238,6 +238,7 @@ class Match:
     def update_summary_stats(self, summary_data, match_stats):
         return {
             "mmr": summary_data.mmr + match_stats['mmr_change'],
+            "momentum": update_momentum(summary_data.momentum, match_stats['win']),
             "games": summary_data.games + 1,
             "wins": summary_data.wins + int(match_stats['win']),
             "losses": summary_data.losses + int(not match_stats['win']),
@@ -277,19 +278,23 @@ class Match:
                 ct_start = current_stats['ct_start']
                 win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
 
+                summary_data = users_summary_data[user_id]
                 ally_score = team_scores[0] if ct_start else team_scores[1]
                 enemy_score = team_scores[1] if ct_start else team_scores[0]
                 ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
                 enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
 
+
                 mmr_change = calculate_mmr_change(current_stats, 
-                    ally_team_score=ally_score, enemy_team_score=enemy_score, 
-                    ally_team_avg_mmr=ally_mmr, enemy_team_avg_mmr=enemy_mmr, win=win,
-                    placements=games_played <= PLACEMENT_MATCHES)
+                    ally_team_score=ally_score, 
+                    enemy_team_score=enemy_score, 
+                    ally_team_avg_mmr=ally_mmr, 
+                    enemy_team_avg_mmr=enemy_mmr, win=win,
+                    placements=games_played <= PLACEMENT_MATCHES,
+                    momentum=summary_data.momentum)
                 
                 current_stats.update({"win": win, "mmr_change": mmr_change})
 
-                summary_data = users_summary_data[user_id]
                 new_mmr = summary_data.mmr + current_stats['mmr_change']
                 if games_played == PLACEMENT_MATCHES:
                     placement_completions.append((member, new_mmr))

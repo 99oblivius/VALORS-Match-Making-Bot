@@ -121,10 +121,10 @@ class ForceAbandonView(nextcord.ui.View):
         cancel_button.callback = cancel_callback
         view.add_item(cancel_button)
 
-        cancel_button = nextcord.ui.Button(
+        confirm_button = nextcord.ui.Button(
             label="Confirm", emoji="✔️", style=nextcord.ButtonStyle.danger)
-        cancel_button.callback = confirm_callback
-        view.add_item(confirm_callback)
+        confirm_button.callback = confirm_callback
+        view.add_item(confirm_button)
 
         embed = nextcord.Embed(
             title="Force Abandon the missing players?",

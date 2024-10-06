@@ -20,7 +20,7 @@ import random
 from typing import List
 import numpy as np
 
-from config import BASE_MMR_CHANGE, STARTING_MMR
+from config import BASE_MMR_CHANGE, STARTING_MMR, MOMENTUM_CHANGE, MOMENTUM_RESET_FACTOR
 from utils.models import MMBotMaps, MMBotUserMapPicks, Side
 from utils.utils import lerp
 
@@ -71,7 +71,8 @@ def calculate_mmr_change(
     enemy_team_avg_mmr: int=0,
     win: bool=False,
     abandoned_count: int=0,
-    placements: bool=False
+    placements: bool=False,
+    momentum: float=1.0
 ) -> int:
     kills = player_stats.get('kills', 0)
     deaths = player_stats.get('deaths', 0)
@@ -96,6 +97,8 @@ def calculate_mmr_change(
     new_r = base_change * (int(win) - pr_a)
     new_r *= closeness
     new_r += kd_rate
+    if not abandoned_count:
+        new_r *= momentum
     return new_r
 
 def calculate_placements_mmr(user_avg_score: int, guild_avg_scores: List[int], initial_mmr: int) -> int:
@@ -120,3 +123,13 @@ def calculate_placements_mmr(user_avg_score: int, guild_avg_scores: List[int], i
             break
     
     return max(STARTING_MMR - 300, min(STARTING_MMR + 450, initial_mmr + mmr_change))
+
+def update_momentum(current_momentum, win):
+    if (win and current_momentum >= 1.0) or (not win and current_momentum <= 1.0):
+        new_momentum = current_momentum + MOMENTUM_CHANGE if win else current_momentum - MOMENTUM_CHANGE
+    else:
+        difference = current_momentum - 1.0
+        reset = difference * MOMENTUM_RESET_FACTOR
+        new_momentum = current_momentum - reset
+
+    return max(0.5, min(2.0, new_momentum))
