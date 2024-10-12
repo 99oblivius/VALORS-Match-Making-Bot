@@ -17,6 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import functools
 import copy
 import traceback
 from time import perf_counter_ns, time
@@ -57,6 +58,7 @@ from .ranked_teams import get_teams
 
 class Match:
     def __init__(self, bot: commands.Bot, guild_id: int, match_id: int, state=MatchState.NOT_STARTED):
+        self.subtasks = set()
         self.bot       = bot
         self.guild_id  = guild_id
         self.match_id  = match_id
@@ -407,12 +409,14 @@ class Match:
         self.state = new_state
         await self.bot.store.save_match_state(self.match_id, self.state)
     
-    def safe_exception(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            self = args[0]
+    def safe_exit(func):
+        @functools.wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            self.subtasks = set()
             try:
-                return await func(*args, **kwargs)
+                return await func(self, *args, **kwargs)
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 log.critical(f"Exception in match {self.match_id}: {traceback.format_exc()}")
                 guild = self.bot.get_guild(self.guild_id)
@@ -420,12 +424,15 @@ class Match:
                 if match and match.match_thread:
                     match_channel = guild.get_channel(match.match_thread)
                     if match_channel:
-                        await self.match_channel.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
-                event = asyncio.Event()
-                await event.wait()
+                        await match_channel.send(f"```diff\n- An error occurred: {e}```\nThe match has been frozen.")
+            finally:
+                for task in self.subtasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*self.subtasks, return_exceptions=True)
         return wrapper
     
-    @safe_exception
+    @safe_exit
     async def run(self):
         await self.bot.wait_until_ready()
         if self.state > 0: log.info(
@@ -964,50 +971,53 @@ class Match:
                 
                 try: await current_message.delete()
                 except nextcord.NotFound: pass
-
-            asyncio.create_task(run_matchmaking_timer())
-
-            while len(server_players) < MATCH_PLAYER_COUNT:
-                await asyncio.sleep(3)
-                try:
-                    players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
-                    if 'InspectList' not in players_data:
-                        continue
-                    
-                    current_players = {str(player['UniqueId']) for player in players_data['InspectList']}
-                    
-                    new_players = current_players - server_players
-                    if new_players:
-                        if len(current_players) < MATCH_PLAYER_COUNT:
-                            embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
-                        else:
-                            embed.title = "Match"
-                            embed.description = "Match started"
-                        await match_message.edit(embed=embed)
-                        log.info(f"[{self.match_id}] New players joined: {new_players}")
-
-                        tasks = []
-                        for platform_id in new_players:
-                            player = next((p for p in self.players if platform_id in [m.platform_id for m in p.user_platform_mappings]), None)
-                            if player:
-                                teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
-                                log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                                tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
-                            else:
-                                log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
-                                tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
-                        
-                        if tasks:
-                            await asyncio.gather(*tasks)
-
-                    server_players = current_players
-                except Exception as e:
-                    tb = traceback.extract_tb(e.__traceback__)
-                    _, line_number, func_name, _ = tb[-1]
-                    log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
-                    print("[players_data] ", players_data)
             
-            done_event.set()
+            timer_task = asyncio.create_task(run_matchmaking_timer())
+            self.subtasks.add(timer_task)
+
+            try:
+                while len(server_players) < MATCH_PLAYER_COUNT:
+                    await asyncio.sleep(3)
+                    try:
+                        players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                        if 'InspectList' not in players_data:
+                            continue
+                        
+                        current_players = {str(player['UniqueId']) for player in players_data['InspectList']}
+                        
+                        new_players = current_players - server_players
+                        if new_players:
+                            if len(current_players) < MATCH_PLAYER_COUNT:
+                                embed.title = f"Match [{len(current_players)}/{MATCH_PLAYER_COUNT}]"
+                            else:
+                                embed.title = "Match"
+                                embed.description = "Match started"
+                            await match_message.edit(embed=embed)
+                            log.info(f"[{self.match_id}] New players joined: {new_players}")
+
+                            tasks = []
+                            for platform_id in new_players:
+                                player = next((p for p in self.players if platform_id in [m.platform_id for m in p.user_platform_mappings]), None)
+                                if player:
+                                    teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
+                                    log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
+                                    tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
+                                else:
+                                    log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
+                                    tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
+                            
+                            if tasks:
+                                await asyncio.gather(*tasks)
+
+                        server_players = current_players
+                    except Exception as e:
+                        tb = traceback.extract_tb(e.__traceback__)
+                        _, line_number, func_name, _ = tb[-1]
+                        log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during wait_for_players: {repr(e)}")
+                        print("[players_data] ", players_data)
+            finally:
+                done_event.set()
+                self.subtasks.discard(timer_task)
 
             for uid, data in warnings_issued.items():
                 embed = nextcord.Embed(
