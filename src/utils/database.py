@@ -1511,11 +1511,11 @@ class Database:
             row = result.first()
             if row:
                 return {
-                    'avg_kills': row.avg_kills,
-                    'avg_deaths': row.avg_deaths,
-                    'avg_assists': row.avg_assists,
-                    'avg_score': row.avg_score,
-                    'avg_mmr_change': row.avg_mmr_change }
+                    'avg_kills': float(row.avg_kills),
+                    'avg_deaths': float(row.avg_deaths),
+                    'avg_assists': float(row.avg_assists),
+                    'avg_score': float(row.avg_score),
+                    'avg_mmr_change': float(row.avg_mmr_change) }
             return None
 
     @log_db_operation

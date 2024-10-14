@@ -103,7 +103,7 @@ class Match:
     async def send_placements_reward_message(self, member: nextcord.Member, new_mmr: int):
         guild = member.guild
         ranks = await self.bot.store.get_ranks(guild.id)
-        rank_role: nextcord.Role = await get_rank_role(guild, ranks, new_mmr)
+        rank_role: nextcord.Role = get_rank_role(guild, ranks, new_mmr)
         embed = nextcord.Embed(
             title="You completed your placement matches!",
             description=f"Congratulations you were placed in `{rank_role.name}`!",
@@ -214,7 +214,8 @@ class Match:
                     "kills": stats.kills,
                     "deaths": stats.deaths,
                     "assists": stats.assists,
-                    "rounds_played": stats.rounds_played
+                    "rounds_played": stats.rounds_played,
+                    "mmr_change": stats.mmr_change
                 }
             else:
                 self.persistent_player_stats[p.user_id] = {
@@ -225,7 +226,8 @@ class Match:
                     "kills": 0,
                     "deaths": 0,
                     "assists": 0,
-                    "rounds_played": 0
+                    "rounds_played": 0,
+                    "mmr_change": None
                 }
 
     def update_user_match_stats(self, user_stats, player_data):
@@ -254,10 +256,7 @@ class Match:
             "total_assists": summary_data.total_assists + match_stats['assists']
         }
     
-    async def finalize_match(self, users_summary_data, team_scores, last_reply: dict | None):
-        if last_reply is None:
-            last_reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
-        
+    async def finalize_match(self, users_summary_data, team_scores):
         final_updates = {}
         users_summary_stats = {}
         placement_completions = []
@@ -273,63 +272,69 @@ class Match:
         played_games = await self.bot.store.get_users_played_games([user.user_id for user in self.players], self.guild_id)
         for player in self.players:
             user_id = player.user_id
-            if user_id in self.persistent_player_stats:
-                member = guild.get_member(user_id)
-                games_played = played_games[player.user_id]
-                current_stats = self.persistent_player_stats[user_id]
-                ct_start = current_stats['ct_start']
-                win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
+            if user_id not in self.persistent_player_stats:
+                continue
 
-                summary_data = users_summary_data[user_id]
-                ally_score = team_scores[0] if ct_start else team_scores[1]
-                enemy_score = team_scores[1] if ct_start else team_scores[0]
-                ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
-                enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
+            member = guild.get_member(user_id)
+            games_played = played_games[player.user_id]
+            current_stats = self.persistent_player_stats[user_id]
+            summary_data = users_summary_data[user_id]
 
-
-                mmr_change = calculate_mmr_change(current_stats, 
-                    ally_team_score=ally_score, 
-                    enemy_team_score=enemy_score, 
-                    ally_team_avg_mmr=ally_mmr, 
-                    enemy_team_avg_mmr=enemy_mmr, win=win,
-                    placements=games_played <= PLACEMENT_MATCHES,
-                    momentum=summary_data.momentum)
-                
-                current_stats.update({"win": win, "mmr_change": mmr_change})
-
-                new_mmr = summary_data.mmr + current_stats['mmr_change']
+            if current_stats["mmr_change"] is not None:
                 if games_played == PLACEMENT_MATCHES:
-                    placement_completions.append((member, new_mmr))
-                elif games_played >= PLACEMENT_MATCHES:
-                    new_rank_id = next((r.role_id for r in sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True) if new_mmr >= r.mmr_threshold), None)
+                    placement_completions.append((member, summary_data.mmr))
+                continue
 
-                    if member:
-                        current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
-                    
-                        if new_rank_id not in current_rank_role_ids:
-                            
-                            rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
-                            roles_to_remove = [role for role in rank_roles if role is not None]
-                            if roles_to_remove:
-                                asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
-                                log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
-                            
-                            new_role = guild.get_role(new_rank_id)
-                            if new_role:
-                                asyncio.create_task(member.add_roles(new_role, reason="Updating MMR rank"))
-                                log.info(f"Role {new_role.name} added to {member.display_name}")
-                else:
-                    if member:
-                        current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+            ct_start = current_stats['ct_start']
+            win = team_scores[0] > team_scores[1] if ct_start else team_scores[1] > team_scores[0]
+
+            ally_score = team_scores[0] if ct_start else team_scores[1]
+            enemy_score = team_scores[1] if ct_start else team_scores[0]
+            ally_mmr = self.match.a_mmr if player.team == Team.A else self.match.b_mmr
+            enemy_mmr = self.match.b_mmr if player.team == Team.A else self.match.a_mmr
+
+
+            mmr_change = calculate_mmr_change(current_stats, 
+                ally_team_score=ally_score, 
+                enemy_team_score=enemy_score, 
+                ally_team_avg_mmr=ally_mmr, 
+                enemy_team_avg_mmr=enemy_mmr, win=win,
+                placements=games_played <= PLACEMENT_MATCHES,
+                momentum=summary_data.momentum)
+            
+            current_stats.update({"win": win, "mmr_change": mmr_change})
+
+            new_mmr = summary_data.mmr + current_stats['mmr_change']
+            if games_played == PLACEMENT_MATCHES:
+                placement_completions.append((member, new_mmr))
+            elif games_played >= PLACEMENT_MATCHES:
+                new_rank_id = next((r.role_id for r in sorted(ranks, key=lambda x: x.mmr_threshold, reverse=True) if new_mmr >= r.mmr_threshold), None)
+
+                if member:
+                    current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+                
+                    if new_rank_id not in current_rank_role_ids:
+                        
                         rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
-                        asyncio.create_task(member.remove_roles(*rank_roles))
+                        roles_to_remove = [role for role in rank_roles if role is not None]
+                        if roles_to_remove:
+                            asyncio.create_task(member.remove_roles(*roles_to_remove, reason="Updating MMR rank"))
+                            log.info(f"Roles {', '.join(role.name for role in roles_to_remove)} removed from {member.display_name}")
+                        
+                        new_role = guild.get_role(new_rank_id)
+                        if new_role:
+                            asyncio.create_task(member.add_roles(new_role, reason="Updating MMR rank"))
+                            log.info(f"Role {new_role.name} added to {member.display_name}")
+            else:
+                if member:
+                    current_rank_role_ids = set(role.id for role in member.roles if role.id in rank_ids)
+                    rank_roles = [guild.get_role(role_id) for role_id in current_rank_role_ids]
+                    asyncio.create_task(member.remove_roles(*rank_roles))
 
-                users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
-                final_updates[user_id] = current_stats
+            users_summary_stats[user_id] = self.update_summary_stats(summary_data, current_stats)
+            final_updates[user_id] = current_stats
         
-        side_a_score = int(last_reply['Team0Score'])
-        side_b_score = int(last_reply['Team1Score'])
-        team_a_score, team_b_score = (side_b_score, side_a_score) if self.match.b_side == Side.CT else (side_a_score, side_b_score)
+        team_a_score, team_b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
         self.match.a_score = team_a_score
         self.match.b_score = team_b_score
         await self.bot.store.update(MMBotMatches, id=self.match_id, a_score=team_a_score, b_score=team_b_score)
@@ -341,10 +346,10 @@ class Match:
         guild_avg_scores = sorted([stats['avg_score'] for stats in await self.bot.store.get_leaderboard(self.guild_id)])
         for member, mmr in placement_completions:
             user_avg_score = (await self.bot.store.get_avg_stats_last_n_games(self.guild_id, member.id, PLACEMENT_MATCHES))['avg_score']
-            new_mmr = await calculate_placements_mmr(user_avg_score, guild_avg_scores, mmr)
+            new_mmr = calculate_placements_mmr(user_avg_score, guild_avg_scores, mmr)
             users_placement_summary[member.id] = { 'mmr': new_mmr }
             asyncio.create_task(self.send_placements_reward_message(member, new_mmr))
-            log.info(f"User {player.user_id} has completed their placements and received {new_mmr - mmr} mmr")
+            log.info(f"User {member.id} has completed their placements and received {new_mmr - mmr} mmr from being at {mmr} mmr")
         if users_placement_summary:
             await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
 
@@ -1052,8 +1057,11 @@ class Match:
             await self.increment_state()
 
         if check_state(MatchState.MATCH_WAIT_FOR_END):
-            self.match = await self.bot.store.get_match(self.match_id)
-            team_scores = [0, 0]
+            a_score = self.match.a_score if self.match.a_score else 0
+            b_score = self.match.b_score if self.match.b_score else 0
+            if self.match.b_side == Side.CT:    team_scores = [b_score, a_score]
+            else:                               team_scores = [a_score, b_score]
+            
             last_users_match_stats = {}
             disconnection_tracker = { player.user_id: 0 for player in self.players }
             last_round_number = self.match.a_score + self.match.b_score if self.match.a_score else 0
@@ -1069,22 +1077,25 @@ class Match:
             a_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A])
             b_player_list = '\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B])
 
-            await self.wait_for_snd_mode()
+            max_score = max(a_score, b_score)
+            if max_score < 10:
+                await self.wait_for_snd_mode()
 
             ready_to_continue = False
-            max_score = 0
             reply = None
             while not ready_to_continue:
                 if max_score >= 10:
                     ready_to_continue = True
                 await asyncio.sleep(3)
                 try:
-                    reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
-                    if "Team0Score" not in reply: continue
+                    if max(self.match.a_score, self.match.b_score) < 10:
+                        reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
+                        if "Team0Score" not in reply: continue
+                        team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
+                        self.current_round = int(reply.get('Round', self.current_round))
+                    else: continue
 
-                    team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
                     max_score = max(team_scores)
-                    self.current_round = int(reply.get('Round', self.current_round))
 
                     is_new_round = self.current_round > last_round_number
                     if is_new_round:
@@ -1119,10 +1130,7 @@ class Match:
                     log.warning(f"[{self.match_id}] [{func_name}:{line_number}] Error during match: {repr(e)}")
                     print("[Reply] ", reply)
             
-            await self.finalize_match(
-                users_summary_data, 
-                team_scores,
-                reply)
+            await self.finalize_match(users_summary_data, team_scores)
             
             embed = log_message.embeds[0]
             embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
