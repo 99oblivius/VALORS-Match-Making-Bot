@@ -520,7 +520,7 @@ class Database:
                     (MMBotUserMatchStats.match_id == subquery.c.latest_match_id))
                 .where(
                     MMBotUserSummaryStats.guild_id == guild_id,
-                    MMBotUserSummaryStats.games > PLACEMENT_MATCHES)
+                    MMBotUserSummaryStats.games >= PLACEMENT_MATCHES)
                 .order_by(desc(MMBotUserSummaryStats.mmr)))
 
             result = await session.execute(query)
