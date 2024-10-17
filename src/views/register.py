@@ -130,7 +130,7 @@ class RegistryButtonView(nextcord.ui.View):
         self.add_item(button)
 
         button = nextcord.ui.Button(
-            label="Show/Hide", 
+            label="Join/Leave", 
             style=nextcord.ButtonStyle.blurple, 
             custom_id=f"{GUILD_ID}:register_button")
         button.callback = self.register_callback

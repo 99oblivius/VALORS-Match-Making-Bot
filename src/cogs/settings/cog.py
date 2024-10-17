@@ -84,9 +84,10 @@ class Settings(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if settings and settings.register_channel and settings.register_message:
             channel = interaction.guild.get_channel(settings.register_channel)
-            try: msg = await channel.fetch_message(settings.register_message)
-            except nextcord.errors.NotFound: pass
-            else: await msg.delete()
+            if channel:
+                try: msg = await channel.fetch_message(settings.register_message)
+                except nextcord.errors.NotFound: pass
+                else: await msg.delete()
         
         embed = nextcord.Embed(
             title="Register for Match Making!", 
@@ -261,6 +262,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
     @settings.subcommand(name="set_leaderboard", description="Set the channel and leaderboard message")
     async def set_leaderboard(self, interaction: nextcord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        await self.bot.store.update(BotSettings, guild_id=interaction.guild.id, leaderboard_channel=interaction.channel.id)
         await update_leaderboard(self.bot.store, interaction.guild)
         await interaction.followup.send(
             f"Match Making Leaderboard set", ephemeral=True)

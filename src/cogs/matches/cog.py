@@ -120,7 +120,7 @@ class Matches(commands.Cog):
         embed.description = "Match canceled"
         await scores_message.edit(embed=embed)
 
-        await log_moderation(interaction, settings.log_channel, "Match canceled")
+        await log_moderation(interaction, settings.log_channel, f"Match canceled #{match_id}")
     
     @nextcord.slash_command(name="abandon", description="Abandon a match", guild_ids=[GUILD_ID])
     async def mm_abandon(self, interaction: nextcord.Interaction):

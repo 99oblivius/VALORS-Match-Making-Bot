@@ -509,7 +509,7 @@ async def create_leaderboard_embed(guild: Guild, leaderboard_data: List[Dict[str
 async def update_leaderboard(store, guild: Guild):
     settings = await store.get_settings(guild.id)
     channel = guild.get_channel(settings.leaderboard_channel)
-    if not isinstance(channel, TextChannel):
+    if channel and not isinstance(channel, TextChannel):
         return
 
     data = await store.get_leaderboard_with_previous_mmr(guild.id)
@@ -527,12 +527,9 @@ async def update_leaderboard(store, guild: Guild):
     try:
         header_message = await channel.fetch_message(settings.leaderboard_message)
         await header_message.edit(content=None, embed=header_embed)
-    except:
+    except Exception:
         header_message = await channel.send(embed=header_embed)
-        await store.update(BotSettings, 
-            guild_id=guild.id, 
-            leaderboard_channel=channel.id, 
-            leaderboard_message=header_message.id)
+        await store.update(BotSettings, guild_id=guild.id, leaderboard_message=header_message.id)
 
     existing_messages = []
     async for message in channel.history(after=header_message, limit=None):

@@ -328,7 +328,7 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_verified_role=verified.id)
         await interaction.response.send_message(f"Verified role set to {verified.mention}", ephemeral=True)
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Set verified role", f"{verified.mention}>")
+        await log_moderation(interaction, settings.log_channel, "Set verified role", f"{verified.mention}")
 
     @queue_settings.subcommand(name="staff_role", description="Set match making staff role")
     async def set_mm_staff(self, interaction: nextcord.Interaction, staff: nextcord.Role):
@@ -337,7 +337,7 @@ class Queues(commands.Cog):
         await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
         await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
         settings = await self.bot.store.get_settings(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Set staff role", f"{staff.mention}>")
+        await log_moderation(interaction, settings.log_channel, "Set staff role", f"{staff.mention}")
 
     @queue_settings.subcommand(name="set_mute", description="Set match making mute role")
     async def settings_set_mute(self, interaction: nextcord.Interaction, mute: nextcord.Role):
@@ -356,9 +356,10 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         if settings and settings.mm_queue_channel and settings.mm_queue_message:
             channel = interaction.guild.get_channel(settings.mm_queue_channel)
-            try: msg = await channel.fetch_message(settings.mm_queue_message)
-            except nextcord.errors.NotFound: pass
-            else: await msg.delete()
+            if channel:
+                try: msg = await channel.fetch_message(settings.mm_queue_message)
+                except nextcord.errors.NotFound: pass
+                else: await msg.delete()
         
         if not settings or not settings.mm_queue_periods:
             return await interaction.response.send_message(
