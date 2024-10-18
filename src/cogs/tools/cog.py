@@ -51,9 +51,15 @@ class ModCommands(commands.Cog):
             description="We strongly recommend you use https://glitchii.github.io/embedbuilder/ to generate it.", 
             required=True)
     ):
+        content = None
+        embeds = []
         try:
-            embed = nextcord.Embed.from_dict(json.loads(embed_str)['embeds'][0])
-            await interaction.channel.send(embed=embed)
+            data = json.loads(embed_str)
+            content = data['content']
+            for e in data['embeds']:
+                embeds.append(nextcord.Embed.from_dict(e))
+                
+            await interaction.channel.send(content=content, embeds=embeds)
             await interaction.response.send_message(f"Done!", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
