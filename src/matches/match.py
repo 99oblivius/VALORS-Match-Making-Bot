@@ -1088,7 +1088,7 @@ class Match:
                     ready_to_continue = True
                 await asyncio.sleep(3)
                 try:
-                    if max(self.match.a_score, self.match.b_score) < 10:
+                    if self.match.a_score is None or max(self.match.a_score, self.match.b_score) < 10:
                         reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
                         if "Team0Score" not in reply: continue
                         team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
