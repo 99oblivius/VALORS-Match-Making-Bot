@@ -91,7 +91,7 @@ class Settings(commands.Cog):
         
         embed = nextcord.Embed(
             title="Register for Match Making!", 
-            description="""## Welcome to VALORS's Match Making!
+            description="""## Welcome to Pavlov Match Making!
 
 1. Click `Register` to authenticate your Steam account.
    - We only access your Steam ID for performance tracking.

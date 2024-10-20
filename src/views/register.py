@@ -187,7 +187,7 @@ class RegistryButtonView(nextcord.ui.View):
         log.info(f"{interaction.user.display_name} joined MM")
         message = f"Join a match in <#{settings.mm_queue_channel}>\nInteract with others in <#{settings.mm_text_channel}>"
         embed = nextcord.Embed(
-            title="Welcome to Match Making!", 
+            title="Welcome to Pavlov Match Making!", 
             description=message,
             color=VALORS_THEME2)
         await interaction.response.send_message(embed=embed, ephemeral=True)

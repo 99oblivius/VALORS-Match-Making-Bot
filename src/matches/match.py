@@ -587,7 +587,7 @@ class Match:
         
         if check_state(MatchState.LOG_MATCH):
             embed = nextcord.Embed(
-                title=f"[{self.match_id}] VALORS MM Match",
+                title=f"Match #{self.match_id}",
                 description="Teams created\nInitiating team votes",
                 color=VALORS_THEME1)
             embed.add_field(name=f"[{self.match.a_mmr:.0f}]Team A", 
@@ -875,7 +875,7 @@ class Match:
         if check_state(MatchState.MATCH_CHANGE_TO_LOBBY):
             self.match = await self.bot.store.get_match(self.match_id)
             pin = 5
-            server_name = f"VALORS MM - {self.match_id}"
+            server_name = f"PMM Match {self.match_id}"
             await asyncio.gather(
                 self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP),
                 self.bot.rcon_manager.unban_all_players(serveraddr),
@@ -1088,7 +1088,7 @@ class Match:
                     ready_to_continue = True
                 await asyncio.sleep(3)
                 try:
-                    if self.match.a_score is None or max(self.match.a_score, self.match.b_score) < 10:
+                    if max(a_score, b_score) < 10:
                         reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
                         if "Team0Score" not in reply: continue
                         team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
@@ -1146,7 +1146,7 @@ class Match:
         
         if check_state(MatchState.MATCH_CLEANUP):
             pin = 5
-            server_name = f"VALORS {server.region} #{server.id}"
+            server_name = f"PMM {server.region} Server {server.id}"
             await self.bot.rcon_manager.set_name(serveraddr, server_name)
             await self.bot.rcon_manager.set_pin(serveraddr, pin)
             await self.bot.rcon_manager.add_map(serveraddr, SERVER_DM_MAP, 'TDM')
