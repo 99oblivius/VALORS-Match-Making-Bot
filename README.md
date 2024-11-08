@@ -4,8 +4,6 @@
 
 A Discord-powered Match Making server for Pavlov VR with automated team formation, voting, and performance tracking.
 
-[![License](badge-url)](#) [![Version](badge-url)](#)
-
 ## Features
 
 ### Queue Management
@@ -16,14 +14,18 @@ A Discord-powered Match Making server for Pavlov VR with automated team formatio
 ### Performance Tracking
 - Comprehensive player statistics
 - Performance history visualization
+
 ![Performance Stats](assets/stats-example.png)
 - Activity tracking and analysis
+
 ![Player Activity](assets/activity-example.png)
 
 ### Community Features
 - Competitive leaderboards
+
 ![Leaderboard System](assets/leaderboard-example.png)
 - Match history and scoreboards
+
 ![Match Scoreboard](assets/scoreboard-example.png)
 - Steam account integration for in-game performance tracking
 
