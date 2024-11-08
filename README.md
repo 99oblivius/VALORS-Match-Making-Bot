@@ -47,5 +47,9 @@ A Discord-powered Match Making server for Pavlov VR with automated team formatio
 ## API Integration
 This bot requires the [VALORS-Bot-API](https://github.com/99oblivius/VALORS-Bot-API) for full functionality.
 
+## Website
+Abandoned League project had a website in development with Match Making attached to it. 
+The WIP website can be visited on https://valorsleague.org/
+
 ## Contributing
 I am open for any and all feedback. Feel free to create Pull requests.
