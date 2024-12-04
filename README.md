@@ -1,6 +1,6 @@
 # VALORS Match Making Bot
 
-![PMM Logo](assets/pmm-logo.png)
+<img src="assets/pmm-logo.png" width="400">
 
 A Discord-powered Match Making server for Pavlov VR with automated team formation, voting, and performance tracking.
 
@@ -17,6 +17,9 @@ A Discord-powered Match Making server for Pavlov VR with automated team formatio
 
 ![Performance Stats](assets/stats-example.png)
 - Activity tracking and analysis
+
+![Player Graph](assets/graph-example.png)
+- View your stats per-game or over-time
 
 ![Player Activity](assets/activity-example.png)
 
