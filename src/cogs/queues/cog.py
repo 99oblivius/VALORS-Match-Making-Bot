@@ -47,6 +47,36 @@ class Queues(commands.Cog):
     ########################
     # QUEUE SLASH COMMANDS #
     ########################
+    @nextcord.slash_command(name="q", description="See who's in queue", guild_ids=[GUILD_ID])
+    async def qeueu(self, interaction: nextcord.Interaction):
+        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        embed = create_queue_embed(queue_users)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @nextcord.slash_command(description="Ping members of the lfg role", guild_ids=[GUILD_ID])
+    async def lfg(self, interaction: nextcord.Interaction):
+        if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
+            return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
+        
+        settings = await self.bot.store.get_settings(interaction.guild.id)
+        if not settings.mm_lfg_role:
+            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings lfg_role')}", ephemeral=True)
+        
+        channel = interaction.guild.get_channel(settings.mm_text_channel)
+        if not channel:
+            return await interaction.response.send_message(f"Queue channel not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')}", ephemeral=True)
+        
+        if interaction.guild.id in self.bot.last_lfg_ping:
+            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
+                return await interaction.response.send_message(
+f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
+Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+            log.info(f"{interaction.user.display_name} wanted to ping LFG role")
+        
+        self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
+        await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned", allowed_mentions=nextcord.AllowedMentions(roles=True, users=False))
+        log.info(f"{interaction.user.display_name} pinged LFG role")
+    
     @nextcord.slash_command(name="block", description="Block a user from queuing", guild_ids=[GUILD_ID])
     async def block_from_queue(self, interaction: nextcord.Interaction, 
         user: nextcord.Member | nextcord.User,
