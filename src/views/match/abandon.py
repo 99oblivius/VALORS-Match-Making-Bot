@@ -41,7 +41,9 @@ class AbandonView(nextcord.ui.View):
         custom_id="mm_accept_abandon_button")
     async def abandon(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
         loop = asyncio.get_event_loop()
+        guild = interaction.guild
         await interaction.response.defer(ephemeral=True)
+        settings = await self.bot.store.get_settings(guild.id)
 
         if not await cleanup_match(loop, self.match.id):
             log.error(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")
@@ -54,13 +56,18 @@ class AbandonView(nextcord.ui.View):
             instance.requeue_players = [p.user_id for p in instance.players if p.user_id != interaction.user.id]
         
         log.info(f"{interaction.user.display_name} abandoned match {self.match.id}")
-        await self.bot.store.add_match_abandons(interaction.guild.id, self.match.id, [interaction.user.id], [self.mmr_loss])
-        await interaction.guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}{requeued_msg}")
+        await self.bot.store.add_match_abandons(guild.id, self.match.id, [interaction.user.id], [self.mmr_loss])
+        asyncio.create_task(guild.get_channel(self.match.match_thread).send(f"@here Match Abandoned by {interaction.user.mention}{requeued_msg}"))
+
+        embed = nextcord.Embed(
+            title="Abandon",
+            description=f"Match Abandoned by {interaction.user.mention}{requeued_msg}",
+            color=0xf02020)
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        asyncio.create_task(guild.get_channel(settings.mm_text_channel).send(embed=embed))
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        log_channel = interaction.guild.get_channel(settings.mm_log_channel)
         try:
-            log_message = await log_channel.fetch_message(self.match.log_message)
+            log_message = await guild.get_channel(settings.mm_log_channel).fetch_message(self.match.log_message)
             embed = log_message.embeds[0]
             embed.description = f"Match abandoned by {interaction.user.mention}"
             await log_message.edit(embed=embed)
