@@ -563,7 +563,7 @@ class Database:
             return { 'bans': bans, 'picks': picks, 'sides': sides }
 
     @log_db_operation
-    async def get_user_last_queue_time_remaining(self, guild_id: int, user_ids: List[int], match_id: int) -> Dict[int, int]:
+    async def get_user_last_queue_time_remaining(self, guild_id: int, match_id: int, user_ids: List[int]) -> Dict[int, int]:
         async with self._session_maker() as session:
             match_start = (
                 select(MMBotMatches.start_timestamp)
