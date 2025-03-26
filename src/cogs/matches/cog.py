@@ -96,10 +96,9 @@ class Matches(commands.Cog):
             match = await self.bot.store.get_match_from_channel(interaction.channel.id)
             if match: match_id = match.id
         else:
-            match_instance = await self.bot.store.get_match(match_id)
-            if not match_instance:
+            match = get_match(match_id)
+            if not match:
                 return await interaction.response.send_message(f"There is no match #{match_id}", ephemeral=True)
-            match = match_instance.match
         
         loop = asyncio.get_event_loop()
         if not await cleanup_match(loop, match_id):

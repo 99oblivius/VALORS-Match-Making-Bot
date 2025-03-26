@@ -17,6 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+from typing import Optional
 
 from .match import Match
 from .match_states import MatchState
@@ -80,5 +81,5 @@ async def go_back_to(loop, match_id, state: MatchState) -> bool:
     running_matches[match_id] = task
     return True
 
-def get_match(match_id) -> Match:
-    return active_matches.get(match_id)
+def get_match(match_id) -> Optional[Match]:
+    return active_matches.get(match_id, None)
