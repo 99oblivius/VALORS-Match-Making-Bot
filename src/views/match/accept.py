@@ -19,6 +19,7 @@
 import asyncio
 
 import nextcord
+from typing import Optional
 
 from config import MATCH_PLAYER_COUNT
 from utils.logger import Logger as log
@@ -27,7 +28,7 @@ from utils.utils import format_mm_attendance
 
 
 class AcceptView(nextcord.ui.View):
-    def __init__(self, bot, done_event=None, *args, **kwargs):
+    def __init__(self, bot, done_event: Optional[asyncio.Event]=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.timeout = None
@@ -61,7 +62,8 @@ class AcceptView(nextcord.ui.View):
                 "You accepted the match!", ephemeral=True)
             self.accepted_players = await self.bot.store.get_accepted_players(match.id)
             if len(self.accepted_players) == MATCH_PLAYER_COUNT:
-                self.done_event.set()
+                if self.done_event:
+                    self.done_event.set()
         
         await asyncio.sleep(3)
         await msg.delete()
