@@ -1272,7 +1272,7 @@ class Database:
             return result.scalars().all()
 
     @log_db_operation
-    async def get_match_map(self, match_id: int) -> MMBotMaps | None:
+    async def get_match_map(self, guild_id: int, match_id: int) -> MMBotMaps | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches.map)
@@ -1283,7 +1283,9 @@ class Database:
             
             result = await session.execute(
                 select(MMBotMaps)
-                .where(MMBotMaps.map == map_string))
+                .where(
+                    MMBotMaps.guild_id == guild_id,
+                    MMBotMaps.map == map_string))
             map_object = result.scalars().first()
             return map_object
 

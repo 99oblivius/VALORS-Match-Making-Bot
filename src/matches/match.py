@@ -464,7 +464,7 @@ class Match:
                     "```diff\n- A player has left the discord server during match initialization. -\nMatch canceled```")
 
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
-        match_map: MMBotMaps              = await self.bot.store.get_match_map(self.match_id)
+        match_map: MMBotMaps              = await self.bot.store.get_match_map(self.guild_id, self.match_id)
         self.last_map: str                = await self.bot.store.get_last_played_map(self.match.queue_channel)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
@@ -800,7 +800,7 @@ class Match:
 
         if check_state(MatchState.MATCH_STARTING):
             await self.match_channel.purge(bulk=True)
-            match_map = await self.bot.store.get_match_map(self.match_id)
+            match_map = await self.bot.store.get_match_map(self.guild_id, self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
             embed = nextcord.Embed(title="Starting", description="Setting up server", color=VALORS_THEME1)
             embed.set_image(match_map.media)
