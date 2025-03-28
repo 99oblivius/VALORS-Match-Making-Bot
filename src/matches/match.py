@@ -1023,6 +1023,13 @@ class Match:
             finally:
                 done_event.set()
                 self.subtasks.discard(timer_task)
+                
+            
+            async def notify_user(embed: nextcord.Embed):
+                try:
+                    await self.bot.get_user(uid).send(embed=embed)
+                except (nextcord.Forbidden, nextcord.HTTPException):
+                    pass
 
             for uid, data in warnings_issued.items():
                 embed = nextcord.Embed(
@@ -1030,7 +1037,7 @@ class Match:
                     description=f"You gained a warning for being late by {format_duration(data['overtime'])} to Match #{self.match_id}.", 
                     color=0xff6600)
                 try:
-                    asyncio.create_task(self.bot.get_user(uid).send(embed=embed))
+                    asyncio.create_task(notify_user(embed))
                 except Exception:
                     pass
             
