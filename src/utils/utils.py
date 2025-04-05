@@ -19,7 +19,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 import asyncio
 import base64
 import re
@@ -403,6 +403,27 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
     img_byte_arr = BytesIO()
     img.save(img_byte_arr, format='PNG')
     return img_byte_arr.getvalue()
+
+def generate_score_text(guild: Guild, persistent_stats: Dict[int, Dict[str, Any]]):
+    scores = "```ansi\n"
+    header = "\u001b[1m CT             |   K/D/S  |  T             |   K/D/S  \u001b[0m\n"
+    scores += f"```ansi\n\u001b[1m{header}\u001b[0m\n{'─' * len(header)}\n"
+    
+    def name_formatted(user_id):
+        member = guild.get_member(user_id)
+        if not member: return " "*14
+        name = member.display_name
+        return (name[:11] + '…' if len(name) > 12 else name).ljust(14)
+    
+    def kda_formatted(stats):
+        return f"{stats['kills']}/{stats['deaths']}/{stats['score']}".rjust(8)
+    
+    '\n'.join(
+        f" \u001b[1;34m{name_formatted(team_a['user_id'])} \u001b[0m- {kda_formatted(team_a)} | \u001b[1;31m{name_formatted(team_b['user_id'])} \u001b[0m- {kda_formatted(team_b)} "
+        for team_a, team_b in zip(
+            sorted([stats | {"user_id": user_id} for user_id, stats in persistent_stats.items() if stats['ct_start']], key=lambda x: x['score'], reverse=True), 
+            sorted([stats | {"user_id": user_id} for user_id, stats in persistent_stats.items() if not stats['ct_start']], key=lambda x: x['score'], reverse=True)))
+    return scores + "```"
 
 
 ANSI_TARGET_COLORS = {
