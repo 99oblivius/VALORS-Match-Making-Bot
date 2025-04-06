@@ -406,7 +406,7 @@ async def generate_score_image(cache, guild: Guild, match: MMBotMatches, match_s
 
 def generate_score_text(guild: Guild, persistent_stats: Dict[int, Dict[str, Any]]):
     scores = "```ansi\n"
-    header = "CT         |   K/D/S  | T         |   K/D/S "
+    header = "CT         |   K/D/S  | T        |   K/D/S "
     scores += f"\u001b[1m{header}\u001b[0m\n{'─' * len(header)}\n"
     
     def name_formatted(user_id):
