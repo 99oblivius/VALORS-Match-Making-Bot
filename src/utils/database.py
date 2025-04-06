@@ -297,10 +297,10 @@ class Database:
                 if len(guilds.all()) != 2:
                     raise ValueError("Both source and destination guilds must exist in the BotSettings table")
 
+                await session.execute(text("SET session_replication_role = 'replica'"))
+                
                 tables = [
                     BotSettings, 
-                    BotRegions, 
-                    MMBotRanks, 
                     UserPlatformMappings, 
                     MMBotUsers, 
                     MMBotQueueUsers, 
@@ -314,7 +314,6 @@ class Database:
                     MMBotUserMapPicks, 
                     MMBotUserSidePicks, 
                     MMBotUserNotifications, 
-                    MMBotMaps, 
                     MMBotMods
                 ]
 
@@ -326,15 +325,29 @@ class Database:
                     for row in source_data:
                         row_dict = {c.key: getattr(row[0], c.key) for c in inspect(table).mapper.column_attrs}
                         row_dict['guild_id'] = destination_guild_id
+                        
+                        # Remove id from row_dict if it's an auto-incrementing field
+                        # This will let the database assign a new id automatically
+                        if 'id' in row_dict and hasattr(table, 'id') and isinstance(getattr(table, 'id').type, Integer) and getattr(table, 'id').primary_key:
+                            del row_dict['id']
+                        
+                        # Generate filter condition for matching existing records
+                        filter_conditions = []
+                        for key in inspect(table).primary_key:
+                            if key.name in row_dict and key.name != 'id':  # Skip 'id' as it's being regenerated
+                                filter_conditions.append(getattr(table, key.name) == row_dict[key.name])
+                        
+                        # Only delete existing record if we have filter conditions
+                        if filter_conditions:
+                            await session.execute(
+                                delete(table).where(*filter_conditions))
 
-                        await session.execute(
-                            delete(table).where(
-                                table.guild_id == destination_guild_id,
-                                *[getattr(table, key) == value for key, value in row_dict.items() if key != 'guild_id' and key in inspect(table).primary_key]))
-
+                        # Insert new record with values from row_dict
                         stmt = insert(table).values(**row_dict)
                         await session.execute(stmt)
-
+                
+                await session.execute(text("SET session_replication_role = 'origin'"))
+                
                 log.info(f"Transferred guild data from {source_guild_id} to {destination_guild_id}")
 
 
