@@ -55,7 +55,7 @@ class ModCommands(commands.Cog):
         embeds = []
         try:
             data = json.loads(embed_str)
-            content = data['content']
+            content = data.get('content')
             for e in data['embeds']:
                 embeds.append(nextcord.Embed.from_dict(e))
                 
@@ -72,7 +72,7 @@ class ModCommands(commands.Cog):
     ):
         await self.bot.store.update(MMBotUsers, guild_id=interaction.guild.id, user_id=user.id, role_message=message)
         await interaction.response.send_message(f"{user.mention}'s role message was set to:\n{message}", ephemeral=True)            
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, f"Role Status Set", f"{user.mention}'s role message changed to:\n```\n{message}```")
 
 
