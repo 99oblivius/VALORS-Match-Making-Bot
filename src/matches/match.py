@@ -21,14 +21,14 @@ import functools
 import copy
 import traceback
 from time import perf_counter_ns, time
-from datetime import datetime, timezone, timedelta
-from functools import wraps
-from typing import List
-from typing import Dict, Tuple
+from datetime import datetime, timezone
+from typing import List, Dict, Tuple, cast, TYPE_CHECKING
 from io import BytesIO
 
+if TYPE_CHECKING:
+    from main import Bot
+
 import nextcord
-from nextcord.ext import commands
 
 from config import (
    B_THEME,
@@ -41,9 +41,9 @@ from config import (
    VALORS_THEME2,
    PLACEMENT_MATCHES
 )
-from utils.logger import Logger as log, VariableLog
+from utils.logger import Logger as log
 from utils.models import *
-from utils.utils import format_duration, format_mm_attendance, generate_score_image, create_queue_embed, get_rank_role
+from utils.utils import format_duration, format_mm_attendance, generate_score_image, generate_score_text, create_queue_embed, get_rank_role
 from utils.statistics import update_leaderboard
 from views.match.accept import AcceptView
 from views.match.banning import BanView, ChosenBansView
@@ -57,9 +57,9 @@ from .ranked_teams import get_teams
 
 
 class Match:
-    def __init__(self, bot: commands.Bot, guild_id: int, match_id: int, state=MatchState.NOT_STARTED):
+    def __init__(self, bot: 'Bot', guild_id: int, match_id: int, state=MatchState.NOT_STARTED):
         self.subtasks = set()
-        self.bot       = bot
+        self.bot: 'Bot'  = bot
         self.guild_id  = guild_id
         self.match_id  = match_id
         self.state     = state
@@ -79,7 +79,7 @@ class Match:
         while True:
             await asyncio.sleep(3)
             try:
-                reply = (await self.bot.rcon_manager.server_info(self.match.serveraddr))['ServerInfo']
+                reply = (await self.bot.rcon_manager.server_info(str(self.match.serveraddr)))['ServerInfo']
                 log.debug(f"WAITING FOR SND {reply}")
                 if reply['GameMode'] == 'SND' and reply['PlayerCount'][0] != '0':
                     break
@@ -134,8 +134,8 @@ class Match:
         
         if user.region == server.region:
             region_pings = [
-                data.get('weighted_avg_ping') 
-                for (uid, addr), data in ping_data.items() 
+                float(data.get('weighted_avg_ping', 50)) 
+                for (_, addr), data in ping_data.items() 
                 if addr.split(':')[0] == serveraddr.split(':')[0] 
                 and data is not None 
                 and data.get('weighted_avg_ping') is not None
@@ -354,7 +354,8 @@ class Match:
             await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
 
     async def start_requeue_players(self, settings: BotSettings):
-        guild = self.bot.get_guild(settings.guild_id)
+        guild = self.bot.get_guild(cast(int, settings.guild_id))
+        assert(isinstance(guild, nextcord.Guild))
 
         queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
         queue_players = sorted(queue_users, key=lambda user: user.timestamp, reverse=True)
@@ -376,7 +377,7 @@ class Match:
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
                     queue_expiry=int(datetime.now(timezone.utc).timestamp()) + durations_left[player_id] + 300)
-            log.debug(f"{guild.get_member(player_id).display_name} has auto queued up")
+            log.debug(f"{member.display_name if (member := guild.get_member(player_id)) else player_id} has auto queued up")
             
         if total_users_and_players >= MATCH_PLAYER_COUNT:
             for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
@@ -393,13 +394,15 @@ class Match:
                     guild_id=settings.guild_id, 
                     queue_channel=settings.mm_queue_channel, 
                     queue_expiry=user.queue_expiry)
-            log.debug(f"{guild.get_member(user.user_id).user.display_name} has auto requeued")
+            log.debug(f"{member.display_name if (member := guild.get_member(player_id)) else player_id} has auto requeued")
         
         queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
         asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
         embed = create_queue_embed(queue_users)
 
-        message = await guild.get_channel(settings.mm_queue_channel).fetch_message(settings.mm_queue_message)
+        channel = guild.get_channel(cast(int, settings.mm_queue_channel))
+        assert(isinstance(channel, nextcord.TextChannel))
+        message = await channel.fetch_message(cast(int, settings.mm_queue_message))
         await message.edit(embeds=[message.embeds[0], embed])
 
     async def increment_state(self):
@@ -448,19 +451,23 @@ class Match:
         
         self.requeue_players = []
         
-        self.state = await self.load_state()
-        settings: BotSettings             = await self.bot.store.get_settings(self.guild_id)
-        guild = self.bot.get_guild(self.guild_id)
-        match_category = guild.get_channel(settings.mm_match_category)
-        text_channel = guild.get_channel(settings.mm_text_channel)
+        self.state      = await self.load_state()
+        settings        = await self.bot.store.get_settings(self.guild_id)
+        assert(isinstance(settings, BotSettings))
+        guild           = self.bot.get_guild(self.guild_id)
+        assert(isinstance(guild, nextcord.Guild))
+        match_category  = guild.get_channel(cast(int, settings.mm_match_category))
+        assert(isinstance(match_category, nextcord.CategoryChannel))
+        text_channel    = guild.get_channel(cast(int, settings.mm_text_channel))
+        assert(isinstance(text_channel, nextcord.TextChannel))
 
         self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         self.compute_user_platform_map()
         for p in self.players:
-            if not guild.get_member(p.user_id):
+            if not guild.get_member(cast(int, p.user_id)):
                 self.state = MatchState.CLEANUP
-                await guild.get_channel(settings.mm_text_channel).send(
+                await text_channel.send(
                     "```diff\n- A player has left the discord server during match initialization. -\nMatch canceled```")
 
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
@@ -476,13 +483,13 @@ class Match:
         
         
 
-        self.match_channel  = guild.get_channel(self.match.match_thread)
-        log_channel   = guild.get_channel(settings.mm_log_channel)
-        a_channel     = guild.get_channel(self.match.a_thread)
-        b_channel     = guild.get_channel(self.match.b_thread)
+        self.match_channel = guild.get_channel(cast(int, self.match.match_thread))
+        log_channel   = guild.get_channel(cast(int, settings.mm_log_channel))
+        a_channel     = guild.get_channel(cast(int, self.match.a_thread))
+        b_channel     = guild.get_channel(cast(int, self.match.b_thread))
 
-        a_vc          = guild.get_channel(self.match.a_vc)
-        b_vc          = guild.get_channel(self.match.b_vc)
+        a_vc          = guild.get_channel(cast(int, self.match.a_vc))
+        b_vc          = guild.get_channel(cast(int, self.match.b_vc))
         
         if a_vc:
             self.bot.match_stages[a_vc.id] = [u.user_id for u in self.players if u.team == Team.A]
@@ -511,7 +518,7 @@ class Match:
         
         if check_state(MatchState.CREATE_MATCH_CHANNEL):
             overwrites = {
-                guild.get_member(player.user_id):
+                guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players
@@ -521,6 +528,7 @@ class Match:
                 name=f"Match - #{self.match_id}",
                 overwrites=overwrites,
                 reason=f"Match - #{self.match_id}")
+            assert(isinstance(self.match_channel, nextcord.TextChannel))
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_thread=self.match_channel.id)
             await self.increment_state()
         
@@ -539,7 +547,7 @@ class Match:
                 if not done_event.is_set():
                     unaccepted_players = await self.bot.store.get_unaccepted_players(self.match_id)
                     for player in unaccepted_players:
-                        member = guild.get_member(player.user_id)
+                        member = guild.get_member(cast(int, player.user_id))
                         if member:
                             embed = nextcord.Embed(
                                 title="Queue Popped!", 
@@ -547,16 +555,16 @@ class Match:
                                 color=0x18ff18)
                             try:
                                 await member.send(embed=embed)
-                            except (nextcord.Forbidden, nextcord.HTTPException) as e:
+                            except (nextcord.Forbidden, nextcord.HTTPException):
                                 pass
 
             notify_tasks = [
                 asyncio.create_task(notify_unaccepted_players(30)),
-                asyncio.create_task(notify_unaccepted_players(settings.mm_accept_period - 30))
+                asyncio.create_task(notify_unaccepted_players(cast(int, settings.mm_accept_period) - 30))
             ]
 
             try:
-                await asyncio.wait_for(done_event.wait(), timeout=settings.mm_accept_period)
+                await asyncio.wait_for(done_event.wait(), timeout=float(cast(int, settings.mm_accept_period)))
             except asyncio.TimeoutError:
                 self.requeue_players = view.accepted_players
                 self.state = MatchState.CLEANUP - 1
@@ -602,7 +610,7 @@ class Match:
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
             overwrites = {
-                guild.get_member(player.user_id):
+                guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
                     ) for player in self.players if player.team == Team.A
@@ -619,7 +627,7 @@ class Match:
         
         if check_state(MatchState.MAKE_TEAM_VC_B):
             overwrites = {
-                guild.get_member(player.user_id):
+                guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
                     ) for player in self.players if player.team == Team.B
@@ -636,7 +644,7 @@ class Match:
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_A):
             overwrites = {
-                guild.get_member(player.user_id):
+                guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.A
@@ -651,7 +659,7 @@ class Match:
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_B):
             overwrites = {
-                guild.get_member(player.user_id):
+                guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.B
@@ -819,7 +827,7 @@ class Match:
             await b_channel.send(embed=embed)
             await self.bot.store.update(MMBotMatches, id=self.match_id, match_message=match_message.id)
             await self.increment_state()
-         
+        
         if check_state(MatchState.LOG_PICKS):
             embed = log_message.embeds[0]
             embed.description = "Server setup"
@@ -908,11 +916,11 @@ class Match:
             async def run_matchmaking_timer():
                 current_message: nextcord.Message | None = None
                 start_time = time()
-                end_time = start_time + settings.mm_join_period + 1
+                end_time = start_time + float(cast(int, settings.mm_join_period)) + 1.0
                 message_update_interval = 10
                 message_post_interval = 60
                 force_abandon_view_delay = 300
-                player_mention_delays = sorted([settings.mm_join_period - 120, settings.mm_join_period - 60, settings.mm_join_period])
+                player_mention_delays = sorted([cast(int, settings.mm_join_period) - 120, cast(int, settings.mm_join_period) - 60, cast(int, settings.mm_join_period)])
 
                 def get_missing_players():
                     return [p for p in self.players if not any(m.platform_id in server_players for m in p.user_platform_mappings)]
@@ -1054,18 +1062,30 @@ class Match:
             log.info(f"[{self.match_id}] Switching to SND")
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
+            
+            for player in self.players:
+                member = guild.get_member(cast(int, player.user_id))
+                if member and member.voice and member.voice.channel.id == settings.mm_voice_channel:
+                    await asyncio.sleep(0.1)
+                    try:
+                        if player.team == Team.A:
+                            await member.move_to(a_vc)
+                        if player.team == Team.B:
+                            await member.move_to(b_vc)
+                    except nextcord.HTTPException: pass
+            
             await self.match_channel.send(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.LOG_MATCH_HAPPENING):
             embed = log_message.embeds[0]
-            embed.description = "Match in progress"
+            embed.description = "Match just started"
             log_message = await log_message.edit(embed=embed)
             await self.increment_state()
 
         if check_state(MatchState.MATCH_WAIT_FOR_END):
-            a_score = self.match.a_score if self.match.a_score else 0
-            b_score = self.match.b_score if self.match.b_score else 0
+            a_score = 0 if self.match.a_score is None else cast(int, self.match.a_score)
+            b_score = 0 if self.match.b_score is None else cast(int, self.match.b_score)
             if self.match.b_side == Side.CT:    team_scores = [b_score, a_score]
             else:                               team_scores = [a_score, b_score]
             
@@ -1108,7 +1128,7 @@ class Match:
                     if is_new_round:
                         last_round_number = self.current_round
                         embed = log_message.embeds[0]
-                        embed.description = "- Ongoing\n- Scores updating live"
+                        embed.description = f"\\- ***Match ongoing***\n{generate_score_text(guild, self.persistent_player_stats)}"
                         a_score, b_score = (team_scores[1], team_scores[0]) if self.match.b_side == Side.CT else (team_scores[0], team_scores[1])
                         asyncio.create_task(self.bot.store.update(MMBotMatches, id=self.match_id, a_score=a_score, b_score=b_score))
                         if max_score >= 10:
@@ -1200,10 +1220,9 @@ class Match:
                 if b_channel: await b_channel.delete()
             except nextcord.HTTPException: pass
             # move users back
-            guild = self.bot.get_guild(self.guild_id)
             voice_channel = guild.get_channel(settings.mm_voice_channel)
             for player in self.players:
-                member = guild.get_member(player.user_id)
+                member = guild.get_member(cast(int, player.user_id))
                 if member and member.voice and member.voice.channel in [a_vc, b_vc]:
                     await asyncio.sleep(0.1)
                     try: await member.move_to(voice_channel)
