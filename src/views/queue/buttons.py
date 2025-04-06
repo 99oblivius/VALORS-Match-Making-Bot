@@ -53,12 +53,8 @@ class QueueButtonsView(nextcord.ui.View):
         button.callback = instance.stats_callback
         instance.add_item(button)
     
-        button = nextcord.ui.Button(label="lfg", custom_id=f"mm_queue_button:lfg")
+        button = nextcord.ui.Button(label="ping", custom_id=f"mm_queue_button:ping")
         button.callback = instance.lfg_callback
-        instance.add_item(button)
-    
-        button = nextcord.ui.Button(label="Toggle lfg", custom_id=f"mm_queue_button:toggle_lfg")
-        button.callback = instance.toggle_lfg_callback
         instance.add_item(button)
 
         return instance
@@ -88,8 +84,6 @@ class QueueButtonsView(nextcord.ui.View):
             style=nextcord.ButtonStyle.red, 
             custom_id=f"mm_queue_button:unready")
         instance.add_item(button)
-
-        row += 1
     
         button = nextcord.ui.Button(
             label="Stats", 
@@ -99,17 +93,10 @@ class QueueButtonsView(nextcord.ui.View):
         instance.add_item(button)
     
         button = nextcord.ui.Button(
-            label="lfg", 
+            label="Ping", 
             row=row,
             style=nextcord.ButtonStyle.blurple, 
-            custom_id=f"mm_queue_button:lfg")
-        instance.add_item(button)
-
-        button = nextcord.ui.Button(
-            label="Toggle lfg", 
-            row=row,
-            style=nextcord.ButtonStyle.grey, 
-            custom_id=f"mm_queue_button:toggle_lfg")
+            custom_id=f"mm_queue_button:ping")
         instance.add_item(button)
 
         return instance
@@ -243,19 +230,3 @@ Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>"
         await asyncio.sleep(5)
         await msg.delete()
 
-    async def toggle_lfg_callback(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        if not settings.mm_lfg_role:
-            return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings lfg_role')}", ephemeral=True)
-    
-        lfg_role = interaction.guild.get_role(settings.mm_lfg_role)
-        if not lfg_role:
-            return await interaction.response.send_message("LFG Role is missing. Reach out to staff", ephemeral=True)
-        
-        if lfg_role in interaction.user.roles:
-            await interaction.user.remove_roles(lfg_role)
-            log.info(f"{interaction.user.display_name} lost LFG role")
-            return await interaction.response.send_message(f"\\- You removed {lfg_role.mention} from yourself", ephemeral=True)
-        await interaction.user.add_roles(lfg_role)
-        log.info(f"{interaction.user.display_name} gained LFG role")
-        await interaction.response.send_message(f"+ You added {lfg_role.mention} to yourself", ephemeral=True)
