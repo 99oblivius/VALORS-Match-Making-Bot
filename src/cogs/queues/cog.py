@@ -50,72 +50,10 @@ class Queues(commands.Cog):
     # QUEUE SLASH COMMANDS #
     ########################
     @nextcord.slash_command(name="q", description="See who's in queue", guild_ids=[*GUILD_IDS])
-    async def qeueu(self, interaction: nextcord.Interaction):
+    async def show_queue(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
         embed = create_queue_embed(queue_users)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-    
-    @nextcord.slash_command(name="block", description="Block a user from queuing", guild_ids=[*GUILD_IDS])
-    async def block_from_queue(self, interaction: nextcord.Interaction, 
-        user: nextcord.Member | nextcord.User,
-        reason: str = nextcord.SlashOption(required=True),
-        period: str = nextcord.SlashOption(
-            name="period",
-            description="Time period (format: 0w0d0h0m)",
-            required=False,
-            default="-1")
-    ):
-        if len(reason) > 1024:
-            return await interaction.response.send_message("Invalid reason. Reason, too long. Try and keep it bellow 1024 characters.", ephemeral=True)
-        now = datetime.now(timezone.utc)
-        period_match = re.match(r"(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?", period)
-        if period == "-1":
-            expiration = now + timedelta(days=10*365)
-        elif not period_match:
-            return await interaction.response.send_message(
-                "Invalid period format. Use 0y0w0d0h0m (e.g., 1y5d for 1 year and 5 months).", ephemeral=True)
-        else:
-            years, weeks, days, hours, minutes = map(lambda x: int(x) if x else 0, period_match.groups())
-            expiration = now + timedelta(days=years*365 + weeks*7 + days, hours=hours, minutes=minutes)
-
-
-        blocked_users = await self.bot.store.get_user_blocks(interaction.guild.id)
-        description = "Set "
-        if user.id in (u.user_id for u in blocked_users):
-            description = "Updated "
-        
-        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration, reason, interaction.user.id)
-        self.bot.queue_manager.remove_user(user.id)
-        await self.bot.store.unqueue_user_guild(interaction.guild.id, user.id)
-        settings = await self.bot.settings_cache(interaction.guild.id)
-        staff_channel = interaction.guild.get_channel(settings.staff_channel)
-        if staff_channel:
-            embed = nextcord.Embed(
-                title="Match Making", 
-                description=f"{user.mention} was blocked from participating in match making for```{reason}```", 
-                color=VALORS_THEME1_1)
-            await staff_channel.send(embed=embed)
-
-        log.info(f"{interaction.user.display_name} blocked {user.display_name} from queueing for {period}")
-        stamp = int(expiration.timestamp())
-        await interaction.response.send_message(f"{description} {user.mention} block successfully until <t:{stamp}:D> <t:{stamp}:R>.", ephemeral=True)
-
-        await log_moderation(interaction, settings.log_channel, "Member blocked", f"{user.mention}{f' until <t:{int(expiration.timestamp())}:f> <t:{int(expiration.timestamp())}:R>' if period else ''}")
-    
-    @nextcord.slash_command(name="unblock", description="(Unblock a user from queuing", guild_ids=[*GUILD_IDS])
-    async def unblock_from_queue(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
-        blocked_users = await self.bot.store.get_user_blocks(interaction.guild.id)
-        if user.id not in (u.user_id for u in blocked_users):
-            return await interaction.response.send_message(f"{user.mention} is not currently blocked", ephemeral=True)
-        
-        expiration = datetime.now(timezone.utc)
-        await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration)
-
-        log.info(f"{interaction.user.display_name} unblocked {user.display_name} from queue")
-        await interaction.response.send_message(f"{user.mention} unblocked successfully.", ephemeral=True)
-
-        settings = await self.bot.settings_cache(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Member unblocked", f"{user.mention}")
 
     @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[*GUILD_IDS])
     async def remove_from_queue(self, interaction: nextcord.Interaction, 
@@ -152,7 +90,7 @@ class Queues(commands.Cog):
     async def queue(self, interaction: nextcord.Interaction):
         pass
 
-    @nextcord.slash_command(name="lfg", description="Ping Looking for Game members", guild_ids=[*GUILD_IDS])
+    @nextcord.slash_command(name="ping", description="Ping Looking for Game members", guild_ids=[*GUILD_IDS])
     async def ping_lfg(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
