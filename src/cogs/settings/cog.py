@@ -55,7 +55,7 @@ class Settings(commands.Cog):
         await self.bot.rcon_manager.clear_dangling_servers()
         log.info("Cog started")
     
-    @nextcord.slash_command(name="settings", description="Settings", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="settings", description="Settings", guild_ids=[*GUILD_IDS])
     async def settings(self, interaction: nextcord.Interaction):
         pass
 
@@ -269,7 +269,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Leaderboard channel set", f"<#{interaction.channel.id}>")
 
-    @nextcord.slash_command(name="change_mmr", description="Change a member's Match Making Rating", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="change_mmr", description="Change a member's Match Making Rating", guild_ids=[*GUILD_IDS])
     async def change_mmr(self, interaction: nextcord.Interaction, 
         user: nextcord.User = nextcord.SlashOption(
             description="The user or member to change the MMR of."),
@@ -318,7 +318,7 @@ Your privacy is our priority. Steam authentication is secure and limited to esse
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Member mmr adjusted", f"{user.mention}\nbefore: {old_mmr}\nafter: {new_mmr}")
     
-    @nextcord.slash_command(name="manual_register", description="Manually register a guild member with a platform ID", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="manual_register", description="Manually register a guild member with a platform ID", guild_ids=[*GUILD_IDS])
     async def manual_register(self,
         interaction: nextcord.Interaction,
         user: nextcord.Member = nextcord.SlashOption(description="The user to register"),

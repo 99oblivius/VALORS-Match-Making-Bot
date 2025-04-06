@@ -20,7 +20,7 @@ import nextcord
 from nextcord.ext import commands
 from nextcord import Interaction, SlashOption
 from typing import List, Dict
-from config import GUILD_ID
+from config import GUILD_IDS
 from fuzzywuzzy import process
 
 class HelpCommand(commands.Cog):
@@ -28,7 +28,7 @@ class HelpCommand(commands.Cog):
         self.bot = bot
         self.all_commands = {}
 
-    @nextcord.slash_command(name="help", description="Display information about available commands", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="help", description="Display information about available commands", guild_ids=[*GUILD_IDS])
     async def help(self, interaction: Interaction, 
                    command: str = SlashOption(required=False, description="Specific command to get help for", autocomplete=True)):
         await interaction.response.defer(ephemeral=True)

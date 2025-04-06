@@ -54,7 +54,7 @@ class Moderation(commands.Cog):
         await self.mute_manager.load_active_mutes()
         log.info("Cog started")
 
-    @nextcord.slash_command(description="Moderation commands", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(description="Moderation commands", guild_ids=[*GUILD_IDS])
     async def moderation(self, interaction: nextcord.Interaction):
         pass
 

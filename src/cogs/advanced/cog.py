@@ -41,7 +41,7 @@ class Advanced(commands.Cog):
     async def on_ready(self):
         log.info("Cog started")
 
-    @nextcord.slash_command(name="advanced_stats", description="List your recent performance", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="advanced_stats", description="List your recent performance", guild_ids=[*GUILD_IDS])
     async def stats(self, interaction: nextcord.Interaction, 
         user: nextcord.User | None = nextcord.SlashOption(required=False)
     ):
@@ -63,7 +63,7 @@ class Advanced(commands.Cog):
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
-    @nextcord.slash_command(name="advanced_graph", description="View advanced graphs", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="advanced_graph", description="View advanced graphs", guild_ids=[*GUILD_IDS])
     async def advanced_graph(self, interaction: nextcord.Interaction,
         user: nextcord.User = nextcord.SlashOption(
             required=False, 

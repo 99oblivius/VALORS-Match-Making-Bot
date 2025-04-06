@@ -47,13 +47,13 @@ class Queues(commands.Cog):
     ########################
     # QUEUE SLASH COMMANDS #
     ########################
-    @nextcord.slash_command(name="q", description="See who's in queue", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="q", description="See who's in queue", guild_ids=[*GUILD_IDS])
     async def qeueu(self, interaction: nextcord.Interaction):
         queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
         embed = create_queue_embed(queue_users)
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @nextcord.slash_command(name="block", description="Block a user from queuing", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="block", description="Block a user from queuing", guild_ids=[*GUILD_IDS])
     async def block_from_queue(self, interaction: nextcord.Interaction, 
         user: nextcord.Member | nextcord.User,
         reason: str = nextcord.SlashOption(required=True),
@@ -100,7 +100,7 @@ class Queues(commands.Cog):
 
         await log_moderation(interaction, settings.log_channel, "Member blocked", f"{user.mention}{f' until <t:{int(expiration.timestamp())}:f> <t:{int(expiration.timestamp())}:R>' if period else ''}")
     
-    @nextcord.slash_command(name="unblock", description="(Unblock a user from queuing", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="unblock", description="(Unblock a user from queuing", guild_ids=[*GUILD_IDS])
     async def unblock_from_queue(self, interaction: nextcord.Interaction, user: nextcord.Member | nextcord.User):
         blocked_users = await self.bot.store.get_user_blocks(interaction.guild.id)
         if user.id not in (u.user_id for u in blocked_users):
@@ -115,7 +115,7 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Member unblocked", f"{user.mention}")
 
-    @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[*GUILD_IDS])
     async def remove_from_queue(self, interaction: nextcord.Interaction, 
         user: str=nextcord.SlashOption(required=False, description="Remove a user or userid from the queue")
     ):
@@ -146,11 +146,11 @@ class Queues(commands.Cog):
 
         await log_moderation(interaction, settings.log_channel, "Member removed from queue", f"{user.mention}")
 
-    @nextcord.slash_command(name="queue", description="Queue settings", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="queue", description="Queue settings", guild_ids=[*GUILD_IDS])
     async def queue(self, interaction: nextcord.Interaction):
         pass
 
-    @nextcord.slash_command(name="lfg", description="Ping Looking for Game members", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="lfg", description="Ping Looking for Game members", guild_ids=[*GUILD_IDS])
     async def ping_lfg(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
@@ -175,7 +175,7 @@ class Queues(commands.Cog):
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
         log.info(f"{interaction.user.display_name} used the ping lfg slash_command")
 
-    @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[*GUILD_IDS])
     async def rating_change(self, interaction: nextcord.Interaction):
         user = interaction.user
 
@@ -204,7 +204,7 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await interaction.response.send_message(embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
-    @nextcord.slash_command(name="stats", description="List your recent performance", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="stats", description="List your recent performance", guild_ids=[*GUILD_IDS])
     async def stats(self, interaction: nextcord.Interaction, 
         user: nextcord.User | None = nextcord.SlashOption(required=False)
     ):
@@ -225,7 +225,7 @@ class Queues(commands.Cog):
         await interaction.response.send_message(
             embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
-    @nextcord.slash_command(name="graph", description="Graph your recent rating performance", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="graph", description="Graph your recent rating performance", guild_ids=[*GUILD_IDS])
     async def graph(
         self, 
         interaction: nextcord.Interaction,
@@ -270,7 +270,7 @@ class Queues(commands.Cog):
         settings = await self.bot.store.get_settings(interaction.guild.id)
         await interaction.response.send_message(f"Graph for {user.mention}", file=file, ephemeral=interaction.channel.id != settings.mm_text_channel)
     
-    @nextcord.slash_command(name="pingme", description="Get a direct message when the queue reaches a specified size", guild_ids=[GUILD_ID])
+    @nextcord.slash_command(name="pingme", description="Get a direct message when the queue reaches a specified size", guild_ids=[*GUILD_IDS])
     async def pingme(self, 
         interaction: nextcord.Interaction,
         count: int = nextcord.SlashOption(
