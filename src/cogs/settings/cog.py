@@ -71,9 +71,9 @@ class Settings(commands.Cog):
 
     @settings.subcommand(name="set_logs", description="Set which channel receives bot logs")
     async def settings_set_logs(self, interaction: nextcord.Interaction):
-        await self.bot.settings_cache(guild_id=interaction.guild.id, log_channel=interaction.channel.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, log_channel=interaction.channel.id)
         await interaction.response.send_message("Log channel set", ephemeral=True)
-        await log_moderation(interaction, interaction.channel.id, "Moderation logs set here")
+        await log_moderation(interaction, settings.log_channel, f"Moderation logs set in <#{interaction.channel.id}>")
 
     @settings.subcommand(name="set_staff", description="Set which channel is intended for staff commands")
     async def settings_set_staff(self, interaction: nextcord.Interaction):

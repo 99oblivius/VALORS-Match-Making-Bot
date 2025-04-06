@@ -28,9 +28,9 @@ class LogHelper:
     
     async def get_log_channel(self, guild: nextcord.Guild) -> nextcord.TextChannel | None:
         settings = await self.bot.settings_cache(guild.id)
-        if not settings or not settings.log_channel:
+        if not settings or not settings.server_log_channel:
             return None
-        return guild.get_channel(int(settings.log_channel))
+        return guild.get_channel(int(settings.server_log_channel))
     
     async def get_staff_role(self, guild: nextcord.Guild) -> nextcord.Role | None:
         settings = await self.bot.settings_cache(guild.id)

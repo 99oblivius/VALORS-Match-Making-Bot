@@ -1,5 +1,9 @@
+import aiohttp
+import asyncio
+import re
 import datetime
-from typing import TYPE_CHECKING, Union, List
+from io import BytesIO
+from typing import TYPE_CHECKING, Union, List, cast
 
 from config import GUILD_IDS
 import nextcord
@@ -17,6 +21,7 @@ class Logging(commands.Cog):
     def __init__(self, bot: 'Bot'):
         self.bot = bot
         self.helper = LogHelper(bot)
+        self.media_lock = asyncio.Lock()
     
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -28,9 +33,15 @@ class Logging(commands.Cog):
     
     @logging.subcommand(name="set_logs", description="Set which channel receives server logs")
     async def server_set_logs(self, interaction: nextcord.Interaction):
-        await self.bot.settings_cache(guild_id=interaction.guild.id, server_log_channel=interaction.channel.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, server_log_channel=interaction.channel.id)
         await interaction.response.send_message("Server Log channel set", ephemeral=True)
-        await log_moderation(interaction, interaction.channel.id, "Server logs set here")
+        await log_moderation(interaction, settings.log_channel, f"Server logs set in <#{interaction.channel.id}>")
+    
+    @logging.subcommand(name="set_media", description="Set which thread repeats server links and attachments")
+    async def server_set_media(self, interaction: nextcord.Interaction):
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, media_log_thread=interaction.channel.id)
+        await interaction.response.send_message("Server Media thread set", ephemeral=True)
+        await log_moderation(interaction, settings.log_channel, f"Media logs set in <#{interaction.channel.id}>")
     
     @commands.Cog.listener()
     async def on_auto_moderation_action_execution(self, execution: nextcord.AutoModerationAction) -> None:
@@ -541,6 +552,42 @@ class Logging(commands.Cog):
     async def on_message(self, message: nextcord.Message) -> None:
         if not message.guild or message.author.bot or not message.content:
             return
+
+        links = [m.group() for m in re.finditer(r'(https?)://(-\.)?([^\s/?\.#-]+\-?\.?)+(/[^\s]*)?', message.content)]
+        if links or message.attachments:
+            links_count = f" {len(links)} link{'s' if len(links) != 1 else ''}" if len(links) > 0 else ""
+            atts_count =  f" {len(message.attachments)} attachment{'s' if len(message.attachments) != 1 else ''}" if len(message.attachments) > 0 else ""
+            description = ""
+            if isinstance(message.channel, nextcord.DMChannel):
+                description += f"[DMs]:\n```\n{message.content}```"
+            else:
+                description += f"[{message.channel.name}]({message.channel.jump_url}) [message]({message.jump_url}){links_count}{atts_count}"
+            
+            settings = await self.bot.settings_cache(message.guild.id)
+            if not settings or not settings.media_log_thread: return
+            thread = message.guild.get_thread(int(cast(int, settings.media_log_thread)))
+            if not thread: return
+            
+            embed = nextcord.Embed(description=description, color=message.author.accent_color)
+            embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
+            files = []
+            async with aiohttp.ClientSession() as session:
+                for attachment in message.attachments:
+                    try:
+                        async with session.get(attachment.url) as resp:
+                            if resp.status == 200:
+                                data = await resp.read()
+                                files.append(nextcord.File(fp=BytesIO(data), filename=attachment.filename))
+                    except Exception:
+                        continue
+            async def send_message():
+                async with self.media_lock:
+                    await thread.send(embed=embed)
+                    if files: await thread.send(files=files)
+                    if links: await thread.send(content='\n'.join(links))
+
+            asyncio.create_task(send_message())
+                
         
         if any(keyword in message.content.lower() for keyword in ["discord.gg", "discord.com/invite"]):
             await self.helper.log_event(
