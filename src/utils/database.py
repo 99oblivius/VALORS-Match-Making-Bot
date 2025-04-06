@@ -19,16 +19,17 @@
 import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple, cast
 import random
 from statistics import mean, median, stdev
 
 from sqlalchemy import delete, desc, func, inspect, or_, text, update, case, and_
 from sqlalchemy.dialects.postgresql import insert, INTERVAL
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload, selectinload, sessionmaker
+from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.sql.functions import concat
 
 from config import DATABASE_URL, PLACEMENT_MATCHES
@@ -40,6 +41,7 @@ from .models import *
 
 class Database:
 
+    @staticmethod
     def log_db_operation(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -62,8 +64,12 @@ class Database:
         return wrapper
 
     def __init__(self) -> None:
-        self._engine: AsyncEngine = create_async_engine(DATABASE_URL, pool_size=20, max_overflow=0)
-        self._session_maker: sessionmaker = sessionmaker(bind=self._engine, class_=AsyncSession, expire_on_commit=False)
+        self._session_maker = async_sessionmaker(
+            create_async_engine(DATABASE_URL, pool_size=20, max_overflow=0), 
+            class_=AsyncSession, 
+            autoflush=True, 
+            expire_on_commit=False, 
+            info=None)
     
 ###########
 # CLASSIC #
@@ -111,7 +117,7 @@ class Database:
             await session.commit()
         
     @log_db_operation
-    async def get_serveraddr(self, match_id: int) -> None:
+    async def get_serveraddr(self, match_id: int) -> str | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches.serveraddr)
@@ -130,7 +136,7 @@ class Database:
                 result = await session.execute(
                     select(RconServers)
                     .order_by(RconServers.id))
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def get_server(self, host: str, port: int) -> RconServers:
@@ -249,7 +255,7 @@ class Database:
                 select(BotRegions)
                 .where(BotRegions.guild_id == guild_id)
                 .order_by(BotRegions.index))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
     @log_db_operation
     async def get_ranks(self, guild_id: int) -> List[MMBotRanks]:
@@ -258,7 +264,7 @@ class Database:
                 select(MMBotRanks)
                 .where(MMBotRanks.guild_id == guild_id)
                 .order_by(MMBotRanks.mmr_threshold))
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def set_ranks(self, guild_id: int, ranks: Dict[str, Dict[str, int]]) -> None:
@@ -354,7 +360,7 @@ class Database:
                     UserPlatformMappings.guild_id == guild_id, 
                     UserPlatformMappings.user_id == user_id)
                 .order_by(UserPlatformMappings.platform))
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def get_users_summary_stats(self, guild_id: int, user_ids: List[int]) -> Dict[int, MMBotUserSummaryStats]:
@@ -365,7 +371,7 @@ class Database:
                     MMBotUserSummaryStats.guild_id == guild_id,
                     MMBotUserSummaryStats.user_id.in_(user_ids)))
             stats_list = result.scalars().all()
-            return {stat.user_id: stat for stat in stats_list}
+            return { int(cast(int, stat.user_id)): stat for stat in stats_list }
     
     @log_db_operation
     async def set_users_summary_stats(self, guild_id: int, users_data: Dict[int, Dict[str, Any]]) -> None:
@@ -395,13 +401,13 @@ class Database:
                     await session.execute(stmt)
     
     @log_db_operation
-    async def get_users(self, guild_id: int, user_ids: List[int] = None) -> List[MMBotUsers]:
+    async def get_users(self, guild_id: int, user_ids: List[int] | None = None) -> List[MMBotUsers]:
         async with self._session_maker() as session:
             query = select(MMBotUsers).options(selectinload(MMBotUsers.summary_stats)).where(MMBotUsers.guild_id == guild_id)
             if user_ids:
                 query = query.where(MMBotUsers.user_id.in_(user_ids))
             result = await session.execute(query)
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def add_user(self, guild_id: int, user_id: int) -> MMBotUsers:
