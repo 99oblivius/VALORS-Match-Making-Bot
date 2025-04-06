@@ -218,7 +218,7 @@ class RCONManager:
             return await rcon.send("Banlist")
     
     @safe_rcon
-    async def list_maps(self, serveraddr: str, *args, **kwargs):
+    async def list_maps(self, serveraddr: str, *args, **kwargs) -> dict:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
             return await rcon.send("MapList")
