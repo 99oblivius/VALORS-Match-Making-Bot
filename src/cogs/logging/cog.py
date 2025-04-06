@@ -8,7 +8,7 @@ from nextcord.ext import commands
 if TYPE_CHECKING:
     from main import Bot
 
-from utils.models import BotSettings
+from utils.utils import log_moderation
 from utils.logger import Logger as log
 from .helper import EventType, LogHelper
 
@@ -26,11 +26,11 @@ class Logging(commands.Cog):
     async def logging(self, interaction: nextcord.Interaction):
         pass
     
-    @logging.subcommand(name="set_logs", description="Set which channel receives bot logs")
-    async def settings_set_logs(self, interaction: nextcord.Interaction):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, log_channel=interaction.channel.id)
-        await interaction.response.send_message("Log channel set", ephemeral=True)
-        await log_moderation(interaction, interaction.channel.id, "Moderation logs set to here")
+    @logging.subcommand(name="set_logs", description="Set which channel receives server logs")
+    async def server_set_logs(self, interaction: nextcord.Interaction):
+        await self.bot.settings_cache(guild_id=interaction.guild.id, server_log_channel=interaction.channel.id)
+        await interaction.response.send_message("Server Log channel set", ephemeral=True)
+        await log_moderation(interaction, interaction.channel.id, "Server logs set here")
     
     @commands.Cog.listener()
     async def on_auto_moderation_action_execution(self, execution: nextcord.AutoModerationAction) -> None:

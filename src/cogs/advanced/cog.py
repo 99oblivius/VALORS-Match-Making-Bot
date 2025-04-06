@@ -16,25 +16,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import json
 import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import asyncio
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 from nextcord.ext import commands
 
 from config import *
 from utils.logger import Logger as log
-from utils.models import BotSettings
 from utils.statistics import create_graph_async, create_stats_embed
-from utils.utils import format_duration, create_queue_embed
-from views.queue.buttons import QueueButtonsView
 
 
 class Advanced(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
     
     @commands.Cog.listener()
@@ -45,7 +44,7 @@ class Advanced(commands.Cog):
     async def stats(self, interaction: nextcord.Interaction, 
         user: nextcord.User | None = nextcord.SlashOption(required=False)
     ):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if user is None:
             user = interaction.user
 
@@ -89,7 +88,7 @@ class Advanced(commands.Cog):
             required=False,
             default="50g")
     ):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         ephemeral = interaction.channel.id != settings.mm_text_channel
         await interaction.response.defer(ephemeral=ephemeral)
         user = user or interaction.user
@@ -134,7 +133,7 @@ class Advanced(commands.Cog):
 
         # Create a Discord file from the BytesIO object
         file = nextcord.File(img_bytes, filename="graph.png")
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await interaction.followup.send(f"Graph for {user.mention}", file=file, ephemeral=ephemeral)
 
 

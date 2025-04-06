@@ -107,6 +107,7 @@ class BotSettings(Base):
 
     guild_id           = Column(BigInteger, primary_key=True, nullable=False)
     staff_channel      = Column(BigInteger)
+    server_log_channel = Column(BigInteger)
     log_channel        = Column(BigInteger)
     
     mm_match_category  = Column(BigInteger)

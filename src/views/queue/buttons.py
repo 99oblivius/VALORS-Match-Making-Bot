@@ -19,7 +19,9 @@
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 from nextcord.ext import commands
@@ -32,7 +34,7 @@ from utils.statistics import create_stats_embed
 
 
 class QueueButtonsView(nextcord.ui.View):
-    def __init__(self, bot: commands.Bot, *args, **kwargs):
+    def __init__(self, bot: "Bot", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.ready_lock: Dict[asyncio.Lock] = {}
@@ -60,10 +62,10 @@ class QueueButtonsView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot):
+    async def create_showable(cls, bot: "Bot"):
         instance = cls(bot, timeout=None)
         instance.stop()
-        settings = await bot.store.get_settings(GUILD_ID)
+        settings = await bot.settings_cache(GUILD_ID)
         periods = json.loads(settings.mm_queue_periods)
         
         # row may never be above 4
@@ -112,7 +114,7 @@ class QueueButtonsView(nextcord.ui.View):
         if lock_id not in self.ready_lock:
             self.ready_lock[lock_id] = asyncio.Lock()
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         user_platforms = await self.bot.store.get_user_platforms(interaction.guild.id, interaction.user.id)
         if not user_platforms:
             return await interaction.response.send_message(
@@ -207,7 +209,7 @@ class QueueButtonsView(nextcord.ui.View):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if not settings.mm_lfg_role:
             return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings lfg_role')}", ephemeral=True)
         

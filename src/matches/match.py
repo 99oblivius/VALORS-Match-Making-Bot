@@ -112,7 +112,7 @@ class Match:
             await member.send(embed=embed)
         except (nextcord.Forbidden, nextcord.HTTPException):
             pass
-        settings: BotSettings = await self.bot.store.get_settings(guild.id)
+        settings = await self.bot.settings_cache(guild.id)
 
         embed = nextcord.Embed(
             title=f"Placements completed!",
@@ -452,7 +452,7 @@ class Match:
         self.requeue_players = []
         
         self.state      = await self.load_state()
-        settings        = await self.bot.store.get_settings(self.guild_id)
+        settings        = await self.bot.settings_cache(self.guild_id)
         assert(isinstance(settings, BotSettings))
         guild           = self.bot.get_guild(self.guild_id)
         assert(isinstance(guild, nextcord.Guild))
@@ -485,6 +485,7 @@ class Match:
 
         self.match_channel = guild.get_channel(cast(int, self.match.match_thread))
         log_channel   = guild.get_channel(cast(int, settings.mm_log_channel))
+        
         a_channel     = guild.get_channel(cast(int, self.match.a_thread))
         b_channel     = guild.get_channel(cast(int, self.match.b_thread))
 

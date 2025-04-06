@@ -63,7 +63,7 @@ class QueueManager:
 
     async def reminder_and_kick(self, user_id: int, expiry: int):
         try:
-            settings = await self.bot.store.get_settings(GUILD_ID)
+            settings = await self.bot.settings_cache(GUILD_ID)
             guild = self.bot.get_guild(GUILD_ID)
             reminder_time = expiry - int(datetime.now(timezone.utc).timestamp()) - settings.mm_queue_reminder
             reminder_msg = None
@@ -118,7 +118,7 @@ class QueueManager:
         self.active_users.pop(user_id, None)
 
     async def fetch_and_initialize_users(self) -> int:
-        settings = await self.bot.store.get_settings(GUILD_ID)
+        settings = await self.bot.settings_cache(GUILD_ID)
         try:
             queue_users = await self.bot.store.get_queue_users(settings.mm_queue_channel)
             count = len(queue_users) if queue_users else 0

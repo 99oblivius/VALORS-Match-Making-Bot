@@ -20,6 +20,9 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 import math
 import re
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 from fuzzywuzzy import process
 import nextcord
@@ -45,7 +48,7 @@ from utils.utils import (
 )
 
 class Moderation(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
         self.mute_manager = MuteManager(bot)
     
@@ -82,7 +85,7 @@ class Moderation(commands.Cog):
                 failed_to_send = True
 
         await interaction.response.send_message(f"{user.mention} has been warned and was{' **NOT** ' if failed_to_send else ' '} notified.", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, f"{user.name} warned{f' Match # {match_id}' if match_id else ''}", f"```\n{message}```")
 
     @moderation.subcommand(name="history", description="View a user's infractions")
@@ -100,7 +103,7 @@ class Moderation(commands.Cog):
             grouped_users[warning.type].append(warning)
         
         embed = nextcord.Embed(
-            title=f"User Infractions Summary{f' by {','.join((w.value.capitalize() for w in warn_filters))}' if warn_filters else ''}",
+            title=f"""User Infractions Summary{f' by {",".join((w.value.capitalize() for w in warn_filters))}' if warn_filters else ''}""",
             description=f"{user.mention}",
             color=0xff6600,
             timestamp=datetime.now(timezone.utc))
@@ -122,7 +125,7 @@ class Moderation(commands.Cog):
                 inline=False)
         
         embed.set_footer(text=f"Total Warnings: {len(all_warnings)}")
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         moderation_category = interaction.guild.get_channel(settings.staff_channel).category
         await interaction.response.send_message(embed=embed, ephemeral=interaction.channel.category.id != moderation_category.id)
 
@@ -139,7 +142,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message(f"Warning `{warning_id}` does not exist.", ephemeral=True)
         
         await self.bot.store.update(MMBotWarnedUsers, id=warning_id, ignored=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await interaction.response.send_message(f"Warning `{warning_id}` was removed successfully.", ephemeral=interaction.channel.id != settings.staff_channel)
         await log_moderation(interaction, settings.log_channel, f"Removed warning", f"id: {warning_id}\ntype: {warning.type.value.capitalize()}\nmatch: {warning.match_id}\n```\n{warning.message}```")
     
@@ -272,7 +275,7 @@ class Moderation(commands.Cog):
         duration: str = nextcord.SlashOption(description="Mute duration (e.g., 1d12h30m or 'indefinite')", required=False),
         silent: bool = nextcord.SlashOption(description="Mute silently", required=False, default=False)
     ):
-        settings = await self.bot.store.get_settings(interaction.guild_id)
+        settings = await self.bot.settings_cache(interaction.guild_id)
         mute_role = interaction.guild.get_role(settings.mm_mute_role)
 
         mute_duration = None
@@ -342,7 +345,7 @@ class Moderation(commands.Cog):
         user: nextcord.Member = nextcord.SlashOption(description="User to unmute"),
         silent: bool = nextcord.SlashOption(description="Unmute silently", required=False, default=False)
     ):
-        settings = await self.bot.store.get_settings(interaction.guild_id)
+        settings = await self.bot.settings_cache(interaction.guild_id)
         mute_role = interaction.guild.get_role(settings.mm_mute_role)
         
         if mute_role not in user.roles:
@@ -412,6 +415,7 @@ class Moderation(commands.Cog):
         delete: bool = nextcord.SlashOption(description="Remove this mute", required=False)
     ):
         mute = await self.bot.store.get_muted(mute_id)
+        settings = await self.bot.settings_cache(interaction.guild_id)
         
         if not mute or (not mute.active and not delete):
             return await interaction.response.send_message("Invalid mute ID or mute is not active.", ephemeral=True)
@@ -437,7 +441,6 @@ class Moderation(commands.Cog):
         
         if delete:
             values['ignored'] = delete
-            settings = await self.bot.store.get_settings(interaction.guild_id)
             mute_role = interaction.guild.get_role(settings.mm_mute_role)
             user = interaction.guild.get_member(mute.user_id) or self.bot.get_user(mute.user_id)
             if user:
@@ -462,7 +465,6 @@ class Moderation(commands.Cog):
             self.mute_manager.tasks.pop(mute.user_id, None)
 
         await interaction.response.send_message(f"Mute updated.\n{'\n'.join(f'{k.capitalize()}: {str(v)}' for k, v in values.items())}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild_id)
         await log_moderation(interaction, settings.log_channel, f"Mute Edited #{mute.id}", f"<@{mute.user_id}>\n{'\n'.join(f'{k.capitalize()}: {str(v)}' for k, v in values.items())}")
 
 def setup(bot):

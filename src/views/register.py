@@ -17,7 +17,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-from typing import List
+from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 from nextcord.ext import commands
@@ -34,7 +36,7 @@ from utils.utils import generate_auth_url
 
 
 class MMHideView(nextcord.ui.View):
-    def __init__(self, bot, verified_role: nextcord.Role):
+    def __init__(self, bot: "Bot", verified_role: nextcord.Role):
         super().__init__(timeout=60)
         self.verified_role = verified_role
         self.bot = bot
@@ -58,7 +60,7 @@ class MMHideView(nextcord.ui.View):
 
 
 class RegionSelect(nextcord.ui.Select):
-    def __init__(self, bot: commands.Bot, regions: List[BotRegions]):
+    def __init__(self, bot: "Bot", regions: List[BotRegions]):
         self.bot = bot
         options = [
             nextcord.SelectOption(
@@ -172,7 +174,7 @@ class RegistryButtonView(nextcord.ui.View):
             await msg.delete()
             return
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         verified_role = interaction.guild.get_role(settings.mm_verified_role)
         if not verified_role:
             return await interaction.response.send_message("Failed to find verified role.", ephemeral=True)

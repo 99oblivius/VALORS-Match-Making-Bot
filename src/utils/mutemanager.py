@@ -38,7 +38,7 @@ class MuteManager:
 
     async def unmute_user(self, user_id: int):
         guild = self.bot.get_guild(GUILD_ID)
-        settings = await self.bot.store.get_settings(GUILD_ID)
+        settings = await self.bot.settings_cache(GUILD_ID)
         member = guild.get_member(user_id)
         if member:
             if settings.mm_mute_role in (r.id for r in member.roles):

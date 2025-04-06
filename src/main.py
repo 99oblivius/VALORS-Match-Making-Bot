@@ -30,6 +30,7 @@ from utils.database import Database
 from utils.queuemanager import QueueManager
 from utils.pavlov import RCONManager
 from utils.command_ids import CommandCache
+from utils.settings import SettingsCache
 
 def exit_cleanup(a: list):
     for b in a:
@@ -46,6 +47,7 @@ class Bot(commands.Bot):
         self.queue_manager: QueueManager  = QueueManager(self)
         self.rcon_manager: RCONManager    = RCONManager(self)
         self.command_cache: CommandCache  = CommandCache(self)
+        self.settings_cache:SettingsCache = SettingsCache(self)
 
         self.match_stages = {}
     

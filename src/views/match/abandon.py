@@ -43,7 +43,7 @@ class AbandonView(nextcord.ui.View):
         loop = asyncio.get_event_loop()
         guild = interaction.guild
         await interaction.response.defer(ephemeral=True)
-        settings = await self.bot.store.get_settings(guild.id)
+        settings = await self.bot.settings_cache(guild.id)
 
         if not await cleanup_match(loop, self.match.id):
             log.error(f"{interaction.user.display_name} had an issue abandoning match {self.match.id}")

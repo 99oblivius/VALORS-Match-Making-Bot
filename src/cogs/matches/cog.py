@@ -18,8 +18,11 @@
 
 import asyncio
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from io import BytesIO
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 import pytz
@@ -29,7 +32,7 @@ from config import *
 from matches import cleanup_match, get_match, load_ongoing_matches
 from matches.functions import calculate_mmr_change
 from utils.logger import Logger as log
-from utils.models import BotSettings, Team, Side
+from utils.models import BotSettings, Team
 from utils.utils import abandon_cooldown, format_duration, generate_score_image, log_moderation
 from views.match.abandon import AbandonView
 from views.match.accept import AcceptView
@@ -49,7 +52,7 @@ class Matches(commands.Cog):
     async def wait_rotate_map_pool(self):
         await self.bot.wait_until_ready()
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
     
     @commands.Cog.listener()
@@ -85,7 +88,7 @@ class Matches(commands.Cog):
 
     @nextcord.slash_command(name="cancel", description="Cancel a match", guild_ids=[*GUILD_IDS])
     async def mm_cancel(self, interaction: nextcord.Interaction, match_id: int=nextcord.SlashOption(default=-1, required=False)):
-        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        settings: BotSettings = await self.bot.settings_cache(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if staff_role and not staff_role in interaction.user.roles:
             msg = await interaction.response.send_message("Missing permissions", ephemeral=True)
@@ -110,7 +113,6 @@ class Matches(commands.Cog):
         await interaction.response.send_message(
             f"Match id {match_id} cleaning up", ephemeral=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         scores_channel = interaction.guild.get_channel(settings.mm_log_channel)
         if not scores_channel: return
         scores_message = await scores_channel.fetch_message(match.log_message)
@@ -154,7 +156,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
 
     @nextcord.slash_command(name="last_match", description="Display stats from the last match", guild_ids=[*GUILD_IDS])
     async def display_last_match(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         ephemeral = interaction.channel.id != settings.mm_text_channel
         await interaction.response.defer(ephemeral=ephemeral)
 
@@ -215,22 +217,21 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
             await interaction.followup.send(
                 "An error occurred while shuffling the maps.", ephemeral=True)
         
-        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
+        settings: BotSettings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Map pool shuffled", f"New order:\n```\n{', '.join(map_list)}```")
 
     @mm_settings.subcommand(name="accept_period", description="Set match accept period")
     async def set_mm_accept_period(self, interaction: nextcord.Interaction, 
         seconds: int=nextcord.SlashOption(min_value=0, max_value=1800)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_accept_period=seconds)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_accept_period=seconds)
         log.info(f"{interaction.user.display_name} set the accept period to: {seconds}")
         await interaction.response.send_message(f"Accept period set to `{format_duration(seconds)}`", ephemeral=True)
 
-        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Accept period changed", f"{format_duration(seconds)}")
 
     @set_mm_accept_period.on_autocomplete("seconds")
     async def autocomplete_accept_period(self, interaction: nextcord.Interaction, seconds):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if not seconds or not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[180])
         await interaction.response.send_autocomplete(choices=[seconds, settings.mm_accept_period])
@@ -239,26 +240,24 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
     async def set_mm_join_period(self, interaction: nextcord.Interaction, 
         minutes: int=nextcord.SlashOption(min_value=0, max_value=30)):
         seconds = minutes * 60
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_join_period=seconds)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_join_period=seconds)
         log.info(f"{interaction.user.display_name} set the join period to: {seconds}")
         await interaction.response.send_message(f"Join period set to `{format_duration(seconds)}`", ephemeral=True)
 
-        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Join period changed", f"{format_duration(seconds)}")
     
     @set_mm_join_period.on_autocomplete("minutes")
     async def autocomplete_join_period(self, interaction: nextcord.Interaction, minutes):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if not minutes or not settings.mm_queue_periods:
             return await interaction.response.send_autocomplete(choices=[int(settings.mm_join_period / 60)])
         await interaction.response.send_autocomplete(choices=[minutes, int(settings.mm_join_period / 60)])
 
     @mm_settings.subcommand(name="map_options", description="Set how many maps are revealed for pick and bans")
     async def set_maps_range(self, interaction: nextcord.Interaction, size: int=nextcord.SlashOption(min_value=3, max_value=10)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=size)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_maps_range=size)
         await interaction.response.send_message(f"Match making set to {size} maps range", ephemeral=True)
 
-        settings: BotSettings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Map options changed", f"{size}")
     
     @mm_settings.subcommand(name="set_maps", description="Choose what maps go into the match making pool")
@@ -271,8 +270,8 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
             return await interaction.response.send_message(
                 "The file you provided did not contain a valid json string\ne.g. `{\"Dust 2\": \"https://image.img\",}`", ephemeral=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)))
+        settings = await self.bot.settings_cache(interaction.guild.id)
+        await self.bot.settings_cache(guild_id=interaction.guild.id, mm_maps_range=min(settings.mm_maps_range, len(m)))
         await self.bot.store.set_maps(guild_id=interaction.guild.id, maps=[(k, v) for k, v in m.items()])
         log.info(f"{interaction.user.display_name} set the map pool to:")
         log.pretty(m)
@@ -314,7 +313,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
         await interaction.response.send_message(
             f"Mods successfully set to `{', '.join([k for k in m.keys()])}`", ephemeral=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Mod list changed", f"New mods:\n```\n{', '.join([k for k in m.keys()])}```")
     
     @mm_settings.subcommand(name="get_mods", description="Get the current mods with their ids")

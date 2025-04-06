@@ -37,7 +37,7 @@ class NoServerFoundView(nextcord.ui.View):
         style=nextcord.ButtonStyle.primary,
         custom_id="mm_refresh_button")
     async def refresh_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if not interaction.user.guild_permissions.administrator or not staff_role in interaction.user.roles:
             return await interaction.response.send_message("This button is intended for staff use only.", ephemeral=True)
@@ -54,7 +54,7 @@ class NoServerFoundView(nextcord.ui.View):
         style=nextcord.ButtonStyle.danger,
         custom_id="mm_terminate_button")
     async def terminate_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if not interaction.user.guild_permissions.administrator or not staff_role in interaction.user.roles:
             return await interaction.response.send_message("This button is intended for staff use only.", ephemeral=True)
@@ -65,7 +65,6 @@ class NoServerFoundView(nextcord.ui.View):
             return await interaction.followup.send("Something went wrong. Try again...", ephemeral=True)
         
         match = await self.bot.store.get_match(self.match_id)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         log_channel = interaction.guild.get_channel(settings.mm_log_channel)
         try:
             log_message = await log_channel.fetch_message(match.log_message)

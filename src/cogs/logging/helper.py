@@ -27,19 +27,19 @@ class LogHelper:
         self.bot = bot
     
     async def get_log_channel(self, guild: nextcord.Guild) -> nextcord.TextChannel | None:
-        settings = await self.bot.store.get_settings(guild.id)
+        settings = await self.bot.settings_cache(guild.id)
         if not settings or not settings.log_channel:
             return None
         return guild.get_channel(int(settings.log_channel))
     
     async def get_staff_role(self, guild: nextcord.Guild) -> nextcord.Role | None:
-        settings = await self.bot.store.get_settings(guild.id)
+        settings = await self.bot.settings_cache(guild.id)
         if not settings or not settings.mm_staff_role:
             return None
         return guild.get_role(int(settings.mm_staff_role))
     
     async def get_match_category(self, guild: nextcord.Guild) -> nextcord.CategoryChannel | None:
-        settings = await self.bot.store.get_settings(guild.id)
+        settings = await self.bot.settings_cache(guild.id)
         if not settings or not settings.mm_match_category:
             return None
         return guild.get_channel(int(settings.mm_match_category))
@@ -65,7 +65,7 @@ class LogHelper:
         
         if author:
             embed.set_author(
-                name=f"{author.name}#{author.discriminator}" if hasattr(author, "discriminator") else author.name,
+                name=f"{author.name}" if hasattr(author, "discriminator") else author.name,
                 icon_url=author.display_avatar.url if hasattr(author, "display_avatar") else None)
         
         if thumbnail:

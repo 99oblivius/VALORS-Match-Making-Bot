@@ -9,7 +9,7 @@ class PaginationView(nextcord.ui.View):
         self.update_button_states()
     
     async def is_staff(self, interaction: nextcord.Interaction) -> bool:
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
         if staff_role in interaction.user.roles:
             return True

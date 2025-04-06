@@ -21,20 +21,22 @@ import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import asyncio
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 from nextcord.ext import commands
 
 from config import *
 from utils.logger import Logger as log
-from utils.models import BotSettings
 from utils.statistics import create_graph_async, create_stats_embed
 from utils.utils import format_duration, create_queue_embed, log_moderation
 from views.queue.buttons import QueueButtonsView
 
 
 class Queues(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
     
     @commands.Cog.listener()
@@ -85,7 +87,7 @@ class Queues(commands.Cog):
         await self.bot.store.set_user_block(interaction.guild.id, user.id, expiration, reason, interaction.user.id)
         self.bot.queue_manager.remove_user(user.id)
         await self.bot.store.unqueue_user_guild(interaction.guild.id, user.id)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         staff_channel = interaction.guild.get_channel(settings.staff_channel)
         if staff_channel:
             embed = nextcord.Embed(
@@ -112,7 +114,7 @@ class Queues(commands.Cog):
         log.info(f"{interaction.user.display_name} unblocked {user.display_name} from queue")
         await interaction.response.send_message(f"{user.mention} unblocked successfully.", ephemeral=True)
 
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Member unblocked", f"{user.mention}")
 
     @nextcord.slash_command(name="remove_from_queue", description="Remove a user from a queue", guild_ids=[*GUILD_IDS])
@@ -130,7 +132,7 @@ class Queues(commands.Cog):
         if user_id not in (user.user_id for user in queue_users):
             return await interaction.response.send_message(f"`{user}` was not found as a queued user.", ephemeral=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await self.bot.store.unqueue_user(settings.mm_queue_channel, user_id)
         self.bot.queue_manager.remove_user(user_id)
         log.info(f"{user_id} was manually removed from queue")
@@ -154,7 +156,7 @@ class Queues(commands.Cog):
     async def ping_lfg(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
             return await interaction.response.send_message("You must be in queue to ping",ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if not settings.mm_lfg_role:
             return await interaction.response.send_message(f"lfg_role not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings lfg_role')}", ephemeral=True)
         
@@ -201,14 +203,14 @@ class Queues(commands.Cog):
             embed.add_field(name="K/D/A", value=f"{match.kills}/{match.deaths}/{match.assists}", inline=True)
             embed.add_field(name="Score", value=str(match.score), inline=True)
         
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await interaction.response.send_message(embed=embed, ephemeral=interaction.channel.id != settings.mm_text_channel)
 
     @nextcord.slash_command(name="stats", description="List your recent performance", guild_ids=[*GUILD_IDS])
     async def stats(self, interaction: nextcord.Interaction, 
         user: nextcord.User | None = nextcord.SlashOption(required=False)
     ):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         user = user or interaction.user
 
         summary_stats = await self.bot.store.get_user_summary_stats(interaction.guild.id, user.id)
@@ -267,7 +269,7 @@ class Queues(commands.Cog):
 
         # Create a Discord file from the BytesIO object
         file = nextcord.File(img_bytes, filename="graph.png")
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await interaction.response.send_message(f"Graph for {user.mention}", file=file, ephemeral=interaction.channel.id != settings.mm_text_channel)
     
     @nextcord.slash_command(name="pingme", description="Get a direct message when the queue reaches a specified size", guild_ids=[*GUILD_IDS])
@@ -313,43 +315,38 @@ class Queues(commands.Cog):
     
     @queue_settings.subcommand(name="set_logs", description="Set which channel receives queue logs")
     async def set_logs(self, interaction: nextcord.Interaction):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_log_channel=interaction.channel.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_log_channel=interaction.channel.id)
         await interaction.response.send_message("Queue log channel set", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set mm logs", f"<#{interaction.channel.id}>")
 
     @queue_settings.subcommand(name="lfg_role", description="Set lfg role")
     async def set_mm_lfg(self, interaction: nextcord.Interaction, lfg: nextcord.Role):
         if not isinstance(lfg, nextcord.Role):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_lfg_role=lfg.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_lfg_role=lfg.id)
         await interaction.response.send_message(f"LookingForGame role set to {lfg.mention}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set lfg role", f"{lfg.mention}>")
 
     @queue_settings.subcommand(name="verified_role", description="Set verified role")
     async def set_mm_verified(self, interaction: nextcord.Interaction, verified: nextcord.Role):
         if not isinstance(verified, nextcord.Role):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_verified_role=verified.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_verified_role=verified.id)
         await interaction.response.send_message(f"Verified role set to {verified.mention}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set verified role", f"{verified.mention}")
 
     @queue_settings.subcommand(name="staff_role", description="Set match making staff role")
     async def set_mm_staff(self, interaction: nextcord.Interaction, staff: nextcord.Role):
         if not isinstance(staff, nextcord.Role):
             return await interaction.response.send_message("This is not a role", ephemeral=True)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_staff_role=staff.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_staff_role=staff.id)
         await interaction.response.send_message(f"Match making staff role set to {staff.mention}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set staff role", f"{staff.mention}")
 
     @queue_settings.subcommand(name="set_mute", description="Set match making mute role")
     async def settings_set_mute(self, interaction: nextcord.Interaction, mute: nextcord.Role):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_mute_role=mute.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_mute_role=mute.id)
         await interaction.response.send_message(f"Mute role set to {mute.mention}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Mute role set", f"<@&{mute.id}>")
 
     async def send_queue_buttons(self, interaction: nextcord.Interaction) -> nextcord.Message:
@@ -359,7 +356,7 @@ class Queues(commands.Cog):
 
     @queue_settings.subcommand(name="set_queue", description="Set queue buttons")
     async def set_queue_buttons(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if settings and settings.mm_queue_channel and settings.mm_queue_message:
             channel = interaction.guild.get_channel(settings.mm_queue_channel)
             if channel:
@@ -372,7 +369,7 @@ class Queues(commands.Cog):
                 f"Failed...\nSet queue periods with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue_periods')}", ephemeral=True)
 
         msg = await self.send_queue_buttons(interaction)
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
+        await self.bot.settings_cache(guild_id=interaction.guild.id, mm_queue_message=msg.id, mm_queue_channel=interaction.channel.id)
         await interaction.response.send_message(f"Queue channel set!", ephemeral=True)
         await log_moderation(interaction, settings.log_channel, "Queue buttons set", f"In <#{interaction.channel.id}>")
     
@@ -382,9 +379,9 @@ class Queues(commands.Cog):
                 min_value=5, 
                 max_value=3600, 
                 required=True)):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_reminder=reminder_time)
+        await self.bot.settings_cache(guild_id=interaction.guild.id, mm_queue_reminder=reminder_time)
         await interaction.response.send_message(f"Queue reminder set to {format_duration(reminder_time)}", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Queue reminder set", f"{format_duration(reminder_time)}")
     
     @queue_settings.subcommand(name="set_queue_periods", description="Set queue ready periods")
@@ -402,17 +399,17 @@ class Queues(commands.Cog):
             return await interaction.response.send_message("Failed.\nToo many periods", ephemeral=True)
         
         periods_str = json.dumps(periods_json, separators=[',', ':'])
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_queue_periods=periods_str)
+        await self.bot.settings_cache(guild_id=interaction.guild.id, mm_queue_periods=periods_str)
         log.info(f"{interaction.user.display_name} set queue periods to:")
         log.pretty(periods_json)
         await interaction.response.send_message(
             f"Queue periods set to `{periods_str}`\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')} to update", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Queue periods set", f"```\n{periods_json}```")
 
     @queue_settings.subcommand(name="get_queue_periods", description="Get the current queue ready periods")
     async def get_queue_periods(self, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
         if not settings.mm_queue_periods:
             return await interaction.response.send_message("No queue periods set.", ephemeral=True)
         
@@ -428,9 +425,8 @@ class Queues(commands.Cog):
     
     @queue_settings.subcommand(name="set_text", description="Set general queueing channel")
     async def set_text_channel(self, interaction: nextcord.Interaction):
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_text_channel=interaction.channel.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_text_channel=interaction.channel.id)
         await interaction.response.send_message("Text channel set successfully", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set text channel", f"<#{interaction.channel.id}>")
     
     @queue_settings.subcommand(name="set_voice", description="Set queueing voice channel")
@@ -438,9 +434,8 @@ class Queues(commands.Cog):
         if not isinstance(voice_channel, nextcord.VoiceChannel):
             return await interaction.response.send_message("The channel you selected is not a Voice Channel", ephemeral=True)
         
-        await self.bot.store.upsert(BotSettings, guild_id=interaction.guild.id, mm_voice_channel=voice_channel.id)
+        settings = await self.bot.settings_cache(guild_id=interaction.guild.id, mm_voice_channel=voice_channel.id)
         await interaction.response.send_message("Voice channel set successfully", ephemeral=True)
-        settings = await self.bot.store.get_settings(interaction.guild.id)
         await log_moderation(interaction, settings.log_channel, "Set voice channel", f"<#{voice_channel.id}>")
 
 

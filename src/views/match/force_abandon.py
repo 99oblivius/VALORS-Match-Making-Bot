@@ -53,7 +53,7 @@ class ForceAbandonView(nextcord.ui.View):
         style=nextcord.ButtonStyle.secondary,
         custom_id="mm_force_abandon")
     async def force_abandon(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        settings = await self.bot.store.get_settings(interaction.guild.id)
+        settings = await self.bot.settings_cache(interaction.guild.id)
 
         if settings.mm_staff_role not in [r.id for r in interaction.user.roles]:
             return await interaction.response.send_message("This button is meant for Staff only", ephemeral=True)
