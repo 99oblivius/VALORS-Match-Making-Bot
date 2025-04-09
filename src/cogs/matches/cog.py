@@ -45,7 +45,7 @@ class Matches(commands.Cog):
     @tasks.loop(seconds=60)
     async def rotate_map_pool(self):
         now = datetime.now(pytz.timezone('US/Eastern'))
-        if now.minute == 00 and now.hour % 8 == 0:
+        if now.minute == 00 and now.hour % 2 == 0:
             await self.bot.store.shuffle_map_order(GUILD_ID)
 
     @rotate_map_pool.before_loop
