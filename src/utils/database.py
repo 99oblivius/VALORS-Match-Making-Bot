@@ -598,7 +598,7 @@ class Database:
                 .where(
                     MMBotQueueUsers.guild_id == guild_id,
                     MMBotQueueUsers.user_id.in_(user_ids))
-                .order_by(desc(MMBotQueueUsers.timestamp))
+                .order_by(MMBotQueueUsers.user_id, desc(MMBotQueueUsers.timestamp))
                 .distinct(MMBotQueueUsers.user_id))
 
             result = await session.execute(query)
