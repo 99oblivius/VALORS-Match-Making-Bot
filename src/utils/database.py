@@ -989,7 +989,9 @@ class Database:
                     select(MMBotMatches)
                     .where(
                         MMBotMatches.queue_channel == channel_id,
-                        MMBotMatches.complete == False))
+                        MMBotMatches.complete == False)
+                    .order_by(MMBotMatches.id.desc()))
+                
                 new_match = result.scalars().first()
 
 
