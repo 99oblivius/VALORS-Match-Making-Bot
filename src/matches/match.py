@@ -524,7 +524,6 @@ class Match:
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(send_messages=False) })
             self.match_channel = await match_category.create_text_channel(
                 name=f"Match - #{self.match_id}",
                 overwrites=overwrites,
