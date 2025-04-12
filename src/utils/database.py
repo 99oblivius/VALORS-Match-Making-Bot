@@ -72,6 +72,57 @@ class Database:
             info=None)
     
 ###########
+# TICKETS #
+###########
+
+    @log_db_operation
+    async def create_ticket(self, guild_id: int, user_id: int, username: str) -> int | None:
+        async with self._session_maker() as session:
+            ticket_id = await session.scalar(
+                insert(Tickets)
+                .values({
+                    "guild_id": guild_id,
+                    "user_id": user_id,
+                    "username": username})
+                .returning(Tickets.id))
+            await session.commit()
+            return ticket_id
+
+    @log_db_operation
+    async def get_ticket(self, ticket_id: int) -> Tickets:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(Tickets)
+                .where(Tickets.id == ticket_id))
+            return result.scalars().first()
+
+    @log_db_operation
+    async def get_ticket_by_channel(self, channel_id: int) -> Tickets:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(Tickets)
+                .where(Tickets.channel_id == channel_id))
+            return result.scalars().first()
+    
+    @log_db_operation
+    async def update_ticket(self, ticket_id: int, **data):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(Tickets)
+                .where(Tickets.id == ticket_id)
+                .values(**data))
+            await session.commit()
+    
+    @log_db_operation
+    async def update_ticket_by_channel(self, channel_id: int, **data):
+        async with self._session_maker() as session:
+            await session.execute(
+                update(Tickets)
+                .where(Tickets.channel_id == channel_id)
+                .values(**data))
+            await session.commit()
+
+###########
 # CLASSIC #
 ###########
     @log_db_operation

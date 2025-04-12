@@ -41,6 +41,10 @@ from sqlalchemy.orm import relationship
 Base = declarative_base()
 
 
+class TicketStatus(Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
 class Phase(Enum):
     NONE = 0
     A_BAN = 1
@@ -67,6 +71,26 @@ class Warn(Enum):
     LATE = "late"
     LANGUAGE = "language"
 
+
+class Tickets(Base):
+    __tablename__ = 'tickets'
+    
+    id         = Column(Integer, primary_key=True)
+    guild_id   = Column(BigInteger, nullable=False)
+    channel_id = Column(BigInteger, unique=True)
+    user_id    = Column(BigInteger, nullable=False)
+    username   = Column(String(64), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    closed_at  = Column(TIMESTAMP(timezone=True))
+    status     = Column(sq_Enum(TicketStatus), nullable=False, default=TicketStatus.OPEN)
+    last_ping  = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    closed_by  = Column(BigInteger)
+
+class TicketTranscripts(Base):
+    __tablename__ = 'ticket_transcripts'
+    
+    ticket_id = Column(Integer, primary_key=True, nullable=False)
+    
 
 class UserPlatformMappings(Base):
     __tablename__ = 'user_platform_mappings'
@@ -111,6 +135,8 @@ class BotSettings(Base):
     media_log_thread   = Column(BigInteger)
     log_channel        = Column(BigInteger)
     
+    tickets_channel    = Column(BigInteger)
+    
     mm_match_category  = Column(BigInteger)
     mm_queue_channel   = Column(BigInteger)
     mm_queue_message   = Column(BigInteger)
@@ -118,6 +144,7 @@ class BotSettings(Base):
     mm_accept_period   = Column(SmallInteger, nullable=False, default=180)
     mm_join_period     = Column(SmallInteger, nullable=False, default=900)
     mm_maps_range      = Column(SmallInteger, nullable=False, default=10)
+    mm_last_ping       = Column(TIMESTAMP(timezone=True))
 
     mm_text_channel    = Column(BigInteger)
     mm_queue_reminder  = Column(Integer, nullable=False, default=180)
