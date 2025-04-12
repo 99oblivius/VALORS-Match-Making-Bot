@@ -121,6 +121,12 @@ class Database:
                 .where(Tickets.channel_id == channel_id)
                 .values(**data))
             await session.commit()
+    
+    @log_db_operation
+    async def save_transcript(self, archive: TicketTranscripts):
+        async with self._session_maker() as session:
+            session.add(archive)
+            await session.commit()
 
 ###########
 # CLASSIC #

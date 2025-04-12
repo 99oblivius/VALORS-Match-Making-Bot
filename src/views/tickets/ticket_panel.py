@@ -1,3 +1,5 @@
+import pickle
+
 from datetime import timedelta, datetime, timezone
 from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
@@ -5,7 +7,7 @@ if TYPE_CHECKING:
 
 import nextcord
 
-from utils.models import TicketStatus
+from utils.models import TicketStatus, TicketTranscripts
 
 
 class TicketPanelView(nextcord.ui.View):
@@ -159,12 +161,33 @@ class TicketPanelView(nextcord.ui.View):
         
         async def delete_confirm(interaction: nextcord.Interaction):
             if not (interaction.guild and interaction.user and isinstance(interaction.channel, nextcord.TextChannel)): return
-            # TODO: transcript storage
+            
             settings = await self.bot.settings_cache(interaction.guild.id)
             channel = interaction.guild.get_channel(cast(int, settings.staff_channel))
             if not channel: await interaction.response.send_message("No staff channel set", ephemeral=True); return
             await channel.send(
                 embed=nextcord.Embed(description=f"{ticket.username}'s `{interaction.channel.name}` was closed by {interaction.user.mention}", color=0xff0000))
+            
+            await interaction.channel.send(embed=nextcord.Embed(description="Archiving..."))
+            all_messages = [message async for message in interaction.channel.history(limit=None)]
+            
+            channel_data = {
+                'channel': {
+                    'id': channel.id,
+                    'name': channel.name,
+                    'guild_id': channel.guild.id,
+                },
+                'messages': all_messages
+            }
+            
+            serialized_data = pickle.dumps(channel_data)
+            
+            archive = TicketTranscripts(
+                ticket_id=ticket.id,
+                guild_id=channel.guild.id,
+                archived_at=datetime.now(timezone.utc),
+                data=serialized_data)
+            await self.bot.store.save_transcript(archive)
             
             await interaction.channel.delete()
         async def delete_cancel(interaction: nextcord.Interaction):

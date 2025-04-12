@@ -34,6 +34,7 @@ from sqlalchemy import (
    Text,
    UniqueConstraint,
    func,
+   LargeBinary
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -89,8 +90,10 @@ class Tickets(Base):
 class TicketTranscripts(Base):
     __tablename__ = 'ticket_transcripts'
     
-    ticket_id = Column(Integer, primary_key=True, nullable=False)
-    
+    ticket_id    = Column(Integer, primary_key=True)
+    guild_id     = Column(BigInteger, nullable=False)
+    archived_at  = Column(TIMESTAMP(timezone=True), nullable=False)
+    data         = Column(LargeBinary, nullable=False)
 
 class UserPlatformMappings(Base):
     __tablename__ = 'user_platform_mappings'
