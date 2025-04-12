@@ -105,13 +105,13 @@ class Queues(commands.Cog):
         if interaction.channel.id != settings.mm_text_channel:
             return await interaction.response.send_message(f"You can only use this command in <#{settings.mm_text_channel}>", ephemeral=True)
 
-        if interaction.guild.id in self.bot.last_lfg_ping:
-            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
+        if settings.mm_last_ping:
+            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < settings.mm_last_ping.timestamp():
                 return await interaction.response.send_message(
-    f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
-    Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+    f"""A ping was already sent <t:{int(settings.mm_last_ping.timestamp())}:R>.
+    Try again <t:{int(settings.mm_last_ping.timestamp() + LFG_PING_DELAY)}:R>""", ephemeral=True)
         
-        self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
+        await self.bot.settings_cache(interaction.guild.id, mm_last_ping=datetime.now(timezone.utc))
         await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
         log.info(f"{interaction.user.display_name} used the ping lfg slash_command")
 

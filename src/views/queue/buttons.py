@@ -217,14 +217,14 @@ class QueueButtonsView(nextcord.ui.View):
         if not channel:
             return await interaction.response.send_message(f"Queue channel not set. Set it with {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'queue settings set_queue')}", ephemeral=True)
         
-        if interaction.guild.id in self.bot.last_lfg_ping:
-            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < self.bot.last_lfg_ping[interaction.guild.id]:
+        if settings.mm_last_ping:
+            if (int(datetime.now(timezone.utc).timestamp()) - LFG_PING_DELAY) < settings.mm_last_ping.timestamp():
                 return await interaction.response.send_message(
-f"""A ping was already sent <t:{self.bot.last_lfg_ping[interaction.guild.id]}:R>.
-Try again <t:{self.bot.last_lfg_ping[interaction.guild.id] + LFG_PING_DELAY}:R>""", ephemeral=True)
+f"""A ping was already sent <t:{int(settings.mm_last_ping.timestamp())}:R>.
+Try again <t:{int(settings.mm_last_ping.timestamp() + LFG_PING_DELAY)}:R>""", ephemeral=True)
             log.info(f"{interaction.user.display_name} wanted to ping LFG role")
         
-        self.bot.last_lfg_ping[interaction.guild.id] = int(datetime.now(timezone.utc).timestamp())
+        await self.bot.settings_cache(interaction.guild.id, mm_last_ping=datetime.now(timezone.utc))
         await channel.send(f"All <@&{settings.mm_lfg_role}> members are being summoned by {interaction.user.mention}", allowed_mentions=nextcord.AllowedMentions(roles=True, users=False))
         log.info(f"{interaction.user.display_name} pinged LFG role")
         embed = nextcord.Embed(title="LookingForGame members pinged!", color=VALORS_THEME1)
