@@ -145,7 +145,7 @@ class TicketPanelView(nextcord.ui.View):
         settings = await self.bot.settings_cache(interaction.guild.id)
         channel = interaction.guild.get_channel(cast(int, settings.staff_channel))
         if not channel: return await interaction.response.send_message("No staff channel set", ephemeral=True)
-        await channel.send(embed=nextcord.Embed(description=f"{interaction.user.mention} is looking for assistance in {interaction.channel.mention}"))
+        await channel.send(f"<@&{settings.mm_staff_role}>", embed=nextcord.Embed(description=f"{interaction.user.mention} is looking for assistance in {interaction.channel.mention}"))
         await interaction.response.send_message(embed=nextcord.Embed(description="### Staff were notified!", color=0xaaaa00), ephemeral=True)
         await self.bot.store.update_ticket(ticket.id, last_ping=now)
     
