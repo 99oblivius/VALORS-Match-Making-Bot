@@ -28,20 +28,20 @@ class Logging(commands.Cog):
         log.info("Cog started")
     
     @nextcord.slash_command(name="logging", description="Server logs", guild_ids=[*GUILD_IDS])
-    async def logging(self, interaction: nextcord.Interaction):
+    async def logging(self, _: nextcord.Interaction):
         pass
     
     @logging.subcommand(name="set_logs", description="Set which channel receives server logs")
     async def server_set_logs(self, interaction: nextcord.Interaction):
         settings = await self.bot.settings_cache(guild_id=interaction.guild.id, server_log_channel=interaction.channel.id)
         await interaction.response.send_message("Server Log channel set", ephemeral=True)
-        await log_moderation(interaction, settings.log_channel, f"Server logs set in <#{interaction.channel.id}>")
+        await log_moderation(interaction, cast(int, settings.log_channel), f"Server logs set in <#{interaction.channel.id}>")
     
     @logging.subcommand(name="set_media", description="Set which thread repeats server links and attachments")
     async def server_set_media(self, interaction: nextcord.Interaction):
         settings = await self.bot.settings_cache(guild_id=interaction.guild.id, media_log_thread=interaction.channel.id)
         await interaction.response.send_message("Server Media thread set", ephemeral=True)
-        await log_moderation(interaction, settings.log_channel, f"Media logs set in <#{interaction.channel.id}>")
+        await log_moderation(interaction, cast(int, settings.log_channel), f"Media logs set in <#{interaction.channel.id}>")
     
     @commands.Cog.listener()
     async def on_auto_moderation_action_execution(self, execution: nextcord.AutoModerationAction) -> None:
@@ -166,6 +166,7 @@ class Logging(commands.Cog):
     @commands.Cog.listener()
     @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
+    @LogHelper.ignore_in_matches
     async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState) -> None:
         if before.channel == after.channel:
             return
@@ -401,7 +402,6 @@ class Logging(commands.Cog):
     
     @commands.Cog.listener()
     @LogHelper.staff_visible_only
-    @LogHelper.ignore_in_matches
     async def on_guild_channel_pins_update(self, channel: Union[nextcord.abc.GuildChannel, nextcord.Thread], last_pin: datetime.datetime | None) -> None:
         await self.helper.log_event(
             channel.guild,
@@ -442,6 +442,7 @@ class Logging(commands.Cog):
                 fields=[("Changes", "\n".join(changes), False)])
     
     @commands.Cog.listener()
+    @LogHelper.staff_visible_only
     @LogHelper.ignore_in_matches
     async def on_guild_channel_create(self, channel: nextcord.abc.GuildChannel) -> None:
         channel_type = "Text"
@@ -464,6 +465,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
+    @LogHelper.staff_visible_only
     @LogHelper.ignore_in_matches
     async def on_guild_channel_delete(self, channel: nextcord.abc.GuildChannel) -> None:
         channel_type = "Text"

@@ -1,7 +1,7 @@
 import enum
 import datetime
 from functools import wraps
-from typing import TYPE_CHECKING, Union, List, Callable, Any, TypeVar
+from typing import TYPE_CHECKING, Union, List, Callable, Any, TypeVar, cast
 
 import nextcord
 
@@ -26,24 +26,6 @@ class LogHelper:
     def __init__(self, bot: 'Bot'):
         self.bot = bot
     
-    async def get_log_channel(self, guild: nextcord.Guild) -> nextcord.TextChannel | None:
-        settings = await self.bot.settings_cache(guild.id)
-        if not settings or not settings.server_log_channel:
-            return None
-        return guild.get_channel(int(settings.server_log_channel))
-    
-    async def get_staff_role(self, guild: nextcord.Guild) -> nextcord.Role | None:
-        settings = await self.bot.settings_cache(guild.id)
-        if not settings or not settings.mm_staff_role:
-            return None
-        return guild.get_role(int(settings.mm_staff_role))
-    
-    async def get_match_category(self, guild: nextcord.Guild) -> nextcord.CategoryChannel | None:
-        settings = await self.bot.settings_cache(guild.id)
-        if not settings or not settings.mm_match_category:
-            return None
-        return guild.get_channel(int(settings.mm_match_category))
-    
     async def log_event(self, 
         guild: nextcord.Guild,
         event_type: EventType, 
@@ -53,7 +35,12 @@ class LogHelper:
         author: Union[nextcord.Member, nextcord.User] | None = None,
         thumbnail: str | None = None
     ) -> nextcord.Message | None:
-        channel = await self.get_log_channel(guild)
+        
+        settings = await self.bot.settings_cache(guild.id)
+        if not settings or not cast(int, settings.server_log_channel):
+            return None
+        channel = guild.get_channel(int(cast(int, settings.server_log_channel)))
+        
         if not channel:
             return None
         
@@ -88,11 +75,17 @@ class LogHelper:
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
             for arg in args:
-                if isinstance(arg, (nextcord.Member, nextcord.User)) and arg.id == self.bot.user.id:
+                if isinstance(arg, (nextcord.Member, nextcord.User)) and arg.id  == self.bot.user.id:
                     return
-                if (author := getattr(arg, 'author', getattr(arg, 'owner', getattr(arg, 'user', False)))
-                ) and author.id == self.bot.user.id:
+                if hasattr(arg, 'author') and arg.author.id == self.bot.user.id:
                     return
+                if hasattr(arg, 'user') and arg.user.id == self.bot.user.id:
+                    return
+                if hasattr(arg, 'owner_id') and arg.owner_id == self.bot.user.id:
+                    return
+                if hasattr(arg, 'owner') and arg.owner.id == self.bot.user.id:
+                    return
+                
             await func(self, *args, **kwargs)
         return wrapper
     
@@ -113,7 +106,10 @@ class LogHelper:
                 await func(self, *args, **kwargs)
                 return
                 
-            staff_role = await self.helper.get_staff_role(guild)
+            settings = await self.bot.settings_cache(guild.id)
+            if not settings or not cast(int, settings.mm_staff_role):
+                return None
+            staff_role = guild.get_role(int(cast(int, settings.mm_staff_role)))
             if not staff_role:
                 await func(self, *args, **kwargs)
                 return
@@ -123,14 +119,17 @@ class LogHelper:
                 if isinstance(arg, nextcord.abc.GuildChannel):
                     channel_arg = arg
                     break
+                elif hasattr(arg, 'channel'):
+                    channel_arg = arg.channel
+                    break
                 
             if not channel_arg:
                 await func(self, *args, **kwargs)
                 return
                 
             perms = channel_arg.permissions_for(staff_role)
-            if perms.view_channel:
-                await func(self, *args, **kwargs)
+            
+            if perms.view_channel: await func(self, *args, **kwargs)
         return wrapper
     
     @staticmethod
@@ -149,24 +148,28 @@ class LogHelper:
             if not guild:
                 await func(self, *args, **kwargs)
                 return
+            
+            match_category = None
+            settings = await self.bot.settings_cache(guild.id)
+            if settings and cast(int, settings.mm_match_category):
+                match_category = guild.get_channel(int(cast(int, settings.mm_match_category)))
                 
-            match_category = await self.helper.get_match_category(guild)
             if not match_category:
                 await func(self, *args, **kwargs)
                 return
                 
             for arg in args:
-                if isinstance(arg, (nextcord.abc.GuildChannel, nextcord.Thread)):
-                    if (hasattr(arg, 'category_id') and arg.category_id == match_category.id) or \
-                       (isinstance(arg, nextcord.Thread) and arg.parent.category_id == match_category.id):
+                if hasattr(arg, 'category_id') and arg.category_id == match_category.id:
+                    return
+                elif hasattr(arg, 'channel'):
+                    if hasattr(arg.channel, 'category') and arg.channel.category.id == match_category.id:
                         return
-                elif isinstance(arg, nextcord.StageInstance):
-                    channel = guild.get_channel(arg.channel_id)
-                    if channel and hasattr(channel, 'category_id') and channel.category_id == match_category.id:
+                    elif hasattr(arg.channel, 'category_id') and arg.channel.category_id == match_category.id:
                         return
-                elif isinstance(arg, nextcord.VoiceState):
-                    if arg.channel and hasattr(arg.channel, 'category_id') and arg.channel.category_id == match_category.id:
-                        return
+                elif hasattr(arg, 'channel_id') and (channel := guild.get_channel(arg.channel_id)) and channel.category_id == match_category.id:
+                    return
+                elif hasattr(arg, 'parent') and arg.parent.category.category_id == match_category.id:
+                    return
             
             await func(self, *args, **kwargs)
         return wrapper
