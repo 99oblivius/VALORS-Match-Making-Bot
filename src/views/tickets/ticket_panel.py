@@ -203,8 +203,9 @@ class TicketPanelView(nextcord.ui.View):
             
             await interaction.channel.edit(overwrites=overwrites)
             await self.bot.store.update_ticket(ticket.id, status=TicketStatus.CLOSED)
-            await interaction.response.send_message(
-                embed=nextcord.Embed(description=f"The ticket was closed. Only staff still have access to it.", color=0xffaa00))
+            embed = nextcord.Embed(description=f"The ticket was closed. Only staff still have access to it.", color=0xffaa00)
+            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(embed=embed)
             button.emoji = "🗑️"
             await original_msg.edit(view=self)
             try: await msg.delete()
