@@ -28,17 +28,19 @@ class TicketCreationView(nextcord.ui.View):
                     "Something went wrong with ticket creation.\nTry again...", ephemeral=True)
                 
             name = user.name.replace('.', '')
-            username = name[7] + '…' if len(name) > 8 else name
+            username = name[:7] + '…' if len(name) > 8 else name
             channel = await interaction.guild.create_text_channel(
                 name=f"{username}-ticket-#{ticket_id}",
                 category=interaction.channel.category,
-                overwrites={
+                overwrites=interaction.channel.category.overwrites | {
                     interaction.guild.default_role: nextcord.PermissionOverwrite(view_channel=False),
                     user: nextcord.PermissionOverwrite(view_channel=True, send_messages=True)
                 },
                 reason=f"Ticket #{ticket_id}")
             await channel.move(end=True)
+            
             await self.bot.store.update_ticket(ticket_id, channel_id=channel.id)
+            
             view = TicketPanelView(self.bot, ticket_id)
             await channel.send(embed=view.embed, view=view)
         else:
