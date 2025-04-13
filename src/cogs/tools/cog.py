@@ -30,6 +30,12 @@ class ModCommands(commands.Cog):
         self.bot = bot
     
     @nextcord.slash_command(
+        name="latency",
+        description="Get the bot's current websocket acknowledgement latency")
+    async def latency(self, interaction: nextcord.Interaction):
+        await interaction.response.send_message(f"Pong! {self.bot.latency*1000:.3f}ms")
+    
+    @nextcord.slash_command(
         name="purge", 
         description="Purge messages", 
         default_member_permissions=nextcord.Permissions(manage_messages=True))
