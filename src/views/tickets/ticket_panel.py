@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 import nextcord
 
 from utils.models import TicketStatus, TicketTranscripts
+from utils.utils import get_message_data
 
 
 class TicketPanelView(nextcord.ui.View):
@@ -169,7 +170,7 @@ class TicketPanelView(nextcord.ui.View):
                 embed=nextcord.Embed(description=f"{ticket.username}'s `{interaction.channel.name}` was closed by {interaction.user.mention}", color=0xff0000))
             
             await interaction.channel.send(embed=nextcord.Embed(description="Archiving..."))
-            all_messages = [message async for message in interaction.channel.history(limit=None)]
+            all_messages = [get_message_data(message) async for message in interaction.channel.history(limit=None)]
             
             channel_data = {
                 'channel': {
@@ -179,7 +180,6 @@ class TicketPanelView(nextcord.ui.View):
                 },
                 'messages': all_messages
             }
-            
             serialized_data = pickle.dumps(channel_data)
             
             archive = TicketTranscripts(

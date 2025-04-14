@@ -29,7 +29,7 @@ from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 import unicodedata
 
-from nextcord import Embed, Guild, Role, Interaction
+from nextcord import Embed, Guild, Role, Interaction, Message, Member, RoleTags
 
 from config import VALORS_THEME1, VALORS_THEME2
 from utils.models import MMBotMatchPlayers, MMBotRanks, MMBotMatches, MMBotUserMatchStats, Side, MMBotQueueUsers
@@ -508,3 +508,224 @@ ANSI_TARGET_COLORS = {
     0xA8B0AC: "46;37",
     # 0xF8F3E2: "47;37",
 }
+
+def get_message_data(message: Message) -> dict:
+    user = {
+        "avatar": {
+            "key": message.author.avatar.key,
+            "url": message.author.avatar.url
+        } if message.author.avatar else {},
+        "bot": message.author.bot,
+        "display_name": message.author.display_name,
+        "global_name": message.author.global_name,
+        "name": message.author.name
+    }
+    if isinstance(message.author, Member):
+        user |= {
+            "accent_color": message.author.accent_color,
+            "banner": {
+                "key": message.author.banner.key,
+                "url": message.author.banner.url
+            } if message.author.banner else {},
+            "color": {
+                "r": message.author.color.r,
+                "g": message.author.color.g,
+                "b": message.author.color.b,
+                "value": message.author.color.value,
+            },
+            "created_at": str(message.author.created_at),
+            "default_avatar": {
+                "key": message.author.default_avatar.key,
+                "url": message.author.default_avatar.url
+            } if message.author.default_avatar else {},
+            "display_avatar": {
+                "key": message.author.display_avatar.key,
+                "url": message.author.display_avatar.url
+            } if message.author.display_avatar else {},
+            "display_banner": {
+                "key": message.author.display_banner.key,
+                "url": message.author.display_banner.url
+            } if message.author.display_banner else {},
+            "guild_avatar": {
+                "key": message.author.guild_avatar.key,
+                "url": message.author.guild_avatar.url
+            } if message.author.guild_avatar else {},
+            "guild_banner": {
+                "key": message.author.guild_banner.key,
+                "url": message.author.guild_banner.url
+            } if message.author.guild_banner else {},
+            "guild_permissions": {
+                "value": message.author.guild_permissions.value
+            },
+            "id": message.author.id,
+            "joined_at": str(joined_at) if (joined_at := message.author.joined_at) else None,
+            "nick": message.author.nick,
+            "premium_since": str(premium_since) if (premium_since := message.author.premium_since) else None,
+            "public_flags": {
+                "value": message.author.public_flags.value
+            },
+            "raw_status": message.author.raw_status,
+            "roles": [{
+                "color": {
+                    "r": role.color.r,
+                    "g": role.color.g,
+                    "b": role.color.b,
+                    "value": role.color.value
+                },
+                "created_at": str(role.created_at),
+                "hoist": role.hoist,
+                "icon": role.icon if isinstance(role.icon, str) else None if role.icon is None else {
+                    "key": role.icon.key,
+                    "url": role.icon.url
+                },
+                "id": role.id,
+                "managed": role.managed,
+                "mentionable": role.mentionable,
+                "name": role.name,
+                "permissions": {
+                    "value": role.permissions.value
+                },
+                "position": role.position,
+                "tags": {
+                    "bot_id": tags.bot_id if (tags := role.tags) else None,
+                    "integration_id": tags.integration_id if (tags := role.tags) else None,
+                    "subscription_listing_id": tags.subscription_listing_id if (tags := role.tags) else None
+                } if isinstance(role.tags, RoleTags) else None
+            } for role in message.author.roles],
+            "status": str(message.author.status),
+            "system": message.author.system,
+            "top_role": {
+                "color": {
+                    "r": message.author.top_role.color.r,
+                    "g": message.author.top_role.color.g,
+                    "b": message.author.top_role.color.b,
+                    "value": message.author.top_role.color.value
+                },
+                "created_at": str(message.author.top_role.created_at),
+                "hoist": message.author.top_role.hoist,
+                "icon": message.author.top_role.icon if isinstance(message.author.top_role.icon, str) else None if message.author.top_role.icon is None else {
+                    "key": message.author.top_role.icon.key,
+                    "url": message.author.top_role.icon.url
+                },
+                "id": message.author.top_role.id,
+                "managed": message.author.top_role.managed,
+                "mentionable": message.author.top_role.mentionable,
+                "name": message.author.top_role.name,
+                "permissions": {
+                    "value": message.author.top_role.permissions.value
+                },
+                "position": message.author.top_role.position,
+                "tags": {
+                    "bot_id": message.author.top_role.tags.bot_id,
+                    "integration_id": message.author.top_role.tags.integration_id,
+                    "subscription_listing_id": message.author.top_role.tags.subscription_listing_id
+                } if message.author.top_role.tags else None
+            }
+        }
+    return {
+        "attachments": [{
+            "content_type": att.content_type,
+            "description": att.description,
+            "filename": att.filename,
+            "height": att.height,
+            "id": att.id,
+            "proxy_url": att.proxy_url,
+            "size": att.size,
+            "url": att.url,
+            "width": att.width
+        } for att in message.attachments],
+        "author": user,
+        "clean_content": message.clean_content,
+        "content": message.content,
+        "created_at": str(message.created_at),
+        "edited_at": str(edited_at) if (edited_at := message.edited_at) else None,
+        "embeds": [{
+            "author": {
+                "name": embed.author.name,
+                "url": embed.author.url,
+                "icon_url": embed.author.icon_url
+            },
+            "color": {
+                "r": color.r,
+                "g": color.g,
+                "b": color.b,
+                "value": color.value
+            } if (color := embed.color) else None,
+            "description": embed.description,
+            "fields": [{
+                "name": field.name,
+                "value": field.value,
+                "inline": field.inline
+            } for field in embed.fields],
+            "footer": {
+                "text": embed.footer.text,
+                "icon_url": embed.footer.icon_url
+            },
+            "image": {
+                "url": embed.image.url,
+                "proxy_url": embed.image.proxy_url,
+                "width": embed.image.width,
+                "height": embed.image.height
+            },
+            "provider": {
+                "name": embed.provider.name,
+                "url": embed.provider.url
+            },
+            "thumbnail": {
+                "url": embed.thumbnail.url,
+                "proxy_url": embed.thumbnail.proxy_url,
+                "width": embed.thumbnail.width,
+                "height": embed.thumbnail.height
+            },
+            "timestamp": str(embed.timestamp),
+            "title": embed.title,
+            "type": embed.type,
+            "url": embed.url,
+            "video": {
+                "url": embed.video.url,
+                "height": embed.video.height,
+                "width": embed.video.width
+            }
+        } for embed in message.embeds],
+        "flags": {
+            "value": message.flags.value
+        },
+        "id": message.id,
+        "interaction_metadata": {
+            "authorizing_integration_owners": message.interaction_metadata.authorizing_integration_owners,
+            "created_at": message.interaction_metadata.created_at,
+            "data": message.interaction_metadata.data,
+            "id": message.interaction_metadata.id,
+            "interacted_message_id": message.interaction_metadata.interacted_message_id,
+            "name": message.interaction_metadata.name,
+            "original_response_message_id": message.interaction_metadata.original_response_message_id,
+            "triggering_interaction_metadata": message.interaction_metadata.triggering_interaction_metadata,
+            "type": message.interaction_metadata.type,
+            "user": {
+                "display_avatar": {
+                    "key": message.interaction_metadata.user.display_avatar.key,
+                    "url": message.interaction_metadata.user.display_avatar.url
+                },
+                "id": message.interaction_metadata.user.id,
+                "display_name": message.interaction_metadata.user.display_name
+            }
+        } if message.interaction_metadata else None,
+        "reactions": [{
+            "count": reaction.count,
+            "emoji": reaction.emoji if isinstance(reaction.emoji, str) else {
+                "name": reaction.emoji.name,
+                "url": reaction.emoji.url,
+                "created_at": str(reaction.emoji.created_at),
+                "id": reaction.emoji.id
+            }
+        } for reaction in message.reactions],
+        "stickers": [{
+            "format": str(sticker.format),
+            "id": sticker.id,
+            "name": sticker.name,
+            "url": sticker.url
+        } for sticker in message.stickers],
+        "type": {
+            "valu": message.type.value
+        }
+    }
