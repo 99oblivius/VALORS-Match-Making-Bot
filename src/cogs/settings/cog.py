@@ -93,15 +93,20 @@ class Settings(commands.Cog):
         
         embed = nextcord.Embed(
             title="Register for Match Making!", 
-            description="""## Welcome to Pavlov Match Making!
+            description=f"""## Welcome to Pavlov Match Making!
 
-1. Click `Register` to authenticate your Steam account.
-   - We only access your Steam ID for performance tracking.
-   - No personal information is stored or shared.
+-# **If you believe to have registered once in the past, simply press the `Join/Leave` button to regain mm access.**
 
+1. Press `Register` and sign in with the account you count on playing with. 
+ - This process will link your steam64 id with your discord id. 
+ - Information pertaining to your account is not stored and is handleded for the least amount of time possible.
 2. Select your playing region for optimal server matching.
+3. Queue up for the next match in <#{settings.mm_queue_channel}>. 
+ - You can also be automatically notified with the </pingme:1358358003136594054> command. 
 
-Your privacy is our priority. Steam authentication is secure and limited to essential game data.""",
+ X. If you find yourself enjoying the services provided in this server and wish to support the continuous development and maintenance of this community-lead match making, you are invited to check out our [buymeacoffee page](https://buymeacoffee.com/oblivius) (there are special perks as well 😉).
+""",
+
             color=VALORS_THEME1_2)
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
