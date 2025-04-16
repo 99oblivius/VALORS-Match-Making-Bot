@@ -19,6 +19,7 @@
 import nextcord
 from functools import partial
 from nextcord.ext import commands
+from typing import List
 
 from utils.logger import Logger as log
 from utils.models import MMBotMatches, MMBotUserMapPicks, Phase
@@ -40,14 +41,14 @@ class MapPickView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_map: str):
+    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_maps: List[str]):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await bot.store.get_bans(match.id)
         map_picks = await bot.store.get_map_vote_counts(guild_id, match.id)
 
-        available_maps = [x for x in map_picks if x[0] != last_map][:match.maps_range]
+        available_maps = [x for x in map_picks if x[0] not in last_maps][:match.maps_range]
         for n, (m, count) in enumerate([x for x in available_maps if x[0] not in banned_maps]):
             if m in banned_maps: continue
             button = nextcord.ui.Button(
@@ -70,7 +71,7 @@ class MapPickView(nextcord.ui.View):
 
         from matches import get_match
         instance = get_match(match.id)
-        available_maps = [m for m in maps if m.map != instance.last_map][:match.maps_range]
+        available_maps = [m for m in maps if m.map not in instance.last_maps][:match.maps_range]
         picks = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
@@ -85,7 +86,7 @@ class MapPickView(nextcord.ui.View):
                 match_id=match.id, 
                 map=picks[slot_id].map)
             log.info(f"{interaction.user.display_name} voted to pick {picks[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_map)
+        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_maps)
         await interaction.edit(view=view)
 
 class ChosenMapView(nextcord.ui.View):

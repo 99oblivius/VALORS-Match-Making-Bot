@@ -472,7 +472,7 @@ class Match:
 
         maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
         match_map: MMBotMaps              = await self.bot.store.get_match_map(self.guild_id, self.match_id)
-        self.last_map: str                = await self.bot.store.get_last_played_map(self.match.queue_channel)
+        self.last_maps: List[str]         = await self.bot.store.get_last_played_maps(self.match.queue_channel)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
         serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
@@ -610,13 +610,17 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_A):
-            overwrites = {
+            overwrites = match_category.overwrites | {
                 guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
-                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.A
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            for overwrite, perms in reversed(overwrites.items()):
+                if isinstance(overwrite, nextcord.Role) and perms.view_channel:
+                    overwrites.update({ overwrite: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+                    break
+            
             a_vc = await match_category.create_voice_channel(
                 name=f"[{self.match_id}] Team A",
                 overwrites=overwrites,
@@ -627,13 +631,17 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_VC_B):
-            overwrites = {
+            overwrites = match_category.overwrites | {
                 guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
-                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True, manage_channels=False
+                        view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.B
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+            for overwrite, perms in reversed(overwrites.items()):
+                if isinstance(overwrite, nextcord.Role) and perms.view_channel:
+                    overwrites.update({ overwrite: nextcord.PermissionOverwrite(view_channel=True, connect=True, speak=False, stream=False) })
+                    break
+            
             b_vc = await match_category.create_voice_channel(
                 name=f"[{self.match_id}] Team B",
                 overwrites=overwrites,
@@ -644,13 +652,17 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_A):
-            overwrites = {
+            overwrites = match_category.overwrites | {
                 guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.A
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
+            for overwrite, perms in reversed(overwrites.items()):
+                if isinstance(overwrite, nextcord.Role) and perms.view_channel:
+                    overwrites.update({ overwrite: nextcord.PermissionOverwrite(view_channel=False) })
+                    break
+            
             a_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team A",
                 overwrites=overwrites,
@@ -659,13 +671,17 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MAKE_TEAM_CHANNEL_B):
-            overwrites = {
+            overwrites = match_category.overwrites | {
                 guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players if player.team == Team.B
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
+            for overwrite, perms in reversed(overwrites.items()):
+                if isinstance(overwrite, nextcord.Role) and perms.view_channel:
+                    overwrites.update({ overwrite: nextcord.PermissionOverwrite(view_channel=False) })
+                    break
+            
             b_channel = await match_category.create_text_channel(
                 name=f"[{self.match_id}] Team B",
                 overwrites=overwrites,
@@ -689,7 +705,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_map)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
@@ -718,7 +734,7 @@ class Match:
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_map)
+            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
             b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
@@ -757,7 +773,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=A_THEME)
-            view = await MapPickView.create_showable(self.bot, self.guild_id, self.match, self.last_map)
+            view = await MapPickView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
@@ -988,14 +1004,23 @@ class Match:
             
             timer_task = asyncio.create_task(run_matchmaking_timer())
             self.subtasks.add(timer_task)
-
+            
+            check_second_time_zero = False
+            
             try:
                 while len(server_players) < MATCH_PLAYER_COUNT:
+                    if not check_second_time_zero and len(server_players) > 0:
+                        check_second_time_zero = True
+                    
                     await asyncio.sleep(3)
                     try:
                         players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                        if check_second_time_zero and ('InspectList' not in players_data or len(players_data['InspectList']) == 0):
+                            log.warning(f"[{self.match_id}] Went back to 0/10\nplayers_data: {players_data}")
+                        
                         if 'InspectList' not in players_data:
                             continue
+                        
                         
                         current_players = {str(player['UniqueId']) for player in players_data['InspectList']}
                         

@@ -42,14 +42,14 @@ class BanView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_map: str):
+    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_maps: List[str]):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await instance.bot.store.get_bans(match.id)
         ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
 
-        available_maps = [x for x in ban_counts if x[0] != last_map][:match.maps_range]
+        available_maps = [x for x in ban_counts if x[0] not in last_maps][:match.maps_range]
         bans = (x for x in available_maps if x[0] not in banned_maps)
         for n, (m, count) in enumerate(bans):
             if m in banned_maps: continue
@@ -72,7 +72,7 @@ class BanView(nextcord.ui.View):
 
         from matches import get_match
         instance = get_match(match.id)
-        available_maps = [m for m in maps if m.map != instance.last_map][:match.maps_range]
+        available_maps = [m for m in maps if m.map not in instance.last_maps][:match.maps_range]
         bans = [m for m in available_maps if m.map not in banned_maps]
         slot_id = int(button.custom_id.split(':')[-1])
         
@@ -97,7 +97,7 @@ class BanView(nextcord.ui.View):
                 map=bans[slot_id].map, 
                 phase=match.phase)
             log.info(f"{interaction.user.name} wants to ban {bans[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_map)
+        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_maps)
         await interaction.edit(view=view)
 
 

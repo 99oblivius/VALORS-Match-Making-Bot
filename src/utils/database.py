@@ -1398,7 +1398,7 @@ class Database:
 ########
 
     @log_db_operation
-    async def get_last_played_map(self, queue_channel: int) -> str | None:
+    async def get_last_played_maps(self, queue_channel: int, limit: int = 3) -> list[str]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches.map)
@@ -1407,8 +1407,8 @@ class Database:
                     MMBotMatches.end_timestamp.is_not(None),
                     MMBotMatches.complete)
                 .order_by(desc(MMBotMatches.id))
-                .limit(1))
-            return result.scalar_one_or_none()
+                .limit(limit))
+            return list(result.scalars().all())
 
     @log_db_operation
     async def shuffle_map_order(self, guild_id: int) -> None:
