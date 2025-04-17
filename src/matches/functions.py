@@ -19,6 +19,7 @@
 import random
 from typing import List
 import numpy as np
+from functools import reduce
 
 from config import BASE_MMR_CHANGE, STARTING_MMR, MOMENTUM_CHANGE, MOMENTUM_RESET_FACTOR
 from utils.models import MMBotMaps, MMBotUserMapPicks, Side
@@ -73,7 +74,7 @@ def calculate_mmr_change(
     abandoned_count: int=0,
     placements: bool=False,
     momentum: float=1.0
-) -> int:
+) -> float:
     kills = player_stats.get('kills', 0)
     deaths = player_stats.get('deaths', 0)
     assists = player_stats.get('assists', 0)
@@ -85,10 +86,8 @@ def calculate_mmr_change(
     s = 400
     closeness_ratio = 4/9
 
-    if placements:
-        kd_rate = BASE_MMR_CHANGE / 3 * ((kills+assists/5) - deaths) / 10
-    else:
-        kd_rate = BASE_MMR_CHANGE / 6 * ((kills+assists/5) - deaths) / 10
+    kd_rate = BASE_MMR_CHANGE / (3 if placements else 6) * reduce(min if win else max, (0, ((kills+assists/3) - deaths) / 10))
+    
     r_ab = ally_team_avg_mmr - enemy_team_avg_mmr
     pr_a = 1 / (1 + pow(10, -r_ab/s))
 
@@ -96,12 +95,13 @@ def calculate_mmr_change(
 
     new_r = base_change * (int(win) - pr_a)
     new_r *= closeness
-    new_r += kd_rate
-    if not abandoned_count:
-        new_r *= momentum
-    return new_r
+    
+    if win: new_r = max(10, new_r + kd_rate)
+    else: new_r = min(-10, new_r + kd_rate)
+    
+    return new_r if abandoned_count else new_r * momentum
 
-def calculate_placements_mmr(user_avg_score: int, guild_avg_scores: List[int], initial_mmr: int) -> int:
+def calculate_placements_mmr(user_avg_score: float, guild_avg_scores: List[float], initial_mmr: float) -> float:
     guild_mean = np.mean(guild_avg_scores)
     guild_std = np.std(guild_avg_scores)
     
@@ -126,10 +126,10 @@ def calculate_placements_mmr(user_avg_score: int, guild_avg_scores: List[int], i
 
 def update_momentum(current_momentum, win):
     if (win and current_momentum >= 1.0) or (not win and current_momentum <= 1.0):
-        new_momentum = current_momentum + MOMENTUM_CHANGE if win else current_momentum - MOMENTUM_CHANGE
+        new_momentum = current_momentum + MOMENTUM_CHANGE if win else current_momentum + MOMENTUM_CHANGE
     else:
         difference = current_momentum - 1.0
         reset = difference * MOMENTUM_RESET_FACTOR
         new_momentum = current_momentum - reset
 
-    return max(0.5, min(2.0, new_momentum))
+    return max(0.75, min(1.25, new_momentum))
