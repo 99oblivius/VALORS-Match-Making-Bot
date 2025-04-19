@@ -288,9 +288,6 @@ class Settings(commands.Cog):
             description="Set the MMR to a specific value.", 
             required=False)
     ):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-
         summary_stats = await self.bot.store.get_user_summary_stats(interaction.guild.id, user.id)
         if not summary_stats:
             return await interaction.response.send_message(f"No MMR data found for {user.mention}.", ephemeral=True)
