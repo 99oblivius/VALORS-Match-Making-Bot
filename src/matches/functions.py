@@ -96,8 +96,8 @@ def calculate_mmr_change(
     new_r = base_change * (int(win) - pr_a)
     new_r *= closeness
     
-    if win: new_r = max(10, new_r + kd_rate)
-    else: new_r = min(-10, new_r + kd_rate)
+    if win: new_r = max(8, new_r + kd_rate)
+    else: new_r = min(-8, new_r + kd_rate)
     
     return new_r if abandoned_count else new_r * momentum
 
