@@ -246,53 +246,27 @@ class Database:
             await session.commit()
 
     @log_db_operation
-    async def get_weighted_player_server_pings(self, guild_id: int, limit: int = 10) -> Dict[Tuple[int, str], Dict[str, float]]:
+    async def get_last_users_to_server_pings(self, guild_id: int, user_ids: List[int], serveraddr: str) -> Dict[int, int]:
         async with self._session_maker() as session:
-            recent_matches = (
+            subquery = (
                 select(
                     MMBotUserMatchStats.user_id,
-                    MMBotMatches.serveraddr,
-                    MMBotUserMatchStats.ping,
-                    MMBotMatches.end_timestamp,
-                    func.row_number().over(
-                        partition_by=(MMBotUserMatchStats.user_id, MMBotMatches.serveraddr),
-                        order_by=desc(MMBotMatches.end_timestamp)
-                    ).label('row_num'))
+                    func.max(MMBotUserMatchStats.timestamp).label("max_ts"))
                 .join(MMBotMatches, MMBotUserMatchStats.match_id == MMBotMatches.id)
                 .where(
                     MMBotUserMatchStats.guild_id == guild_id,
-                    MMBotUserMatchStats.ping.isnot(None),
-                    MMBotMatches.serveraddr.isnot(None))
-                .subquery()
-            )
-
+                    MMBotUserMatchStats.user_id.in_(user_ids),
+                    MMBotMatches.serveraddr == serveraddr)
+                .group_by(MMBotUserMatchStats.user_id)
+                .subquery())
+            
             result = await session.execute(
-                select(
-                    recent_matches.c.user_id,
-                    recent_matches.c.serveraddr,
-                    func.avg(recent_matches.c.ping).label('avg_ping'),
-                    func.min(recent_matches.c.ping).label('min_ping'),
-                    func.max(recent_matches.c.ping).label('max_ping'),
-                    func.sum(
-                        recent_matches.c.ping * func.exp(-0.1 * (func.extract('epoch', func.now() - recent_matches.c.end_timestamp) / 86400))
-                    ).label('weighted_sum'),
-                    func.sum(
-                        func.exp(-0.1 * (func.extract('epoch', func.now() - recent_matches.c.end_timestamp) / 86400))
-                    ).label('weight_sum'))
-                .where(recent_matches.c.row_num <= limit)
-                .group_by(recent_matches.c.user_id, recent_matches.c.serveraddr))
-
-            ping_data = {}
-            for row in result:
-                user_server = (row.user_id, row.serveraddr)
-                ping_data[user_server] = {
-                    'avg_ping': row.avg_ping,
-                    'min_ping': row.min_ping,
-                    'max_ping': row.max_ping,
-                    'weighted_avg_ping': row.weighted_sum / row.weight_sum if row.weight_sum and row.weight_sum > 0 else None
-                }
-
-            return ping_data
+                select(MMBotUserMatchStats)
+                .join(subquery, and_(
+                    MMBotUserMatchStats.user_id == subquery.c.user_id,
+                    MMBotUserMatchStats.timestamp == subquery.c.max_ts)))
+            
+            return { cast(int, stat.user_id): cast(int, stat.ping) for stat in result.scalars().all() }
 
 ########
 # BOT #
@@ -334,6 +308,31 @@ class Database:
                 insert(MMBotRanks)
                 .values(ranks_list))
             await session.commit()
+    
+    @log_db_operation
+    async def update_user_coords(self, guild_id: int, user_coords: Dict[int, tuple]) -> None:
+            column_mapping = {
+                'lat': (1, MMBotUsers.lat),
+                'lon': (2, MMBotUsers.lon),
+                'height': (3, MMBotUsers.height),
+                'uncertainty': (4, MMBotUsers.accuracy)
+            }
+
+            case_values = {
+                column_name: case(
+                    *[(MMBotUsers.id == uid, coords[idx]) for uid, coords in user_coords.items()],
+                    else_=default_attr)
+                for column_name, (idx, default_attr) in column_mapping.items()
+            }
+            
+            async with self._session_maker() as session:
+                await session.execute(
+                    update(MMBotUsers)
+                    .where(
+                        MMBotUsers.guild_id == guild_id,
+                        MMBotUsers.id.in_(list(user_coords.keys())))
+                    .values(**case_values))
+                await session.commit()
     
     @log_db_operation
     async def set_user_platform(self, user_id: int, platform: str, platform_id: str, guild_id: int) -> None:

@@ -124,6 +124,11 @@ class RconServers(Base):
     region      = Column(String(32), nullable=False)
     being_used  = Column(Boolean, nullable=False, default=False)
     timestamp   = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    
+    lat          = Column(Float)
+    lon          = Column(Float)
+    height       = Column(Float)
+    uncertainty  = Column(Float, default=0.1)
 
     __table_args__ = (
         UniqueConstraint('host', 'port', name='unique_host_port'),
@@ -170,6 +175,10 @@ class BotRegions(Base):
     label     = Column(String(32), primary_key=True, nullable=False)
     emoji     = Column(String(32))
     index     = Column(SmallInteger, default=0)
+    
+    base_latitude   = Column(Float)
+    base_longitude  = Column(Float)
+    base_height     = Column(Float)
 
 class MMBotRanks(Base):
     __tablename__ = 'mm_bot_ranks'
@@ -204,6 +213,11 @@ class MMBotUsers(Base):
     region        = Column(String(32))
     registered    = Column(TIMESTAMP(timezone=True), server_default=func.now())
     role_message  = Column(Text, nullable=True)
+    
+    lat          = Column(Float)
+    lon          = Column(Float)
+    height       = Column(Float)
+    uncertainty  = Column(Float)
 
     __table_args__ = (
         ForeignKeyConstraint(['guild_id', 'region'], ['bot_regions.guild_id', 'bot_regions.label']),

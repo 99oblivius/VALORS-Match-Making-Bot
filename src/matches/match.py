@@ -54,6 +54,7 @@ from views.match.force_abandon import ForceAbandonView
 from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side, calculate_placements_mmr, update_momentum
 from .match_states import MatchState
 from .ranked_teams import get_teams
+from .server_selection import get_server_scores
 
 
 class Match:
@@ -145,20 +146,6 @@ class Match:
         
         region_difference = abs(ord(user.region[0]) - ord(server.region[0]))
         return 50 + region_difference * 20
-
-    async def estimate_pings(self, rcon_servers: List[RconServers]):
-        user_ids = [player.user_id for player in self.players]
-        ping_data = await self.bot.store.get_weighted_player_server_pings(self.guild_id)
-        
-        estimated_pings = {}
-        for server in rcon_servers:
-            serveraddr = f"{server.host}:{server.port}"
-            server_pings = {}
-            for user_id in user_ids:
-                ping = await self.estimate_user_server_ping(user_id, serveraddr, ping_data)
-                server_pings[user_id] = ping
-            estimated_pings[serveraddr] = server_pings
-        return estimated_pings
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
         for platform_id, player_data in players_dict.items():
@@ -859,26 +846,15 @@ class Match:
         
         if check_state(MatchState.MATCH_FIND_SERVER):
             users = await self.bot.store.get_users(self.guild_id, [player.user_id for player in self.players])
-            success = None
+            regions = await self.bot.store.get_regions(self.guild_id)
             rcon_servers: List[RconServers] = await self.bot.store.get_servers(free=True)
-            log.debug(f"RCON_SERVERS: {rcon_servers}")
+            log.debug(f"RCON_SERVERS: {len(rcon_servers)}")
+            success = None
 
             if rcon_servers:
-                estimated_pings = await self.estimate_pings(rcon_servers)
-                server_scores = []
-                for server in rcon_servers:
-                    serveraddr = f"{server.host}:{server.port}"
-                    server_pings = estimated_pings[serveraddr]
-                    max_ping = max(server_pings.values())
-                    avg_ping = sum(server_pings.values()) / len(server_pings)
-                    
-                    score = max_ping * 0.75 + avg_ping * 0.25
-                    server_scores.append((server, score))
-                
-                sorted_servers = sorted(server_scores, key=lambda x: x[1])
-
-                for server, _ in sorted_servers:
-                    successful = await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
+                for server, _ in sorted(await get_server_scores(regions, users, rcon_servers)):
+                    successful = await self.bot.rcon_manager.add_server(
+                        cast(str, server.host), cast(int, server.port), cast(str, server.password))
                     if successful:
                         log.info(f"[{self.match_id}] Server found running rcon server {server.host}:{server.port} password: {server.password} region: {server.region}")
                         serveraddr = f'{server.host}:{server.port}'

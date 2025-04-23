@@ -78,7 +78,7 @@ class HelpCommand(commands.Cog):
         if command.get('options'):
             options_text = self.format_options(command['options'])
             if options_text:
-                embed.add_field(name="Options", value=options_text, inline=False)
+                embed.add_field(name="Options", value=options_text[:1024], inline=False)
 
         permissions = self.get_required_permissions(command)
         if permissions:
