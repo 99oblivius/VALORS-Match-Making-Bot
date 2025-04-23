@@ -518,13 +518,13 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.CREATE_MATCH_CHANNEL):
-            overwrites = {
+            overwrites = match_category.overwrites | {
                 guild.get_member(cast(int, player.user_id)):
                     nextcord.PermissionOverwrite(
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players
             }
-            overwrites.update({ guild.default_role: nextcord.PermissionOverwrite(view_channel=False) })
+            
             self.match_channel = await match_category.create_text_channel(
                 name=f"Match - #{self.match_id}",
                 overwrites=overwrites,
