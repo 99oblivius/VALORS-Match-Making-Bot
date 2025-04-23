@@ -36,7 +36,7 @@ class HtraeNCS:
             for user in users:
                 u_coords = await HtraeNCS._get_coords(regions, user)
                 
-                rtt = HtraeNCS._calculate_pair_rtt(u_coords, s_coords, same_as=(user.region == server.region))
+                rtt = HtraeNCS._calculate_pair_rtt(u_coords, s_coords, same_as=(bool(user.region) == server.region))
                 
                 score = HtraeNCS._calculate_score(rtt)
                 user_scores.append(score)
@@ -97,17 +97,13 @@ class HtraeNCS:
     async def update_coordinates(bot: "Bot", 
         regions: List[BotRegions], 
         server: RconServers, 
-        users: List[MMBotUsers], 
-        measured_rtts: List[float]
+        user_rtts: List[Tuple[MMBotUsers, float]]
     ) -> None:
-        if len(users) != len(measured_rtts):
-            raise ValueError("Users and RTTs must have the same length")
-        
         s_coords = await HtraeNCS._get_coords(regions, server)
         user_updates: Dict[int, Tuple[float, float, float, float]] = {}
         server_deltas = []
         
-        for user, rtt in zip(users, measured_rtts):
+        for user, rtt in user_rtts:
             if rtt <= 0: continue
             
             u_coords = await HtraeNCS._get_coords(regions, user)
@@ -130,7 +126,7 @@ class HtraeNCS:
             server_deltas.append(tuple(a - b for a, b in zip(s_new, s_coords)))
         
         if not user_updates: return
-        await bot.store.update_user_coords(guild_id=users[0].guild_id, user_coords=user_updates)
+        await bot.store.update_user_coords(guild_id=user_rtts[0][0].guild_id, user_coords=user_updates)
         
         if server_deltas:
             s_avg = tuple(sum(deltas) / len(server_deltas) for deltas in zip(*server_deltas))

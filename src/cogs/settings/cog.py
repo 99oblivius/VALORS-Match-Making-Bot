@@ -111,7 +111,7 @@ class Settings(commands.Cog):
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
         await self.bot.settings_cache(
-            guild_id=interaction.guild.id, about:blank#blocked
+            guild_id=interaction.guild.id,
             register_channel=interaction.channel.id, 
             register_message=msg.id)
         await interaction.response.send_message("Registry channel set", ephemeral=True)

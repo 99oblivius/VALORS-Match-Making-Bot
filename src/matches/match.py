@@ -54,25 +54,25 @@ from views.match.force_abandon import ForceAbandonView
 from .functions import calculate_mmr_change, get_preferred_bans, get_preferred_map, get_preferred_side, calculate_placements_mmr, update_momentum
 from .match_states import MatchState
 from .ranked_teams import get_teams
-from .server_selection import get_server_scores
+from .server_selection import get_server_scores, update_coordinates
 
 
 class Match:
-    def __init__(self, bot: 'Bot', guild_id: int, match_id: int, state=MatchState.NOT_STARTED):
+    def __init__(self, bot: 'Bot', guild_id: int, match_id: int, state: MatchState=MatchState.NOT_STARTED):
         self.subtasks = set()
         self.bot: 'Bot'  = bot
         self.guild_id  = guild_id
         self.match_id  = match_id
         self.state     = state
 
-        self.players       = []
-        self.persistent_player_stats = {}
-        self.user_platform_map = {}
-        self.current_round = None
+        self.players: List[MMBotMatchPlayers] = []
+        self.persistent_player_stats: Dict[int, Dict[str, int | float]] = {}
+        self.user_platform_map: Dict[int, List[str]] = {}
+        self.current_round: int = -1
 
     def compute_user_platform_map(self):
         self.user_platform_map = {
-            player.user_id: [m.platform_id for m in player.user_platform_mappings]
+            cast(int, player.user_id): [m.platform_id for m in player.user_platform_mappings]
             for player in self.players
         }
 
@@ -120,13 +120,12 @@ class Match:
             description=f"{member.mention} finished their {PLACEMENT_MATCHES} placement games.\nThey will start their adventure in {rank_role.mention}!",
             color=rank_role.color,
             timestamp=datetime.now(timezone.utc))
-        await guild.get_channel(settings.mm_text_channel).send(embed=embed)
+        await guild.get_channel(cast(int, settings.mm_text_channel)).send(embed=embed)
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
         for platform_id, player_data in players_dict.items():
-            user_id = next((uid for uid, pids in self.user_platform_map.items() if platform_id in pids), None)
-            if user_id:
-                player = next(p for p in self.players if p.user_id == user_id)
+            if user_id := next((cast(int, uid) for uid, pids in self.user_platform_map.items() if platform_id in pids), None):
+                player = next(p for p in self.players if cast(int, p.user_id) == user_id)
                 
                 await self.ensure_correct_team(player, platform_id, player_data)
                 
@@ -137,7 +136,7 @@ class Match:
                     disconnection_tracker[user_id] = 0
             else:
                 log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
-                await self.bot.rcon_manager.kick_player(self.match.serveraddr, platform_id)
+                await self.bot.rcon_manager.kick_player(cast(str, self.match.serveraddr), platform_id)
     
     async def upsert_user_stats(self, changed_users, last_users_match_stats, players_dict):
         changed_users.clear()
@@ -145,7 +144,7 @@ class Match:
             if user_id not in last_users_match_stats or current_stats != last_users_match_stats[user_id]:
                 changed_users[user_id] = current_stats.copy()
 
-                platform_ids = self.user_platform_map.get(user_id, [])
+                platform_ids = self.user_platform_map.get(cast(int, user_id), [])
                 for platform_id in platform_ids:
                     if platform_id in players_dict:
                         changed_users[user_id]["ping"] = int(float(players_dict[platform_id]['Ping']))
@@ -163,12 +162,12 @@ class Match:
             log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
             await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
 
-    def initialize_user_match_stats(self, match_stats, users_summary_data):
+    def initialize_user_match_stats(self, match_stats: List[MMBotUserMatchStats], users_summary_data: Dict[int, MMBotUserSummaryStats]):
         id_stats = { stats.user_id: stats for stats in match_stats }
         for p in self.players:
             if p.user_id in id_stats:
                 stats = id_stats[p.user_id]
-                self.persistent_player_stats[p.user_id] = {
+                self.persistent_player_stats[cast(int, p.user_id)] = {
                     "mmr_before": stats.mmr_before,
                     "games": stats.games,
                     "ct_start": stats.ct_start,
@@ -177,19 +176,23 @@ class Match:
                     "deaths": stats.deaths,
                     "assists": stats.assists,
                     "rounds_played": stats.rounds_played,
-                    "mmr_change": stats.mmr_change
+                    "mmr_change": stats.mmr_change,
+                    "ping": -1,
+                    "ping_samples": 0
                 }
             else:
-                self.persistent_player_stats[p.user_id] = {
-                    "mmr_before": users_summary_data.get(p.user_id, MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
-                    "games": users_summary_data.get(p.user_id, MMBotUserSummaryStats(games=0)).games + 1,
+                self.persistent_player_stats[cast(int, p.user_id)] = {
+                    "mmr_before": users_summary_data.get(cast(int, p.user_id), MMBotUserSummaryStats(mmr=STARTING_MMR)).mmr,
+                    "games": users_summary_data.get(cast(int, p.user_id), MMBotUserSummaryStats(games=0)).games + 1,
                     "ct_start": (p.team == Team.A) == (self.match.b_side == Side.T),
                     "score": 0,
                     "kills": 0,
                     "deaths": 0,
                     "assists": 0,
                     "rounds_played": 0,
-                    "mmr_change": None
+                    "mmr_change": None,
+                    "ping": -1,
+                    "ping_samples": 0
                 }
 
     def update_user_match_stats(self, user_stats, player_data):
@@ -200,6 +203,19 @@ class Match:
             "deaths": deaths,
             "assists": assists
         })
+        
+        # EMA Ping value
+        try:
+            new_ping = float(player_data['Ping'])
+            if new_ping > 0:
+                if user_stats["ping"] < 0 or user_stats["ping_samples"] == 0:
+                    user_stats["ping"] = new_ping
+                else:
+                    user_stats["ping"] = 0.1 * new_ping + (0.9) * user_stats["ping"]
+                
+                user_stats["ping_samples"] += 1
+        except (KeyError, ValueError):
+            pass
 
     def update_summary_stats(self, summary_data, match_stats):
         return {
@@ -314,6 +330,28 @@ class Match:
             log.info(f"User {member.id} has completed their placements and received {new_mmr - mmr} mmr from being at {mmr} mmr")
         if users_placement_summary:
             await self.bot.store.set_users_summary_stats(self.guild_id, users_placement_summary)
+
+    async def update_network_latencies(self):
+        try:
+            host, port = self.match.serveraddr.split(':')
+            server = await self.bot.store.get_server(host, port)
+            regions = await self.bot.store.get_regions(self.guild_id)
+            
+            user_rtts = []
+            
+            user_stats = {
+                user: self.persistent_player_stats[user.user_id] 
+                for user in await self.bot.store.get_users(self.guild_id, [u.user_id for u in self.players])
+            }
+            
+            for user, stats in user_stats.items():
+                if stats["ping"] or -1 > 0 and stats["ping_samples"] or 0 >= 3:
+                    user_rtts.append((user, stats["ping"]))
+            
+            if user_rtts:
+                await update_coordinates(self.bot, regions, server, user_rtts)
+        except Exception as e:
+            log.warning(f"[{self.match_id}] Failed to update coordinates after match: {str(e)}")
 
     async def start_requeue_players(self, settings: BotSettings):
         guild = self.bot.get_guild(cast(int, settings.guild_id))
@@ -437,9 +475,9 @@ class Match:
         self.last_maps: List[str]         = await self.bot.store.get_last_played_maps(self.match.queue_channel)
         match_sides                       = await self.bot.store.get_match_sides(self.match_id)
 
-        serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
-        if serveraddr:
-            host, port = serveraddr.split(':')
+        self.serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
+        if self.serveraddr:
+            host, port = self.serveraddr.split(':')
             server = await self.bot.store.get_server(host, port)
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
         
@@ -832,33 +870,34 @@ class Match:
                         cast(str, server.host), cast(int, server.port), cast(str, server.password))
                     if successful:
                         log.info(f"[{self.match_id}] Server found running rcon server {server.host}:{server.port} password: {server.password} region: {server.region}")
-                        serveraddr = f'{server.host}:{server.port}'
+                        self.serveraddr = f'{server.host}:{server.port}'
                         success = True
-                        await self.bot.store.set_serveraddr(self.match_id, serveraddr)
-                        await self.bot.store.use_server(serveraddr)
+                        await self.bot.store.set_serveraddr(self.match_id, self.serveraddr)
+                        await self.bot.store.use_server(self.serveraddr)
                         await self.increment_state()
                         break
             if not success:
                 await self.show_no_server_found_message()
 
         if check_state(MatchState.SET_SERVER_MODS):
+            self.match = await self.bot.store.get_match(self.match_id)
             mods = await self.bot.store.get_mods(guild.id)
-            await self.bot.rcon_manager.clear_mods(serveraddr)
+            await self.bot.rcon_manager.clear_mods(self.serveraddr)
             for mod in mods:
-                await self.bot.rcon_manager.add_mod(serveraddr, mod.resource_id)
+                await self.bot.rcon_manager.add_mod(self.serveraddr, mod.resource_id)
             await self.increment_state()
         
         if check_state(MatchState.MATCH_CHANGE_TO_LOBBY):
-            self.match = await self.bot.store.get_match(self.match_id)
             pin = 5
             server_name = f"PMM Match {self.match_id}"
+            addr = self.serveraddr
             await asyncio.gather(
-                self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP),
-                self.bot.rcon_manager.unban_all_players(serveraddr),
-                self.bot.rcon_manager.comp_mode(serveraddr, state=True),
-                self.bot.rcon_manager.max_players(serveraddr, MATCH_PLAYER_COUNT),
-                self.bot.rcon_manager.set_pin(serveraddr, pin),
-                self.bot.rcon_manager.set_name(serveraddr, server_name)
+                self.bot.rcon_manager.set_teamdeathmatch(addr, SERVER_DM_MAP),
+                self.bot.rcon_manager.unban_all_players(addr),
+                self.bot.rcon_manager.comp_mode(addr, state=True),
+                self.bot.rcon_manager.max_players(addr, MATCH_PLAYER_COUNT),
+                self.bot.rcon_manager.set_pin(addr, str(pin)),
+                self.bot.rcon_manager.set_name(addr, server_name)
             )
 
             embed = nextcord.Embed(title=f"Match [0/{MATCH_PLAYER_COUNT}]", description=f"Server ready!", color=VALORS_THEME1)
@@ -965,7 +1004,7 @@ class Match:
                     
                     await asyncio.sleep(3)
                     try:
-                        players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                        players_data = await self.bot.rcon_manager.inspect_all(self.serveraddr, retry_attempts=1)
                         if check_second_time_zero and ('InspectList' not in players_data or len(players_data['InspectList']) == 0):
                             log.warning(f"[{self.match_id}] Went back to 0/10\nplayers_data: {players_data}")
                         
@@ -991,10 +1030,10 @@ class Match:
                                 if player:
                                     teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
                                     log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-                                    tasks.append(self.bot.rcon_manager.allocate_team(serveraddr, platform_id, teamid))
+                                    tasks.append(self.bot.rcon_manager.allocate_team(self.serveraddr, platform_id, teamid))
                                 else:
                                     log.info(f"[{self.match_id}] Unauthorized player {platform_id} found. Kicking.")
-                                    tasks.append(self.bot.rcon_manager.kick_player(serveraddr, platform_id))
+                                    tasks.append(self.bot.rcon_manager.kick_player(self.serveraddr, platform_id))
                             
                             if tasks:
                                 await asyncio.gather(*tasks)
@@ -1031,11 +1070,11 @@ class Match:
         
         if check_state(MatchState.MATCH_START_SND):
             m = next((m for m in maps if m.map == self.match.map), maps[0])
-            server_maps = await self.bot.rcon_manager.list_maps(serveraddr)
-            await self.bot.rcon_manager.add_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
+            server_maps = await self.bot.rcon_manager.list_maps(self.serveraddr)
+            await self.bot.rcon_manager.add_map(self.serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
             for ma in server_maps.get('MapList', []):
-                await self.bot.rcon_manager.remove_map(serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=3)
-            await self.bot.rcon_manager.set_searchndestroy(serveraddr, m.resource_id if m.resource_id else m.map)
+                await self.bot.rcon_manager.remove_map(self.serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=3)
+            await self.bot.rcon_manager.set_searchndestroy(self.serveraddr, m.resource_id if m.resource_id else m.map)
             log.info(f"[{self.match_id}] Switching to SND")
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
@@ -1093,7 +1132,7 @@ class Match:
                 await asyncio.sleep(3)
                 try:
                     if max(a_score, b_score) < 10:
-                        reply = (await self.bot.rcon_manager.server_info(serveraddr))['ServerInfo']
+                        reply = (await self.bot.rcon_manager.server_info(self.serveraddr))['ServerInfo']
                         if "Team0Score" not in reply: continue
                         team_scores = [int(reply['Team0Score']), int(reply['Team1Score'])]
                         self.current_round = int(reply.get('Round', self.current_round))
@@ -1115,7 +1154,7 @@ class Match:
                         asyncio.create_task(log_message.edit(embed=embed))
                         log.info(f"[{self.match_id}] Round {self.current_round} completed. Scores: {team_scores[0]} - {team_scores[1]}")
 
-                    players_data = await self.bot.rcon_manager.inspect_all(serveraddr, retry_attempts=1)
+                    players_data = await self.bot.rcon_manager.inspect_all(self.serveraddr, retry_attempts=1)
                     if not 'InspectList' in players_data: continue
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
 
@@ -1136,6 +1175,8 @@ class Match:
             
             await self.finalize_match(users_summary_data, team_scores)
             
+            await self.update_network_latencies()
+            
             embed = log_message.embeds[0]
             embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
             a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
@@ -1151,15 +1192,15 @@ class Match:
         if check_state(MatchState.MATCH_CLEANUP):
             pin = 5
             server_name = f"PMM {server.region} Server {server.id}"
-            await self.bot.rcon_manager.set_name(serveraddr, server_name)
-            await self.bot.rcon_manager.set_pin(serveraddr, pin)
-            await self.bot.rcon_manager.add_map(serveraddr, SERVER_DM_MAP, 'TDM')
+            await self.bot.rcon_manager.set_name(self.serveraddr, server_name)
+            await self.bot.rcon_manager.set_pin(self.serveraddr, pin)
+            await self.bot.rcon_manager.add_map(self.serveraddr, SERVER_DM_MAP, 'TDM')
             m = next((m for m in maps if m.map == self.match.map), maps[0])
-            await self.bot.rcon_manager.remove_map(serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
-            await self.bot.rcon_manager.set_teamdeathmatch(serveraddr, SERVER_DM_MAP)
-            await self.bot.rcon_manager.comp_mode(serveraddr, state=False)
-            await self.bot.rcon_manager.clear_mods(serveraddr)
-            await self.bot.rcon_manager.max_players(serveraddr, 10)
+            await self.bot.rcon_manager.remove_map(self.serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
+            await self.bot.rcon_manager.set_teamdeathmatch(self.serveraddr, SERVER_DM_MAP)
+            await self.bot.rcon_manager.comp_mode(self.serveraddr, state=False)
+            await self.bot.rcon_manager.clear_mods(self.serveraddr)
+            await self.bot.rcon_manager.max_players(self.serveraddr, 10)
             await self.increment_state()
         
         if check_state(MatchState.LOG_END):
@@ -1174,10 +1215,10 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.CLEANUP):
-            if serveraddr:
-                await self.bot.store.free_server(serveraddr)
-                await self.bot.rcon_manager.unban_all_players(serveraddr, retry_attempts=1)
-                await self.bot.rcon_manager.comp_mode(serveraddr, state=False, retry_attempts=1)
+            if self.serveraddr:
+                await self.bot.store.free_server(self.serveraddr)
+                await self.bot.rcon_manager.unban_all_players(self.serveraddr, retry_attempts=1)
+                await self.bot.rcon_manager.comp_mode(self.serveraddr, state=False, retry_attempts=1)
             embed = nextcord.Embed(title="The match is terminating", color=VALORS_THEME1)
             embed.set_footer(text="You will be able to requeue once this channel is deleted")
             
