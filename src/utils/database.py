@@ -312,12 +312,12 @@ class Database:
     @log_db_operation
     async def update_user_coords(self, guild_id: int, user_coords: Dict[int, tuple]) -> None:
             column_mapping = {
-                'lat': (1, MMBotUsers.lat),
-                'lon': (2, MMBotUsers.lon),
-                'height': (3, MMBotUsers.height),
-                'uncertainty': (4, MMBotUsers.accuracy)
+                'lat': (0, MMBotUsers.lat),
+                'lon': (1, MMBotUsers.lon),
+                'height': (2, MMBotUsers.height),
+                'uncertainty': (3, MMBotUsers.accuracy)
             }
-
+            
             case_values = {
                 column_name: case(
                     *[(MMBotUsers.id == uid, coords[idx]) for uid, coords in user_coords.items()],

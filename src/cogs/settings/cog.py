@@ -21,7 +21,7 @@ from io import BytesIO
 
 import aiohttp
 import nextcord
-from typing import TYPE_CHECKING
+from typing import Dict, List, cast, TYPE_CHECKING
 if TYPE_CHECKING:
     from main import Bot
 
@@ -111,66 +111,102 @@ class Settings(commands.Cog):
         view = RegistryButtonView(self.bot)
         msg = await interaction.channel.send(embed=embed, view=view)
         await self.bot.settings_cache(
-            guild_id=interaction.guild.id, 
+            guild_id=interaction.guild.id, about:blank#blocked
             register_channel=interaction.channel.id, 
             register_message=msg.id)
         await interaction.response.send_message("Registry channel set", ephemeral=True)
         await log_moderation(interaction, settings.log_channel, "Register buttons set", f"<#{interaction.channel.id}>")
     
-    @settings.subcommand(name="regions", description="Set regions")
+    @settings.subcommand(name="set_regions", description="Set regions with geographical coordinates")
     async def set_regions(self, interaction: nextcord.Interaction, 
-        regions: str = nextcord.SlashOption(
-            name="json", 
-            description="Comma separated List or region:emoji Json",
-            required=True)
+        regions: nextcord.Attachment=nextcord.SlashOption(description="JSON file with region data including coordinates")
     ):
-        if regions.find('{') != -1 or regions.find('}') != -1:
-            try:
-                regions = json.loads(regions)
-            except Exception: 
-                return await interaction.response.send_message(
-                    "Failed.\nIncorrect formatting. Read command description.", ephemeral=True)
-            if len(regions) > 25:
-                return await interaction.response.send_message(
-                    "Failed.\nToo many regions", ephemeral=True)
-        else:
-            regions = regions.replace(' ', '')
-            regions = regions.split(',')
-            regions = {region: None for region in regions}
-
+        try:
+            file = await regions.read()
+            regions_data: Dict[str, Dict[str, str | float]] = json.loads(file)
+        except Exception:
+            return await interaction.response.send_message(
+                "The file you provided did not contain valid JSON. Format example:\n"
+                "```json\n"
+                "{\n"
+                "  \"NAE\": {\n"
+                "    \"emoji\": \"🇺🇸\",\n"
+                "    \"lat\": 36.0466,\n"
+                "    \"lon\": -86.6444,\n"
+                "    \"height\": 50.0\n"
+                "  },\n"
+                "  \"EUW\": {\n"
+                "    \"emoji\": \"🇪🇺\",\n"
+                "    \"lat\": 48.8594,\n"
+                "    \"lon\": 2.3507,\n"
+                "  }\n"
+                "}\n```", 
+                ephemeral=True)
+        
+        if len(regions_data) > 25:
+            return await interaction.response.send_message(
+                "Failed. Too many regions", ephemeral=True)
+        
         guild_id = interaction.guild_id
+        if not guild_id: return
+        
         existing_regions = await self.bot.store.get_regions(guild_id)
-
-        existing_labels = {region.label for region in existing_regions}
-        new_labels = set(regions.keys())
-        removed_labels = existing_labels - new_labels
+        new_regions: List[Dict[str, str | float | None]] = []
+        
+        for n, (label, data) in enumerate(regions_data.items()):
+            try:
+                new_regions.append({
+                    "emoji": data.get("emoji", ""),
+                    "index": n,
+                    "base_latitude": data["lat"],
+                    "base_longitude": data["lon"],
+                    "base_height": data.get("height")
+                })
+            except KeyError:
+                return await interaction.response.send_message(
+                    f"Region `{label}` requires both longitude and latitude values.", ephemeral=True)
+        
+        removed_labels = {region.label for region in existing_regions} - set(regions_data.keys())
         for label in removed_labels:
             await self.bot.store.null_user_region(guild_id, label)
             await self.bot.store.remove(BotRegions, guild_id=guild_id, label=label)
-        for n, (label, emoji) in enumerate(regions.items()):
-            await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, emoji=emoji.strip(), index=n)
-        log.debug(f"{interaction.user.display_name} set regions to:")
-        log.pretty(regions)
-            
+        
+        for n, region in enumerate(new_regions):
+            await self.bot.store.upsert(BotRegions, guild_id=guild_id, label=label, index=n, **region)
+        
+        log.debug(f"{interaction.user.display_name} set regions with geographic data:")
+        log.pretty(regions_data)
+        
+        await interaction.response.send_message(f"Regions set with geographic data", ephemeral=True)
+        
+        settings = await self.bot.settings_cache(guild_id)
+        await log_moderation(interaction, cast(int, settings.log_channel), 
+            "Regions set with geographic data", f"```\n{', '.join(regions_data.keys())}```")
+
+    @settings.subcommand(name="get_regions", description="Get current regions with geographic data")
+    async def get_regions(self, interaction: nextcord.Interaction):
+        regions = await self.bot.store.get_regions(guild_id=interaction.guild_id)
+        regions_dict = {}
+        
+        for region in regions:
+            regions_dict[region.label] = {
+                "emoji": region.emoji,
+                "base_latitude": region.base_latitude,
+                "base_longitude": region.base_longitude,
+                "base_height": region.base_height
+            }
+        
+        json_str = json.dumps(regions_dict, indent=4)
+        json_bytes = json_str.encode('utf-8')
+        json_file = BytesIO(json_bytes)
+        json_file.seek(0)
+        file = nextcord.File(json_file, filename="regions_geo.json")
+        
         await interaction.response.send_message(
-            f"Regions set\nUse {await self.bot.command_cache.get_command_mention(interaction.guild.id, 'settings set_register')} to update", ephemeral=True)
-        settings = await self.bot.settings_cache(interaction.guild.id)
-        await log_moderation(interaction, settings.log_channel, "Regions set to", f"```\n{regions}```")
+            f"Here are the current regions with geographic data:\n_Edit and upload with_ "
+            f"{await self.bot.command_cache.get_command_mention(interaction.guild_id, 'settings set_regions_geo')}", 
+            file=file, ephemeral=True)
 
-    @set_regions.on_autocomplete("regions")
-    async def autocomplete_regions(self, interaction: nextcord.Interaction, regions: str):
-        if not regions:
-            regions = "Start typing..."
-        existing_regions = await self.bot.store.get_regions(interaction.guild.id)
-        dict_regions = {}
-        if existing_regions:
-            dict_regions = { r.label: "" for r in existing_regions }
-        else: dict_regions = { "NA": "🌎", "EU": "🌍" }
-
-        existing_regions = json.dumps(dict_regions, separators=[',', ':'])
-        if len(existing_regions) > 100:
-            existing_regions = "Autofill response too long sorry."
-        await interaction.response.send_autocomplete(choices=[regions, existing_regions])
     
     @settings.subcommand(name="add_server", description="Add a pavlov server")
     async def add_server(self, interaction: nextcord.Interaction, 

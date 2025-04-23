@@ -121,31 +121,6 @@ class Match:
             color=rank_role.color,
             timestamp=datetime.now(timezone.utc))
         await guild.get_channel(settings.mm_text_channel).send(embed=embed)
-    
-    async def estimate_user_server_ping(self, user_id: int, serveraddr: str, ping_data: Dict[Tuple[int, str], Dict[str, float]]) -> int:
-        user_server = (user_id, serveraddr)
-        if user_server in ping_data and ping_data[user_server] is not None:
-            weighted_avg_ping = ping_data[user_server].get('weighted_avg_ping')
-            if weighted_avg_ping is not None:
-                return round(weighted_avg_ping)
-        
-        user = await self.bot.store.get_user(self.guild_id, user_id)
-        host, port = serveraddr.split(':')
-        server = await self.bot.store.get_server(host, int(port))
-        
-        if user.region == server.region:
-            region_pings = [
-                float(data.get('weighted_avg_ping', 50)) 
-                for (_, addr), data in ping_data.items() 
-                if addr.split(':')[0] == serveraddr.split(':')[0] 
-                and data is not None 
-                and data.get('weighted_avg_ping') is not None
-            ]
-            if region_pings:
-                return round(sum(region_pings) / len(region_pings))
-        
-        region_difference = abs(ord(user.region[0]) - ord(server.region[0]))
-        return 50 + region_difference * 20
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
         for platform_id, player_data in players_dict.items():
