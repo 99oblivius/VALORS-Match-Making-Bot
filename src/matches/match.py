@@ -123,38 +123,52 @@ class Match:
         await guild.get_channel(cast(int, settings.mm_text_channel)).send(embed=embed)
 
     async def process_players(self, players_dict, disconnection_tracker, is_new_round):
+        changed_users = {}
         for platform_id, player_data in players_dict.items():
             if user_id := next((cast(int, uid) for uid, pids in self.user_platform_map.items() if platform_id in pids), None):
                 player = next(p for p in self.players if cast(int, p.user_id) == user_id)
                 
                 await self.ensure_correct_team(player, platform_id, player_data)
-                
-                self.update_user_match_stats(self.persistent_player_stats[user_id], player_data)
+                current_stats = self.persistent_player_stats[user_id]
                 
                 if is_new_round:
-                    self.persistent_player_stats[user_id]['rounds_played'] += 1
+                    current_stats['rounds_played'] += 1
                     disconnection_tracker[user_id] = 0
+                
+                kills, deaths, assists = map(int, player_data['KDA'].split('/'))
+                new_score = int(player_data['Score'])
+                if (is_new_round
+                    or new_score != current_stats["score"]
+                    or kills != current_stats["kills"]
+                    or deaths != current_stats["deaths"]
+                    or assists != current_stats["assists"]
+                ):
+                    current_stats.update({
+                        "score": new_score,
+                        "kills": kills,
+                        "deaths": deaths,
+                        "assists": assists
+                    })
+                    
+                    changed_users[user_id] = current_stats
+                
+                try:
+                    new_ping = float(player_data['Ping'])
+                    if new_ping > 0:
+                        if current_stats["ping"] < 0:
+                            current_stats["ping"] = new_ping
+                        else:
+                            current_stats["ping"] = 0.1 * new_ping + (0.9) * current_stats["ping"]
+                        
+                except (KeyError, ValueError):
+                    pass
             else:
                 log.info(f"[{self.match_id}] Unauthorized player {platform_id} detected. Kicking.")
                 await self.bot.rcon_manager.kick_player(cast(str, self.match.serveraddr), platform_id)
-    
-    async def upsert_user_stats(self, changed_users, last_users_match_stats, players_dict):
-        changed_users.clear()
-        for user_id, current_stats in self.persistent_player_stats.items():
-            if user_id not in last_users_match_stats or current_stats != last_users_match_stats[user_id]:
-                changed_users[user_id] = current_stats.copy()
-
-                platform_ids = self.user_platform_map.get(cast(int, user_id), [])
-                for platform_id in platform_ids:
-                    if platform_id in players_dict:
-                        changed_users[user_id]["ping"] = int(float(players_dict[platform_id]['Ping']))
-                        break
-                else: changed_users[user_id]["ping"] = -1
-
+        
         if changed_users:
             await self.bot.store.upsert_users_match_stats(self.guild_id, self.match_id, changed_users)
-            for user_id in changed_users: del changed_users[user_id]["ping"]
-            last_users_match_stats.update(copy.deepcopy(changed_users))
+    
 
     async def ensure_correct_team(self, player, platform_id, player_data):
         teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
@@ -177,8 +191,7 @@ class Match:
                     "assists": stats.assists,
                     "rounds_played": stats.rounds_played,
                     "mmr_change": stats.mmr_change,
-                    "ping": -1,
-                    "ping_samples": 0
+                    "ping": -1
                 }
             else:
                 self.persistent_player_stats[cast(int, p.user_id)] = {
@@ -191,31 +204,8 @@ class Match:
                     "assists": 0,
                     "rounds_played": 0,
                     "mmr_change": None,
-                    "ping": -1,
-                    "ping_samples": 0
+                    "ping": -1
                 }
-
-    def update_user_match_stats(self, user_stats, player_data):
-        kills, deaths, assists = map(int, player_data['KDA'].split('/'))
-        user_stats.update({
-            "score": int(player_data['Score']),
-            "kills": kills,
-            "deaths": deaths,
-            "assists": assists
-        })
-        
-        # EMA Ping value
-        try:
-            new_ping = float(player_data['Ping'])
-            if new_ping > 0:
-                if user_stats["ping"] < 0 or user_stats["ping_samples"] == 0:
-                    user_stats["ping"] = new_ping
-                else:
-                    user_stats["ping"] = 0.1 * new_ping + (0.9) * user_stats["ping"]
-                
-                user_stats["ping_samples"] += 1
-        except (KeyError, ValueError):
-            pass
 
     def update_summary_stats(self, summary_data, match_stats):
         return {
@@ -345,7 +335,7 @@ class Match:
             }
             
             for user, stats in user_stats.items():
-                if stats["ping"] or -1 > 0 and stats["ping_samples"] or 0 >= 3:
+                if stats["ping"] or -1 > 0:
                     user_rtts.append((user, stats["ping"]))
             
             if user_rtts:
@@ -524,6 +514,10 @@ class Match:
                         view_channel=True, send_messages=True, speak=True, stream=True, connect=True
                     ) for player in self.players
             }
+            for overwrite, perms in reversed(overwrites.items()):
+                if isinstance(overwrite, nextcord.Role) and perms.view_channel:
+                    overwrites.update({ overwrite: nextcord.PermissionOverwrite(view_channel=False) })
+                    break
             
             self.match_channel = await match_category.create_text_channel(
                 name=f"Match - #{self.match_id}",
@@ -865,7 +859,10 @@ class Match:
             success = None
 
             if rcon_servers:
-                for server, _ in sorted(await get_server_scores(regions, users, rcon_servers)):
+                server_options = sorted(await get_server_scores(regions, users, rcon_servers), key=lambda x: x[1], reverse=True)
+                for serv in server_options:
+                    log.info(f"{serv[0].id} - {serv[0].region}\n{serv[1]:.2f}")
+                for server, _ in server_options:
                     successful = await self.bot.rcon_manager.add_server(
                         cast(str, server.host), cast(int, server.port), cast(str, server.password))
                     if successful:
@@ -1105,10 +1102,8 @@ class Match:
             if self.match.b_side == Side.CT:    team_scores = [b_score, a_score]
             else:                               team_scores = [a_score, b_score]
             
-            last_users_match_stats = {}
             disconnection_tracker = { player.user_id: 0 for player in self.players }
             last_round_number = self.match.a_score + self.match.b_score if self.match.a_score else 0
-            changed_users = {}
             players_dict = {}
             
             users_summary_data = await self.bot.store.get_users_summary_stats(self.guild_id, [p.user_id for p in self.players])
@@ -1158,15 +1153,8 @@ class Match:
                     if not 'InspectList' in players_data: continue
                     players_dict = { player['UniqueId']: player for player in players_data['InspectList'] }
 
-                    await self.process_players(
-                        players_dict, 
-                        disconnection_tracker, 
-                        is_new_round)
+                    await self.process_players(players_dict, disconnection_tracker, is_new_round)
                     
-                    await self.upsert_user_stats(
-                        changed_users,
-                        last_users_match_stats,
-                        players_dict)
                 except Exception as e:
                     tb = traceback.extract_tb(e.__traceback__)
                     _, line_number, func_name, _ = tb[-1]
