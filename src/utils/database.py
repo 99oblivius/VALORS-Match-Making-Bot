@@ -315,12 +315,12 @@ class Database:
                 'lat': (0, MMBotUsers.lat),
                 'lon': (1, MMBotUsers.lon),
                 'height': (2, MMBotUsers.height),
-                'uncertainty': (3, MMBotUsers.accuracy)
+                'uncertainty': (3, MMBotUsers.uncertainty)
             }
             
             case_values = {
                 column_name: case(
-                    *[(MMBotUsers.id == uid, coords[idx]) for uid, coords in user_coords.items()],
+                    *[(MMBotUsers.user_id == uid, coords[idx]) for uid, coords in user_coords.items()],
                     else_=default_attr)
                 for column_name, (idx, default_attr) in column_mapping.items()
             }
@@ -330,7 +330,7 @@ class Database:
                     update(MMBotUsers)
                     .where(
                         MMBotUsers.guild_id == guild_id,
-                        MMBotUsers.id.in_(list(user_coords.keys())))
+                        MMBotUsers.user_id.in_(list(user_coords.keys())))
                     .values(**case_values))
                 await session.commit()
     
