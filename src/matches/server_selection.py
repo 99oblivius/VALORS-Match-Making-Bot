@@ -12,7 +12,7 @@ AS_CORRECTION_THRESHOLD_KM = 350
 AS_HEIGHT_REDUCTION = 0.6
 TIV_THRESHOLD_MS = 100
 GEOGRAPHIC_DEFAULT_UNCERTAINTY = 0.292
-DEFAULT_HEIGHT_MS = 31.66
+DEFAULT_HEIGHT_MS = 10.0
 
 def haversine(lat_a: float, lon_a: float, lat_b: float, lon_b: float) -> float:
     lon_a, lat_a, lon_b, lat_b = map(radians, [lon_a, lat_a, lon_b, lat_b])
