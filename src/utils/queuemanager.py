@@ -137,7 +137,8 @@ class QueueManager:
                 title="Notification", 
                 description=f"The queue in <#{settings.mm_queue_channel}> has reached\n## {queue_count}", 
                 color=0xffffff)
-            await self.bot.get_user(user_id).send(embed=embed)
+            try: await self.bot.get_user(user_id).send(embed=embed)
+            except nextcord.HTTPException: pass
 
         user_notifications = await self.bot.store.get_user_notifications(guild_id)
         remove_notifications = []
