@@ -91,7 +91,7 @@ class HtraeNCS:
         elif rtt >= 150:
             return -1.0  # Poor RTT
         
-        return 0.5 - (rtt - 50) / 50
+        return 0.5 - (rtt - 50) / 100
 
     @staticmethod
     async def update_coordinates(bot: "Bot", 
