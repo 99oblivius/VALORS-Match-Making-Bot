@@ -19,7 +19,9 @@
 import asyncio
 
 import nextcord
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 from config import MATCH_PLAYER_COUNT
 from utils.logger import Logger as log
@@ -28,7 +30,7 @@ from utils.utils import format_mm_attendance
 
 
 class AcceptView(nextcord.ui.View):
-    def __init__(self, bot, done_event: Optional[asyncio.Event]=None, *args, **kwargs):
+    def __init__(self, bot: "Bot", done_event: Optional[asyncio.Event]=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.timeout = None
@@ -46,6 +48,9 @@ class AcceptView(nextcord.ui.View):
 
         async with self.lock:
             players = await self.bot.store.get_players(match.id)
+            if interaction.user.id not in [p.user_id for p in players]:
+                return await interaction.response.send_message(
+                    "You are not in this match :(", ephemeral=True)
             if interaction.user.id in [p.user_id for p in players if p.accepted]:
                 return await interaction.response.send_message(
                     "You have already accepted the match.\nBut thank you for making sure :)", ephemeral=True)
