@@ -60,7 +60,6 @@ class SidePickView(nextcord.ui.View):
                 label=f"{side}: {side_counts.get(side, 0)}", 
                 style=nextcord.ButtonStyle.blurple, 
                 custom_id=f"mm_side_picks:{side}")
-            button.callback = partial(instance.side_callback, button)
             instance.add_item(button)
         return instance
     
@@ -79,22 +78,20 @@ class SidePickView(nextcord.ui.View):
         if cast(Team, player.team) != Team.B:
             return await interaction.response.send_message(f"Only Team B can pick the side.", ephemeral=True)
         
-        user_pick = await self.bot.store.get_user_side_pick(match.id, interaction.user.id)
-        await self.bot.store.remove(MMBotUserSidePicks, 
-            match_id=match.id, 
-            user_id=interaction.user.id)
-
-        pick_slot = button.custom_id.split(':')[-1]
-        if pick_slot == "T": pick = Side.T
-        if pick_slot == "CT": pick = Side.CT
-        if pick not in user_pick:
-            # vote this one
+        
+        user_picks = await self.bot.store.get_user_side_pick(match.id, interaction.user.id)
+        if user_picks:
+            await self.bot.store.remove(MMBotUserSidePicks, 
+                match_id=match.id, 
+                user_id=interaction.user.id)
+            
+        if (pick := button.custom_id.split(':')[-1]) not in user_picks:
             await self.bot.store.insert(MMBotUserSidePicks, 
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
                 side=pick)
-            log.info(f"{interaction.user.display_name} voted for {pick.name}")
+            log.info(f"{interaction.user.display_name} voted for {pick}")
         view = await self.create_showable(self.bot, match)
         await interaction.edit(view=view)
 
