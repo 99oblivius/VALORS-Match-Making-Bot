@@ -387,6 +387,7 @@ class MMBotMatches(Base):
     match_message    = Column(BigInteger)
     maps_range       = Column(BigInteger, nullable=False, default=10)
     phase            = Column(sq_Enum(Phase), nullable=False, default=Phase.NONE)
+    map_options      = Column(ARRAY(String(32)))
     log_message      = Column(BigInteger)
     a_thread         = Column(BigInteger)
     b_thread         = Column(BigInteger)

@@ -1271,7 +1271,7 @@ class Database:
                 .where(
                     MMBotUserBans.match_id == match_id,
                     MMBotUserBans.phase == phase))
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def get_bans(self, match_id: int, team: Team | None = None) -> List[str]:
@@ -1306,7 +1306,7 @@ class Database:
                 .where(
                     MMBotUserBans.match_id == match_id,
                     MMBotUserBans.user_id == user_id))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
 ###############
 # MATCH PICKS #
@@ -1330,13 +1330,13 @@ class Database:
             return [(row.map, row.pick_count) for row in pick_counts]
 
     @log_db_operation
-    async def get_map_votes(self, match_id: int) -> List[MMBotUserMapPicks]:
+    async def get_map_votes(self, match_id: int) -> List[str]:
         async with self._session_maker() as session:
             result = await session.execute(
-                select(MMBotUserMapPicks)
+                select(MMBotUserMapPicks.map)
                 .where(
                     MMBotUserMapPicks.match_id == match_id))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
     @log_db_operation
     async def get_user_map_picks(self, match_id: int, user_id: int) -> List[str]:
@@ -1346,8 +1346,18 @@ class Database:
                 .where(
                     MMBotUserMapPicks.match_id == match_id,
                     MMBotUserMapPicks.user_id == user_id))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
+    @log_db_operation
+    async def get_maps(self, guild_id: int, maps: List[str]) -> List[MMBotMaps]:
+        async with self._session_maker() as session:
+            result = await session.execute(
+                select(MMBotMaps)
+                .where(
+                    MMBotMaps.guild_id == guild_id,
+                    MMBotMaps.map.in_(maps)))
+            return list(result.scalars().all()) or []
+    
     @log_db_operation
     async def get_match_map(self, guild_id: int, match_id: int) -> MMBotMaps | None:
         async with self._session_maker() as session:
@@ -1367,17 +1377,14 @@ class Database:
             return map_object
 
     @log_db_operation
-    async def get_match_sides(self, match_id: int) -> Tuple[Side | None, Side | None]:
+    async def get_match_sides(self, match_id: int) -> Tuple[str, str]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMatches.b_side)
                 .where(MMBotMatches.id == match_id))
             b_side = result.scalars().first()
-            if b_side is None:
-                return (None, None)
-            
             a_side = Side.CT if b_side == Side.T else Side.T
-            return (a_side, b_side)
+            return (str(a_side), str(b_side))
 
     @log_db_operation
     async def get_last_players(self, guild_id: int) -> List[MMBotMatchPlayers]:
@@ -1453,7 +1460,7 @@ class Database:
                 await session.execute(update_stmt)
 
     @log_db_operation
-    async def get_maps(self, guild_id: int) -> List[MMBotMaps]:
+    async def get_all_maps(self, guild_id: int) -> List[MMBotMaps]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotMaps)
@@ -1461,7 +1468,7 @@ class Database:
                     MMBotMaps.guild_id == guild_id,
                     MMBotMaps.active == True)
                 .order_by(MMBotMaps.order))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
 ########
 # MODS #
@@ -1512,7 +1519,7 @@ class Database:
             result = await session.execute(
                 select(MMBotUserSidePicks.side)
                 .where(MMBotUserSidePicks.match_id == match_id))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
     @log_db_operation
     async def get_user_side_pick(self, match_id: int, user_id: int) -> List[str]:
@@ -1522,7 +1529,7 @@ class Database:
                 .where(
                     MMBotUserSidePicks.match_id == match_id,
                     MMBotUserSidePicks.user_id == user_id))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
 ###############
 # MATCH STATs #

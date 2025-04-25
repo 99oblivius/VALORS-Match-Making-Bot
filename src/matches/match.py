@@ -18,11 +18,10 @@
 
 import asyncio
 import functools
-import copy
 import traceback
 from time import perf_counter_ns, time
 from datetime import datetime, timezone
-from typing import List, Dict, Tuple, cast, TYPE_CHECKING
+from typing import Any, List, Dict, Tuple, cast, TYPE_CHECKING
 from io import BytesIO
 
 if TYPE_CHECKING:
@@ -66,7 +65,7 @@ class Match:
         self.state     = state
 
         self.players: List[MMBotMatchPlayers] = []
-        self.persistent_player_stats: Dict[int, Dict[str, int | float]] = {}
+        self.persistent_player_stats: Dict[int, Dict[str, Any]] = {}
         self.user_platform_map: Dict[int, List[str]] = {}
         self.current_round: int = -1
 
@@ -174,7 +173,7 @@ class Match:
         teamid = self.match.b_side.value if player.team == Team.B else 1 - self.match.b_side.value
         if int(player_data['TeamId']) != int(teamid):
             log.info(f"[{self.match_id}] Moving player {platform_id} to team {teamid}")
-            await self.bot.rcon_manager.allocate_team(self.match.serveraddr, platform_id, teamid)
+            await self.bot.rcon_manager.allocate_team(cast(str, self.match.serveraddr), platform_id, teamid)
 
     def initialize_user_match_stats(self, match_stats: List[MMBotUserMatchStats], users_summary_data: Dict[int, MMBotUserSummaryStats]):
         id_stats = { stats.user_id: stats for stats in match_stats }
@@ -451,7 +450,6 @@ class Match:
         text_channel    = guild.get_channel(cast(int, settings.mm_text_channel))
         assert(isinstance(text_channel, nextcord.TextChannel))
 
-        self.match: MMBotMatches               = await self.bot.store.get_match(self.match_id)
         self.players: List[MMBotMatchPlayers]  = await self.bot.store.get_players(self.match_id)
         self.compute_user_platform_map()
         for p in self.players:
@@ -460,19 +458,28 @@ class Match:
                 await text_channel.send(
                     "```diff\n- A player has left the discord server during match initialization. -\nMatch canceled```")
 
-        maps: List[MMBotMaps]             = await self.bot.store.get_maps(self.guild_id)
-        match_map: MMBotMaps              = await self.bot.store.get_match_map(self.guild_id, self.match_id)
-        self.last_maps: List[str]         = await self.bot.store.get_last_played_maps(self.match.queue_channel)
-        match_sides                       = await self.bot.store.get_match_sides(self.match_id)
-
-        self.serveraddr                        = await self.bot.store.get_serveraddr(self.match_id)
+        self.match: MMBotMatches = await self.bot.store.get_match(self.match_id)
+        
+        self.available_maps = self.match.map_options or []
+        if cast(list, self.available_maps):
+            self.available_maps = await self.bot.store.get_maps(guild_id=self.guild_id, maps=self.available_maps)
+        else:
+            maps = await self.bot.store.get_all_maps(self.guild_id)
+            last_maps = await self.bot.store.get_last_played_maps(self.match.queue_channel, 3)
+            self.available_maps = [m for m in maps if m.map not in last_maps][:settings.mm_maps_range]
+            await self.bot.store.update(MMBotMatches, id=self.match_id, map_options=[m.map for m in self.available_maps])
+        
+        match_map: MMBotMaps  = await self.bot.store.get_match_map(self.guild_id, self.match_id)
+        match_sides: Tuple[Side | None, Side | None]  = await self.bot.store.get_match_sides(self.match_id)
+        
+        self.serveraddr: str | None = await self.bot.store.get_serveraddr(self.match_id)
         if self.serveraddr:
             host, port = self.serveraddr.split(':')
             server = await self.bot.store.get_server(host, port)
             await self.bot.rcon_manager.add_server(server.host, server.port, server.password)
         
         
-
+        
         self.match_channel = guild.get_channel(cast(int, self.match.match_thread))
         log_channel   = guild.get_channel(cast(int, settings.mm_log_channel))
         
@@ -697,16 +704,16 @@ class Match:
         if check_state(MatchState.A_BANS):
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
-            add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.A]
+            add_mention = [f"<@{player.user_id}>" for player in self.players if cast(Team, player.team) == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
+            view = await BanView.create_showable(self.bot, self.match, self.available_maps)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.A_BAN)
-            bans = get_preferred_bans(maps, bans, total_bans=2)
+            bans = get_preferred_bans(self.available_maps, bans, total_bans=2)
             view = ChosenBansView(bans)
             embed = nextcord.Embed(title="You banned", color=A_THEME)
             await a_message.edit(embed=embed, view=view)
@@ -728,7 +735,7 @@ class Match:
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
-            view = await BanView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
+            view = await BanView.create_showable(self.bot, self.match, self.available_maps)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
             b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
@@ -736,7 +743,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
             
             bans = await self.bot.store.get_ban_votes(self.match_id, Phase.B_BAN)
-            bans = get_preferred_bans(maps, bans, total_bans=2)
+            bans = get_preferred_bans(self.available_maps, bans, total_bans=2)
             view = ChosenBansView(bans)
             embed = nextcord.Embed(title="You banned", color=B_THEME)
             await b_message.edit(embed=embed, view=view)
@@ -767,38 +774,38 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=A_THEME)
-            view = await MapPickView.create_showable(self.bot, self.guild_id, self.match, self.last_maps)
+            view = await MapPickView.create_showable(self.bot, self.match, self.available_maps)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             map_votes = await self.bot.store.get_map_votes(self.match_id)
-            map_pick = get_preferred_map(maps, map_votes)
-            view = ChosenMapView(map_pick.map)
+            match_map = get_preferred_map(self.available_maps, map_votes)
+            view = ChosenMapView(str(match_map.map))
             embed = nextcord.Embed(title="You picked", color=A_THEME)
-            embed.set_thumbnail(map_pick.media)
+            embed.set_thumbnail(match_map.media)
             await a_message.edit(embed=embed, view=view)
             embed.title = "A picked"
             await b_channel.send(embed=embed, view=view)
-            await self.bot.store.update(MMBotMatches, id=self.match_id, map=map_pick.map)
+            await self.bot.store.update(MMBotMatches, id=self.match_id, map=match_map.map)
             await self.increment_state()
         
         if check_state(MatchState.PICK_SWAP):
             embed = nextcord.Embed(title="Team B pick side", description=f"<#{b_channel.id}>", color=B_THEME)
             embed.add_field(name="Team A", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if cast(Team, player.team) == Team.A]))
             embed.add_field(name="Team B", 
-                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
+                value='\n'.join([f"- <@{player.user_id}>" for player in self.players if cast(Team, player.team) == Team.B]))
             await match_message.edit(embed=embed)
             await self.increment_state()
         
         if check_state(MatchState.B_PICK):
             time_to_pick = 20
             self.players = await self.bot.store.get_players(self.match_id)
-            add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.B)
+            add_mention = (f"<@{player.user_id}>" for player in self.players if cast(Team, player.team) == Team.B)
             embed = nextcord.Embed(title="Pick your side", description=format_duration(time_to_pick), color=B_THEME)
-            view = await SidePickView.create_showable(self.bot, self.guild_id, self.match)
+            view = await SidePickView.create_showable(self.bot, self.match)
             b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  b_message=b_message.id, phase=Phase.B_PICK)
             await asyncio.sleep(time_to_pick)
@@ -809,23 +816,19 @@ class Match:
             embed = nextcord.Embed(title="You picked", color=B_THEME)
             await b_message.edit(embed=embed, view=ChosenSideView(side_pick))
             
-            a_side = None
-            if side_pick == Side.T: a_side = Side.CT
-            elif side_pick == Side.CT: a_side = Side.T
             embed = nextcord.Embed(title="You are", color=B_THEME)
-            await a_channel.send(embed=embed, view=ChosenSideView(a_side))
+            await a_channel.send(embed=embed, view=ChosenSideView(Side.CT if side_pick == Side.T else Side.T))
             await self.bot.store.update(MMBotMatches, id=self.match_id, b_side=side_pick)
             await self.increment_state()
 
         if check_state(MatchState.MATCH_STARTING):
             await self.match_channel.purge(bulk=True)
-            match_map = await self.bot.store.get_match_map(self.guild_id, self.match_id)
             match_sides = await self.bot.store.get_match_sides(self.match_id)
             embed = nextcord.Embed(title="Starting", description="Setting up server", color=VALORS_THEME1)
             embed.set_image(match_map.media)
-            embed.add_field(name=f"Team A - {match_sides[0].name}", 
+            embed.add_field(name=f"Team A - {match_sides[0]}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.add_field(name=f"Team B - {match_sides[1].name}", 
+            embed.add_field(name=f"Team B - {match_sides[1]}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.add_field(name=f"{match_map.map}:", value="\u200B", inline=False)
             match_message = await self.match_channel.send(embed=embed)
@@ -899,9 +902,9 @@ class Match:
 
             embed = nextcord.Embed(title=f"Match [0/{MATCH_PLAYER_COUNT}]", description=f"Server ready!", color=VALORS_THEME1)
             embed.set_image(match_map.media)
-            embed.add_field(name=f"Team A - {match_sides[0].name}", 
+            embed.add_field(name=f"Team A - {match_sides[0]}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.A]))
-            embed.add_field(name=f"Team B - {match_sides[1].name}", 
+            embed.add_field(name=f"Team B - {match_sides[1]}", 
                 value='\n'.join([f"- <@{player.user_id}>" for player in self.players if player.team == Team.B]))
             embed.add_field(name="TDM Server", value=f"`{server_name}`", inline=False)
             embed.add_field(name="Pin", value=f"`{pin}`")
@@ -1066,12 +1069,14 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_START_SND):
-            m = next((m for m in maps if m.map == self.match.map), maps[0])
             server_maps = await self.bot.rcon_manager.list_maps(self.serveraddr)
-            await self.bot.rcon_manager.add_map(self.serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
+            await self.bot.rcon_manager.add_map(self.serveraddr, 
+                str(match_map.resource_id) if str(match_map.resource_id) else str(match_map.map), 'SND')
+            
             for ma in server_maps.get('MapList', []):
                 await self.bot.rcon_manager.remove_map(self.serveraddr, ma['MapId'], ma['GameMode'], retry_attempts=3)
-            await self.bot.rcon_manager.set_searchndestroy(self.serveraddr, m.resource_id if m.resource_id else m.map)
+            await self.bot.rcon_manager.set_searchndestroy(self.serveraddr, 
+                str(match_map.resource_id) if str(match_map.resource_id) else str(match_map.map))
             log.info(f"[{self.match_id}] Switching to SND")
 
             embed = nextcord.Embed(title="Match started!", description="May the best team win!", color=VALORS_THEME1)
@@ -1167,9 +1172,9 @@ class Match:
             
             embed = log_message.embeds[0]
             embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-            a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+            a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[cast(int, player.user_id)]['mmr_change']:+02.2f}" 
                                     for player in self.players if player.team == Team.A])
-            b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[player.user_id]['mmr_change']:+02.2f}" 
+            b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[cast(int, player.user_id)]['mmr_change']:+02.2f}" 
                                     for player in self.players if player.team == Team.B])
             embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
             embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
@@ -1178,13 +1183,13 @@ class Match:
             await self.increment_state()
         
         if check_state(MatchState.MATCH_CLEANUP):
-            pin = 5
+            pin = "5"
             server_name = f"PMM {server.region} Server {server.id}"
             await self.bot.rcon_manager.set_name(self.serveraddr, server_name)
             await self.bot.rcon_manager.set_pin(self.serveraddr, pin)
             await self.bot.rcon_manager.add_map(self.serveraddr, SERVER_DM_MAP, 'TDM')
-            m = next((m for m in maps if m.map == self.match.map), maps[0])
-            await self.bot.rcon_manager.remove_map(self.serveraddr, m.resource_id if m.resource_id else m.map, 'SND')
+            await self.bot.rcon_manager.remove_map(self.serveraddr, 
+                str(match_map.resource_id) if str(match_map.resource_id) else str(match_map.map), 'SND')
             await self.bot.rcon_manager.set_teamdeathmatch(self.serveraddr, SERVER_DM_MAP)
             await self.bot.rcon_manager.comp_mode(self.serveraddr, state=False)
             await self.bot.rcon_manager.clear_mods(self.serveraddr)
@@ -1226,7 +1231,7 @@ class Match:
                 if b_channel: await b_channel.delete()
             except nextcord.HTTPException: pass
             # move users back
-            voice_channel = guild.get_channel(settings.mm_voice_channel)
+            voice_channel = guild.get_channel(cast(int, settings.mm_voice_channel))
             for player in self.players:
                 member = guild.get_member(cast(int, player.user_id))
                 if member and member.voice and member.voice.channel in [a_vc, b_vc]:

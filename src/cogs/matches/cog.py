@@ -205,7 +205,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
         
         try:
             await self.bot.store.shuffle_map_order(interaction.guild.id)
-            shuffled_maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
+            shuffled_maps = await self.bot.store.get_all_maps(guild_id=interaction.guild.id)
             map_list = [m.map for m in shuffled_maps]
             
             log.info(f"{interaction.user.display_name} shuffled the map pool:")
@@ -282,7 +282,7 @@ _You will have a cooldown of `{format_duration(cooldown)}` and lose `{str(mmr_lo
     
     @mm_settings.subcommand(name="get_maps", description="Get the current map pool with their media")
     async def get_map_pool(self, interaction: nextcord.Interaction):
-        maps = await self.bot.store.get_maps(guild_id=interaction.guild.id)
+        maps = await self.bot.store.get_all_maps(guild_id=interaction.guild.id)
         map_dict = {
             m.map: {"media": m.media, "resource_id": m.resource_id}
             for m in maps

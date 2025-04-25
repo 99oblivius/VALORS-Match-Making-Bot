@@ -17,23 +17,24 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from functools import partial
-from typing import List
+from typing import List, TYPE_CHECKING, cast
+from collections import Counter
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
-from nextcord.ext import commands
 
 from utils.logger import Logger as log
-from utils.models import MMBotMatches, MMBotUserBans, Phase
-from utils.utils import shifted_window
+from utils.models import MMBotMatches, MMBotUserBans, Phase, MMBotMaps, Team
 
 
 class BanView(nextcord.ui.View):
-    def __init__(self, bot, *args, **kwargs):
+    def __init__(self, bot: 'Bot', *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bot: commands.Bot = bot
+        self.bot = bot
 
     @classmethod
-    def create_dummy_persistent(cls, bot: commands.Bot):
+    def create_dummy_persistent(cls, bot: 'Bot'):
         instance = cls(bot, timeout=None)
         for slot_id in range(20):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_match_bans:{slot_id}")
@@ -42,48 +43,55 @@ class BanView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_maps: List[str]):
+    async def create_showable(cls, bot: 'Bot', match: MMBotMatches, available_maps: List[MMBotMaps]):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await instance.bot.store.get_bans(match.id)
-        ban_counts = await instance.bot.store.get_ban_counts(guild_id, match.id, match.phase)
+        bans = await instance.bot.store.get_ban_votes(match.id, match.phase)
+        ban_counts = Counter(bans)
 
-        available_maps = [x for x in ban_counts if x[0] not in last_maps][:match.maps_range]
-        bans = (x for x in available_maps if x[0] not in banned_maps)
-        for n, (m, count) in enumerate(bans):
-            if m in banned_maps: continue
+        for n, m in enumerate(available_maps):
+            if m.map in banned_maps: continue
             button = nextcord.ui.Button(
-                label=f"{m}: {count}", 
+                label=f"{m.map}: {ban_counts.get(m.map, 0)}", 
                 style=nextcord.ButtonStyle.red, 
                 custom_id=f"mm_match_bans:{n}")
             instance.add_item(button)
         return instance
 
-    async def ban_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def ban_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if not match.phase in (Phase.A_BAN, Phase.B_BAN):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
-        # what button
-        banned_maps = await self.bot.store.get_bans(match.id)
-        maps = await self.bot.store.get_maps(interaction.guild.id)
-        user_bans = await self.bot.store.get_user_map_bans(match.id, interaction.user.id)
 
         from matches import get_match
         instance = get_match(match.id)
-        available_maps = [m for m in maps if m.map not in instance.last_maps][:match.maps_range]
-        bans = [m for m in available_maps if m.map not in banned_maps]
-        slot_id = int(button.custom_id.split(':')[-1])
+        assert(instance is not None)
         
-        if bans[slot_id].map in user_bans:
+        if not (player := next((p for p in instance.players if cast(int, p.user_id) == interaction.user.id), None)):
+            return await interaction.response.send_message("You are not a player in this match", ephemeral=True)
+        if not ((cast(Phase, match.phase) == Phase.A_BAN and cast(Team, player.team) == Team.A)
+            or (cast(Phase, match.phase) == Phase.B_BAN and cast(Team, player.team) == Team.B)
+        ):
+            team_name = "Team A" if match.phase == Phase.A_BAN else "Team B"
+            return await interaction.response.send_message(f"It is {team_name}'s turn to ban.", ephemeral=True)
+        
+        
+        # what button
+        slot_id = int(button.custom_id.split(':')[-1])
+        banned_map = instance.available_maps[slot_id].map
+        
+        user_bans = await self.bot.store.get_user_map_bans(match.id, interaction.user.id)
+        if banned_map in user_bans:
             # already voted this one
             await self.bot.store.remove(MMBotUserBans, 
                 guild_id=interaction.guild.id, 
                 match_id=match.id, 
                 user_id=interaction.user.id, 
-                map=bans[slot_id].map)
-            log.info(f"{interaction.user.name} removed ban vote for {bans[slot_id].map}")
+                map=banned_map)
+            log.info(f"{interaction.user.name} removed ban vote for {banned_map}")
         else:
             # already voted max times
             if len(user_bans) > 1:
@@ -94,10 +102,11 @@ class BanView(nextcord.ui.View):
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
-                map=bans[slot_id].map, 
+                map=banned_map, 
                 phase=match.phase)
-            log.info(f"{interaction.user.name} wants to ban {bans[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_maps)
+            log.info(f"{interaction.user.name} wants to ban {banned_map}")
+        
+        view = await self.create_showable(self.bot, match, instance.available_maps)
         await interaction.edit(view=view)
 
 

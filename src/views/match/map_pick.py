@@ -19,20 +19,23 @@
 import nextcord
 from functools import partial
 from nextcord.ext import commands
-from typing import List
+from typing import List, TYPE_CHECKING, cast
+from collections import Counter
+if TYPE_CHECKING:
+    from main import Bot
 
 from utils.logger import Logger as log
-from utils.models import MMBotMatches, MMBotUserMapPicks, Phase
+from utils.models import MMBotMatches, MMBotUserMapPicks, Phase, Team, MMBotMaps
 from utils.utils import shifted_window
 
 
 class MapPickView(nextcord.ui.View):
-    def __init__(self, bot, *args, **kwargs):
+    def __init__(self, bot: "Bot", *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bot: commands.Bot = bot
+        self.bot = bot
 
     @classmethod
-    def create_dummy_persistent(cls, bot: commands.Bot):
+    def create_dummy_persistent(cls, bot: "Bot"):
         instance = cls(bot, timeout=None)
         for slot_id in range(20):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_map_picks:{slot_id}")
@@ -41,21 +44,20 @@ class MapPickView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches, last_maps: List[str]):
+    async def create_showable(cls, bot: "Bot", match: MMBotMatches, available_maps: List[MMBotMaps]):
         instance = cls(bot, timeout=None)
         instance.stop()
 
         banned_maps = await bot.store.get_bans(match.id)
-        map_picks = await bot.store.get_map_vote_counts(guild_id, match.id)
+        picks = await instance.bot.store.get_map_votes(match.id)
+        pick_counts = Counter(picks)
 
-        available_maps = [x for x in map_picks if x[0] not in last_maps][:match.maps_range]
-        for n, (m, count) in enumerate([x for x in available_maps if x[0] not in banned_maps]):
-            if m in banned_maps: continue
+        for n, m in enumerate(available_maps):
+            if m.map in banned_maps: continue
             button = nextcord.ui.Button(
-                label=f"{m}: {count}", 
+                label=f"{m.map}: {pick_counts.get(m.map, 0)}", 
                 style=nextcord.ButtonStyle.green, 
                 custom_id=f"mm_map_picks:{n}")
-            button.callback = partial(instance.pick_callback, button)
             instance.add_item(button)
         return instance
 
@@ -64,29 +66,34 @@ class MapPickView(nextcord.ui.View):
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if match.phase != Phase.A_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
-        # what button
-        banned_maps = await self.bot.store.get_bans(match.id)
-        maps = await self.bot.store.get_maps(interaction.guild.id)
-        user_picks = await self.bot.store.get_user_map_picks(match.id, interaction.user.id)
-
+        
         from matches import get_match
         instance = get_match(match.id)
-        available_maps = [m for m in maps if m.map not in instance.last_maps][:match.maps_range]
-        picks = [m for m in available_maps if m.map not in banned_maps]
+        assert(instance is not None)
+        
+        if not (player := next((p for p in instance.players if cast(int, p.user_id) == interaction.user.id), None)):
+            return await interaction.response.send_message("You are not a player in this match", ephemeral=True)
+        if cast(Team, player.team) != Team.A:
+            return await interaction.response.send_message(f"Only Team A can pick the map.", ephemeral=True)
+        
+        user_picks = await self.bot.store.get_user_map_picks(match.id, interaction.user.id)
+                
+        # what button
         slot_id = int(button.custom_id.split(':')[-1])
+        picked_map = instance.available_maps[slot_id].map
         
         await self.bot.store.remove(MMBotUserMapPicks, 
             match_id=match.id, 
             user_id=interaction.user.id)
-        if picks[slot_id].map not in user_picks:
+        if picked_map not in user_picks:
             # vote this one
             await self.bot.store.insert(MMBotUserMapPicks, 
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
                 match_id=match.id, 
-                map=picks[slot_id].map)
-            log.info(f"{interaction.user.display_name} voted to pick {picks[slot_id].map}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match, instance.last_maps)
+                map=picked_map)
+            log.info(f"{interaction.user.display_name} voted to pick {picked_map}")
+        view = await self.create_showable(self.bot, match, instance.available_maps)
         await interaction.edit(view=view)
 
 class ChosenMapView(nextcord.ui.View):

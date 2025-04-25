@@ -16,22 +16,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from typing import cast, TYPE_CHECKING
+from collections import Counter
+if TYPE_CHECKING:
+    from main import Bot
+
 import nextcord
 from functools import partial
-from nextcord.ext import commands
 
 from utils.logger import Logger as log
-from utils.models import MMBotMatches, MMBotUserSidePicks, Phase, Side
+from utils.models import MMBotMatches, MMBotUserSidePicks, Phase, Side, Team, MMBotMaps
 
 
 class SidePickView(nextcord.ui.View):
-    def __init__(self, bot, *args, **kwargs):
+    def __init__(self, bot: "Bot", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.timeout = None
-        self.bot: commands.Bot = bot
+        self.bot = bot
 
     @classmethod
-    def create_dummy_persistent(cls, bot: commands.Bot):
+    def create_dummy_persistent(cls, bot: "Bot"):
         instance = cls(bot, timeout=None)
 
         button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_side_picks:CT")
@@ -44,25 +48,36 @@ class SidePickView(nextcord.ui.View):
         return instance
     
     @classmethod
-    async def create_showable(cls, bot: commands.Bot, guild_id: int, match: MMBotMatches):
+    async def create_showable(cls, bot: "Bot", match: MMBotMatches):
         instance = cls(bot, timeout=None)
         instance.stop()
-
-        sides = await instance.bot.store.get_side_vote_count(guild_id, match.id)
-        for side, count in sides:
+        
+        sides = await instance.bot.store.get_side_votes(match.id)
+        side_counts = Counter(sides)
+        
+        for side in ('CT', 'T'):
             button = nextcord.ui.Button(
-                label=f"{side.name}: {count}", 
+                label=f"{side}: {side_counts.get(side, 0)}", 
                 style=nextcord.ButtonStyle.blurple, 
-                custom_id=f"mm_side_picks:{side.name}")
+                custom_id=f"mm_side_picks:{side}")
             button.callback = partial(instance.side_callback, button)
             instance.add_item(button)
         return instance
     
-    async def side_callback(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def side_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if match.phase != Phase.B_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
+        
+        from matches import get_match
+        instance = get_match(match.id)
+        assert(instance is not None)
+        
+        if not (player := next((p for p in instance.players if cast(int, p.user_id) == interaction.user.id), None)):
+            return await interaction.response.send_message("You are not a player in this match", ephemeral=True)
+        if cast(Team, player.team) != Team.B:
+            return await interaction.response.send_message(f"Only Team B can pick the side.", ephemeral=True)
         
         user_pick = await self.bot.store.get_user_side_pick(match.id, interaction.user.id)
         await self.bot.store.remove(MMBotUserSidePicks, 
@@ -80,7 +95,7 @@ class SidePickView(nextcord.ui.View):
                 match_id=match.id, 
                 side=pick)
             log.info(f"{interaction.user.display_name} voted for {pick.name}")
-        view = await self.create_showable(self.bot, interaction.guild.id, match)
+        view = await self.create_showable(self.bot, match)
         await interaction.edit(view=view)
 
 class ChosenSideView(nextcord.ui.View):

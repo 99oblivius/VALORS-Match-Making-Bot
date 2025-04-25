@@ -20,14 +20,14 @@ import random
 from typing import List
 import numpy as np
 from functools import reduce
+from collections import Counter
 
 from config import BASE_MMR_CHANGE, STARTING_MMR, MOMENTUM_CHANGE, MOMENTUM_RESET_FACTOR
 from utils.models import MMBotMaps, MMBotUserMapPicks, Side
 from utils.utils import lerp
 
-
 def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:
-    map_options = { m.map: 0 for m in maps }
+    map_options = { str(m.map): 0 for m in maps }
     for ban in bans: map_options[ban] += 1
 
     ban_votes = [(k, v) for k, v in sorted(map_options.items(), key=lambda item: item[1], reverse=True)]
@@ -42,22 +42,17 @@ def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2
         bans.append(chosen_ban[0])
         ban_votes.remove(chosen_ban)
     
-    order_map = {m.map: n for n, m in enumerate(maps)}
+    order_map = { str(m.map): n for n, m in enumerate(maps) }
     bans.sort(key=lambda x: order_map[x])
     
     return bans
 
-def get_preferred_map(maps: List[MMBotMaps], picks: List[MMBotUserMapPicks]) -> MMBotMaps:
+def get_preferred_map(maps: List[MMBotMaps], picks: List[str]) -> MMBotMaps:
     random.shuffle(picks)
-    map_dict = { m.map: m for m in maps }
-    pick_options = { m.map: 0 for m in maps }
-    for pick in picks:
-        if pick.map in pick_options:
-            pick_options[pick.map] += 1
-    most_picked_map_name = sorted(pick_options.items(), key=lambda x: x[1], reverse=True)[0][0]
-    return map_dict[most_picked_map_name]
+    pick_counts = Counter(picks)
+    return {str(m.map): m for m in maps}[pick_counts.most_common(1)[0][0]]
 
-def get_preferred_side(sides: List[Side], picks: List[str]) -> str:
+def get_preferred_side(sides: List[Side], picks: List[str]) -> Side:
     random.shuffle(picks)
     pick_options = { s: 0 for s in sides }
     for pick in picks: pick_options[pick] += 1
