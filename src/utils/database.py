@@ -1514,7 +1514,7 @@ class Database:
             return [(Side[row.side], row.pick_count) for row in pick_counts]
     
     @log_db_operation
-    async def get_side_votes(self, match_id: int) -> List[str]:
+    async def get_side_votes(self, match_id: int) -> List[Side]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserSidePicks.side)
@@ -1522,7 +1522,7 @@ class Database:
             return list(result.scalars().all())
 
     @log_db_operation
-    async def get_user_side_pick(self, match_id: int, user_id: int) -> List[str]:
+    async def get_user_side_pick(self, match_id: int, user_id: int) -> List[Side]:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserSidePicks.side)

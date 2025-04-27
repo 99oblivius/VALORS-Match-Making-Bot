@@ -55,11 +55,11 @@ class SidePickView(nextcord.ui.View):
         sides = await instance.bot.store.get_side_votes(match.id)
         side_counts = Counter(sides)
         
-        for side in ('CT', 'T'):
+        for side in (Side.CT, Side.T):
             button = nextcord.ui.Button(
-                label=f"{side}: {side_counts.get(side, 0)}", 
+                label=f"{side.name}: {side_counts.get(side, 0)}", 
                 style=nextcord.ButtonStyle.blurple, 
-                custom_id=f"mm_side_picks:{side}")
+                custom_id=f"mm_side_picks:{side.name}")
             instance.add_item(button)
         return instance
     
@@ -85,7 +85,7 @@ class SidePickView(nextcord.ui.View):
                 match_id=match.id, 
                 user_id=interaction.user.id)
             
-        if (pick := button.custom_id.split(':')[-1]) not in user_picks:
+        if (pick := button.custom_id.split(':')[-1]) not in (p.name for p in user_picks):
             await self.bot.store.insert(MMBotUserSidePicks, 
                 guild_id=interaction.guild.id, 
                 user_id=interaction.user.id, 
