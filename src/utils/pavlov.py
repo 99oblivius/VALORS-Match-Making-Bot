@@ -46,7 +46,7 @@ class RCONManager:
                                 await asyncio.sleep(0.15)
                             asyncio.create_task(delay_release())
                             return dict() if result is None else result
-                    except ConnectionRefusedError:
+                    except (TimeoutError, ConnectionRefusedError):
                         if serveraddr in self.servers:
                             del self.servers[serveraddr]
                             del self.server_timeouts[serveraddr]
