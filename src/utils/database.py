@@ -1330,7 +1330,7 @@ class Database:
             return [(row.map, row.pick_count) for row in pick_counts]
 
     @log_db_operation
-    async def get_map_votes(self, match_id: int) -> List[str]:
+    async def get_map_votes(self, match_id: int) -> List[str] | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserMapPicks.map)
@@ -1514,7 +1514,7 @@ class Database:
             return [(Side[row.side], row.pick_count) for row in pick_counts]
     
     @log_db_operation
-    async def get_side_votes(self, match_id: int) -> List[Side]:
+    async def get_side_votes(self, match_id: int) -> List[Side] | None:
         async with self._session_maker() as session:
             result = await session.execute(
                 select(MMBotUserSidePicks.side)

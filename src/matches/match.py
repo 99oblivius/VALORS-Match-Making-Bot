@@ -781,7 +781,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             map_votes = await self.bot.store.get_map_votes(self.match_id)
-            match_map = get_preferred_map(self.available_maps, map_votes)
+            match_map = get_preferred_map(self.available_maps, map_votes or [])
             view = ChosenMapView(str(match_map.map))
             embed = nextcord.Embed(title="You picked", color=A_THEME)
             embed.set_thumbnail(match_map.media)
@@ -812,7 +812,7 @@ class Match:
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             side_votes = await self.bot.store.get_side_votes(self.match_id)
-            side_pick = get_preferred_side([Side.T, Side.CT], side_votes)
+            side_pick = get_preferred_side([Side.T, Side.CT], side_votes or [])
             embed = nextcord.Embed(title="You picked", color=B_THEME)
             await b_message.edit(embed=embed, view=ChosenSideView(side_pick))
             
