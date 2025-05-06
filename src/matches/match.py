@@ -393,6 +393,7 @@ class Match:
         assert(isinstance(channel, nextcord.TextChannel))
         message = await channel.fetch_message(cast(int, settings.mm_queue_message))
         await message.edit(embeds=[message.embeds[0], embed])
+        asyncio.create_task(self.bot.queue_manager.notify_queue_count(self.guild_id, settings, len(queue_users)))
 
     async def increment_state(self):
         self.state = MatchState(self.state + 1)

@@ -998,7 +998,7 @@ class Database:
                 .where(
                     MMBotQueueUsers.queue_channel == channel_id, 
                     MMBotQueueUsers.in_queue == True))
-            return result.scalars().all()
+            return list(result.scalars().all())
     
     @log_db_operation
     async def upsert_queue_user(self, user_id: int, guild_id: int, queue_channel: int, queue_expiry: int):
@@ -1755,7 +1755,7 @@ class Database:
                 .where(MMBotUserNotifications.guild_id == guild_id)
             )
             return {
-                notification.user_id: {
+                cast(int, notification.user_id): {
                     'queue_count': notification.queue_count,
                     'expiry': notification.expiry,
                     'one_time': notification.one_time

@@ -19,6 +19,9 @@
 import asyncio
 from datetime import datetime, timezone
 from collections import deque
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Bot
 
 import nextcord
 
@@ -28,7 +31,7 @@ from utils.utils import format_duration, create_queue_embed
 
 
 class QueueManager:
-    def __init__(self, bot):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
         self.active_users = {}
         self.tasks = {}
