@@ -115,8 +115,9 @@ class Matches(commands.Cog):
         
         scores_channel = interaction.guild.get_channel(settings.mm_log_channel)
         if not scores_channel: return
-        scores_message = await scores_channel.fetch_message(match.log_message)
-        if not scores_message: return
+        if match.log_message:
+            scores_message = await scores_channel.fetch_message(match.log_message)
+            if not scores_message: return
         embed = scores_message.embeds[0]
         embed.description = "Match canceled"
         await scores_message.edit(embed=embed)
