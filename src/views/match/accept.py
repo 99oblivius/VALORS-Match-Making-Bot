@@ -43,32 +43,28 @@ class AcceptView(nextcord.ui.View):
         emoji="✅", 
         style=nextcord.ButtonStyle.green, 
         custom_id="mm_accept_button")
-    async def accept_button(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def accept_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        await interaction.response.defer()
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
 
         async with self.lock:
             players = await self.bot.store.get_players(match.id)
             if interaction.user.id not in [p.user_id for p in players]:
-                return await interaction.response.send_message(
-                    "You are not in this match :(", ephemeral=True)
+                return await interaction.followup.send("You are not in this match :(", ephemeral=True)
             if interaction.user.id in [p.user_id for p in players if p.accepted]:
-                return await interaction.response.send_message(
-                    "You have already accepted the match.\nBut thank you for making sure :)", ephemeral=True)
+                return await interaction.followup.send("You have already accepted the match.\nBut thank you for making sure :)", ephemeral=True)
             
             await self.bot.store.update(MMBotMatchPlayers, 
                 guild_id=interaction.guild.id, match_id=match.id, user_id=interaction.user.id, accepted=True)
             log.info(f"{interaction.user.display_name} accepted match {match.id}")
-            players = await self.bot.store.get_players(match.id)
             
-            embed = interaction.message.embeds[0]
-            embed.set_field_at(0, name="Attendance", value=format_mm_attendance(players))
-            await interaction.message.edit(embed=embed)
-            msg = await interaction.response.send_message(
-                "You accepted the match!", ephemeral=True)
+            asyncio.create_task(interaction.followup.send("You accepted the match!", ephemeral=True))
             self.accepted_players = await self.bot.store.get_accepted_players(match.id)
             if len(self.accepted_players) == MATCH_PLAYER_COUNT:
                 if self.done_event:
                     self.done_event.set()
-        
-        await asyncio.sleep(3)
-        await msg.delete()
+            
+            players = await self.bot.store.get_players(match.id)
+            embed = interaction.message.embeds[0]
+            embed.set_field_at(0, name="Attendance", value=format_mm_attendance(players))
+            await interaction.message.edit(embed=embed)
