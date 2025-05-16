@@ -1,7 +1,7 @@
 import pickle
 
 from datetime import timedelta, datetime, timezone
-from typing import TYPE_CHECKING, cast
+from typing import Set, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from main import Bot
 
@@ -9,6 +9,7 @@ import nextcord
 
 from utils.models import TicketStatus, TicketTranscripts
 from utils.utils import get_message_data
+from utils.logger import Logger as log
 
 
 class TicketPanelView(nextcord.ui.View):
@@ -169,25 +170,34 @@ class TicketPanelView(nextcord.ui.View):
             await channel.send(
                 embed=nextcord.Embed(description=f"{ticket.username}'s `{interaction.channel.name}` was closed by {interaction.user.mention}", color=0xff0000))
             
-            await interaction.channel.send(embed=nextcord.Embed(description="Archiving..."))
-            all_messages = [get_message_data(message) async for message in interaction.channel.history(limit=None)]
-            
-            channel_data = {
-                'channel': {
-                    'id': channel.id,
-                    'name': channel.name,
-                    'guild_id': channel.guild.id,
-                },
-                'messages': all_messages
-            }
-            serialized_data = pickle.dumps(channel_data)
-            
-            archive = TicketTranscripts(
-                ticket_id=ticket.id,
-                guild_id=channel.guild.id,
-                archived_at=datetime.now(timezone.utc),
-                data=serialized_data)
-            await self.bot.store.save_transcript(archive)
+            await interaction.response.send_message(embed=nextcord.Embed(description="Archiving..."))
+            all_messages = []
+            all_message_ids: Set[int] = set()
+            async with interaction.channel.typing():
+                async for message in interaction.channel.history(limit=None):
+                    log.info(f"{message.clean_content}")
+                    if message.id in all_message_ids:
+                        log.info(f"{message.clean_content}::::: Was already stored. Breaking!")
+                        break
+                    all_message_ids.add(message.id)
+                    all_messages.append(get_message_data(message))
+                
+                channel_data = {
+                    'channel': {
+                        'id': channel.id,
+                        'name': channel.name,
+                        'guild_id': channel.guild.id,
+                    },
+                    'messages': all_messages
+                }
+                serialized_data = pickle.dumps(channel_data)
+                
+                archive = TicketTranscripts(
+                    ticket_id=ticket.id,
+                    guild_id=channel.guild.id,
+                    archived_at=datetime.now(timezone.utc),
+                    data=serialized_data)
+                await self.bot.store.save_transcript(archive)
             
             await interaction.channel.delete()
         async def delete_cancel(interaction: nextcord.Interaction):
