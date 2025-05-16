@@ -110,6 +110,8 @@ class QueueButtonsView(nextcord.ui.View):
         await interaction.edit(embeds=[interaction.message.embeds[0], embed])
 
     async def ready_callback(self, interaction: nextcord.Interaction):
+        await interaction.response.defer()
+        
         lock_id = f'{interaction.channel.id}'
         if lock_id not in self.ready_lock:
             self.ready_lock[lock_id] = asyncio.Lock()
@@ -117,29 +119,24 @@ class QueueButtonsView(nextcord.ui.View):
         settings = await self.bot.settings_cache(interaction.guild.id)
         user_platforms = await self.bot.store.get_user_platforms(interaction.guild.id, interaction.user.id)
         if not user_platforms:
-            return await interaction.response.send_message(
-                "Verify with at least one platform.", ephemeral=True)
+            return await interaction.followup.send("Verify with at least one platform.", ephemeral=True)
         
         in_queue = False
-        if not settings: return await interaction.response.send_message(
-            "Settings not found.", ephemeral=True)
+        if not settings: return await interaction.followup.send("Settings not found.", ephemeral=True)
         
         user = await self.bot.store.get_user(interaction.guild.id, interaction.user.id)
-        if not user: return await interaction.response.send_message(
-            "You are not registered.", ephemeral=True)
-        if not user.region: return await interaction.response.send_message(
-            "You must select your region.", ephemeral=True)
+        if not user: return await interaction.followup.send("You are not registered.", ephemeral=True)
+        if not user.region: return await interaction.followup.send("You must select your region.", ephemeral=True)
         
         blocked_users = await self.bot.store.get_user_blocks(interaction.guild.id)
         blocked_user = next((u for u in blocked_users if u.user_id == user.user_id), None)
         if blocked_user:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 f"You will be unblocked from this queue <t:{int(blocked_user.expiration.timestamp())}:R>", ephemeral=True)
         
         in_match = await self.bot.store.is_user_in_match(interaction.user.id)
         if in_match:
-            msg = await interaction.response.send_message(
-            "Your current match has not ended yet.", ephemeral=True)
+            msg = await interaction.followup.send("Your current match has not ended yet.", ephemeral=True)
             await asyncio.sleep(1.5)
             return await msg.delete()
         previous_abandons, last_abandon = await self.bot.store.get_abandon_count_last_period(interaction.guild.id, interaction.user.id)
@@ -149,7 +146,7 @@ class QueueButtonsView(nextcord.ui.View):
                 title="You are on cooldown due to abandoning a match",
                 description=f"You can queue again in `{format_duration(cooldown)}`",
                 color=VALORS_THEME1_2)
-            return await interaction.response.send_message(embed=embed, ephemeral=True)
+            return await interaction.followup.send(embed=embed, ephemeral=True)
         slot_id = int(interaction.data['custom_id'].split(':')[-1])
         periods = list(json.loads(settings.mm_queue_periods).items())
         expiry = int(datetime.now(timezone.utc).timestamp()) + 60 * int(periods[slot_id][1])
@@ -159,7 +156,7 @@ class QueueButtonsView(nextcord.ui.View):
             total_in_queue = len(queue_users)
             if total_in_queue + 1 > MATCH_PLAYER_COUNT:
                 log.info(f"{interaction.user.display_name} wanted to queue but was overtaken")
-                return await interaction.response.send_message("Someone else just got in.\nBetter luck next time", ephemeral=True)
+                return await interaction.followup.send("Someone else just got in.\nBetter luck next time", ephemeral=True)
             self.bot.queue_manager.add_user(interaction.user.id, expiry)
             in_queue = await self.bot.store.upsert_queue_user(
                 user_id=interaction.user.id, 

@@ -39,10 +39,10 @@ class AbandonView(nextcord.ui.View):
         emoji="✔️", 
         style=nextcord.ButtonStyle.red, 
         custom_id="mm_accept_abandon_button")
-    async def abandon(self, button: nextcord.ui.Button, interaction: nextcord.Integration):
+    async def abandon(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         loop = asyncio.get_event_loop()
         guild = interaction.guild
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         settings = await self.bot.settings_cache(guild.id)
 
         if not await cleanup_match(loop, self.match.id):

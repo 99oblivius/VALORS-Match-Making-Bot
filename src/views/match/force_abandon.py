@@ -59,7 +59,8 @@ class ForceAbandonView(nextcord.ui.View):
             return await interaction.response.send_message("This button is meant for Staff only", ephemeral=True)
         
         message = None
-        async def confirm_callback(interaction: nextcord.Integration):
+        async def confirm_callback(interaction: nextcord.Interaction):
+            await interaction.response.defer()
             async with self.abandon_lock:
                 if not self.abandoned:
                     from matches import cleanup_match
@@ -89,8 +90,6 @@ class ForceAbandonView(nextcord.ui.View):
                             description=f"You lost `{mmr_change}` and gained a cooldown of `{format_duration(cooldown)}` due to {abandons_str} in the past 2 months.",
                             color=0xff0000)
                         asyncio.create_task(self.bot.get_user(player.user_id).send(embed=embed))
-
-                    await interaction.response.defer(ephemeral=True)
                     
                     missing_mentions = ', '.join((f'<@{p.user_id}>' for p in self.missing_players))
                     log.info(f"{interaction.user.display_name} abandoned forcefully match {self.match.id} due to lates: {missing_mentions}")
