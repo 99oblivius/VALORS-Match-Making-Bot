@@ -1171,12 +1171,26 @@ class Match:
             
             await self.update_network_latencies()
             
+            player_stats = lambda p: self.persistent_player_stats[cast(int, p.user_id)]
+            
             embed = log_message.embeds[0]
             embed.description = f"{'A' if a_score > b_score else 'B'} Wins!"
-            a_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[cast(int, player.user_id)]['mmr_change']:+02.2f}" 
-                                    for player in self.players if player.team == Team.A])
-            b_player_list = '\n'.join([f"- <@{player.user_id}> Δ{self.persistent_player_stats[cast(int, player.user_id)]['mmr_change']:+02.2f}" 
-                                    for player in self.players if player.team == Team.B])
+            a_player_list = '\n'.join([
+                f"{n}. Δ{player_stats(player)['mmr_change']:+02.1f} <@{player.user_id}>{users_summary_data[player.user_id].momentum:.1f}"
+                for n, player in enumerate(
+                    sorted(self.players,
+                        key=lambda p: player_stats(p)['score'], reverse=True), start=1)
+                if player.team == Team.A
+            ])
+
+            b_player_list = '\n'.join([
+                f"{n}. Δ{player_stats(player)['mmr_change']:+02.1f} <@{player.user_id}>{users_summary_data[player.user_id].momentum:.1f}"
+                for n, player in enumerate(
+                    sorted(self.players,
+                        key=lambda p: player_stats(p)['score'], reverse=True), start=1)
+                if player.team == Team.B
+            ])
+
             embed.set_field_at(0, name=f"[{self.match.a_mmr:.0f}]Team A - {a_side}: {a_score}", value=a_player_list)
             embed.set_field_at(1, name=f"[{self.match.b_mmr:.0f}]Team B - {b_side}: {b_score}", value=b_player_list)
             asyncio.create_task(log_message.edit(embed=embed))
