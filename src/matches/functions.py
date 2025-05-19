@@ -78,10 +78,10 @@ def calculate_mmr_change(
     if abandoned_count > 0:
         base_change = BASE_MMR_CHANGE * abandoned_count / 2 + 0.5
 
-    s = 400
+    s = 250
     closeness_ratio = 4/9
 
-    kd_rate = BASE_MMR_CHANGE / (3 if placements else 6) * reduce(min if win else max, (0, ((kills+assists/3) - deaths) / 10))
+    kd_rate = BASE_MMR_CHANGE / (2.5 if placements else 5) * min(1, max(-1, (((kills + (assists/2.5)) - deaths) / 8)))
     
     r_ab = ally_team_avg_mmr - enemy_team_avg_mmr
     pr_a = 1 / (1 + pow(10, -r_ab/s))
@@ -91,10 +91,8 @@ def calculate_mmr_change(
     new_r = base_change * (int(win) - pr_a)
     new_r *= closeness
     
-    if win: new_r = max(8, new_r + kd_rate)
-    else: new_r = min(-8, new_r + kd_rate)
-    
-    return new_r if abandoned_count else new_r * momentum
+    new_r = new_r if abandoned_count else new_r * momentum
+    return max(5, new_r + kd_rate) if win else min(-5, new_r + kd_rate)
 
 def calculate_placements_mmr(user_avg_score: float, guild_avg_scores: List[float], initial_mmr: float) -> float:
     guild_mean = np.mean(guild_avg_scores)
@@ -121,7 +119,7 @@ def calculate_placements_mmr(user_avg_score: float, guild_avg_scores: List[float
 
 def update_momentum(current_momentum, win):
     if (win and current_momentum >= 1.0) or (not win and current_momentum <= 1.0):
-        new_momentum = current_momentum + MOMENTUM_CHANGE if win else current_momentum + MOMENTUM_CHANGE
+        new_momentum = current_momentum + MOMENTUM_CHANGE
     else:
         difference = current_momentum - 1.0
         reset = difference * MOMENTUM_RESET_FACTOR
