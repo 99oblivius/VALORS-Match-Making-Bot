@@ -112,7 +112,7 @@ class Queues(commands.Cog):
     Try again <t:{int(settings.mm_last_ping.timestamp() + LFG_PING_DELAY)}:R>""", ephemeral=True)
         
         await self.bot.settings_cache(interaction.guild.id, mm_last_ping=datetime.now(timezone.utc))
-        await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!")
+        await interaction.response.send_message(f"All <@&{settings.mm_lfg_role}> members are being summoned!", allowed_mentions=nextcord.AllowedMentions(everyone=True, users=True, roles=True))
         log.info(f"{interaction.user.display_name} used the ping lfg slash_command")
 
     @nextcord.slash_command(name="rating_change", description="Display MMR change from the last match", guild_ids=[*GUILD_IDS])
