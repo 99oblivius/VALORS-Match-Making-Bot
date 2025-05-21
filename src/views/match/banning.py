@@ -29,10 +29,9 @@ from utils.models import MMBotMatches, MMBotUserBans, Phase, MMBotMaps, Team
 
 
 class BanView(nextcord.ui.View):
-    def __init__(self, bot: 'Bot', banned_maps: List[str]=[], *args, **kwargs):
+    def __init__(self, bot: 'Bot', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
-        self.banned_maps = banned_maps
 
     @classmethod
     def create_dummy_persistent(cls, bot: 'Bot'):
@@ -45,7 +44,7 @@ class BanView(nextcord.ui.View):
     
     @classmethod
     async def create_showable(cls, bot: 'Bot', match: MMBotMatches, available_maps: List[MMBotMaps], banned_maps: List[str]):
-        instance = cls(bot, banned_maps, timeout=None)
+        instance = cls(bot, timeout=None)
         instance.stop()
         
         bans = await instance.bot.store.get_ban_votes(match.id, match.phase)
@@ -106,7 +105,8 @@ class BanView(nextcord.ui.View):
                 phase=match.phase)
             log.info(f"{interaction.user.name} wants to ban {banned_map}")
         
-        view = await self.create_showable(self.bot, match, instance.available_maps, self.banned_maps)
+        banned_maps = await instance.bot.store.get_bans(match.id)
+        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
         await interaction.edit(view=view)
 
 

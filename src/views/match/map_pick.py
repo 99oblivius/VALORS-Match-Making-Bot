@@ -30,10 +30,9 @@ from utils.utils import shifted_window
 
 
 class MapPickView(nextcord.ui.View):
-    def __init__(self, bot: "Bot", banned_maps: List[str]=[], *args, **kwargs):
+    def __init__(self, bot: "Bot", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
-        self.banned_maps = banned_maps
 
     @classmethod
     def create_dummy_persistent(cls, bot: "Bot"):
@@ -94,7 +93,8 @@ class MapPickView(nextcord.ui.View):
                 map=picked_map)
             log.info(f"{interaction.user.display_name} voted to pick {picked_map}")
         
-        view = await self.create_showable(self.bot, match, instance.available_maps, self.banned_maps)
+        banned_maps = await instance.bot.store.get_bans(match.id)
+        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
         await interaction.edit(view=view)
 
 class ChosenMapView(nextcord.ui.View):
