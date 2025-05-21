@@ -164,7 +164,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     @LogHelper.ignore_in_matches
     async def on_voice_state_update(self, member: nextcord.Member, before: nextcord.VoiceState, after: nextcord.VoiceState) -> None:
@@ -356,7 +356,7 @@ class Logging(commands.Cog):
             thumbnail=member.display_avatar.url)
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_thread_create(self, thread: nextcord.Thread) -> None:
         await self.helper.log_event(
@@ -371,7 +371,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_thread_remove(self, thread: nextcord.Thread) -> None:
         await self.helper.log_event(
@@ -386,7 +386,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_thread_delete(self, thread: nextcord.Thread) -> None:
         await self.helper.log_event(
@@ -401,7 +401,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     async def on_guild_channel_pins_update(self, channel: Union[nextcord.abc.GuildChannel, nextcord.Thread], last_pin: datetime.datetime | None) -> None:
         await self.helper.log_event(
             channel.guild,
@@ -413,7 +413,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_in_matches
     async def on_guild_channel_update(self, before: nextcord.abc.GuildChannel, after: nextcord.abc.GuildChannel) -> None:
         changes = []
@@ -442,7 +442,7 @@ class Logging(commands.Cog):
                 fields=[("Changes", "\n".join(changes), False)])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_in_matches
     async def on_guild_channel_create(self, channel: nextcord.abc.GuildChannel) -> None:
         channel_type = "Text"
@@ -465,7 +465,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_in_matches
     async def on_guild_channel_delete(self, channel: nextcord.abc.GuildChannel) -> None:
         channel_type = "Text"
@@ -488,7 +488,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_message_edit(self, before: nextcord.Message, after: nextcord.Message) -> None:
         if not before.guild or not before.content or not after.content or before.content == after.content:
@@ -507,7 +507,7 @@ class Logging(commands.Cog):
             author=before.author)
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     async def on_bulk_message_delete(self, messages: List[nextcord.Message]) -> None:
         if not messages or not messages[0].guild:
             return
@@ -526,7 +526,7 @@ class Logging(commands.Cog):
             ])
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_message_delete(self, message: nextcord.Message) -> None:
         if not message.guild or (not message.content and not message.attachments):
@@ -549,7 +549,7 @@ class Logging(commands.Cog):
             author=message.author)
     
     @commands.Cog.listener()
-    @LogHelper.staff_visible_only
+    # @LogHelper.staff_visible_only
     @LogHelper.ignore_bot_actions
     async def on_message(self, message: nextcord.Message) -> None:
         if not message.guild or message.author.bot or not message.content:
