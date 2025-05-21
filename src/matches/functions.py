@@ -19,11 +19,10 @@
 import random
 from typing import List
 import numpy as np
-from functools import reduce
 from collections import Counter
 
 from config import BASE_MMR_CHANGE, STARTING_MMR, MOMENTUM_CHANGE, MOMENTUM_RESET_FACTOR
-from utils.models import MMBotMaps, MMBotUserMapPicks, Side
+from utils.models import MMBotMaps, Side
 from utils.utils import lerp
 
 def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2) -> List[str]:
@@ -47,8 +46,9 @@ def get_preferred_bans(maps: List[MMBotMaps], bans: List[str], total_bans: int=2
     
     return bans
 
-def get_preferred_map(maps: List[MMBotMaps], picks: List[str]) -> MMBotMaps:
+def get_preferred_map(maps: List[MMBotMaps], picks: List[str], banned_maps: List[str]) -> MMBotMaps:
     random.shuffle(picks)
+    if not picks: picks.append(random.choice([str(m.map) for m in maps if m.map not in banned_maps]))
     pick_counts = Counter(picks)
     return {str(m.map): m for m in maps}[pick_counts.most_common(1)[0][0]]
 

@@ -707,7 +707,7 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = [f"<@{player.user_id}>" for player in self.players if cast(Team, player.team) == Team.A]
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=A_THEME)
-            view = await BanView.create_showable(self.bot, self.match, self.available_maps)
+            view = await BanView.create_showable(self.bot, self.match, self.available_maps, [])
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_BAN)
             await asyncio.sleep(time_to_ban)
@@ -736,7 +736,8 @@ class Match:
             time_to_ban = 20
             self.players = await self.bot.store.get_players(self.match_id)
             embed = nextcord.Embed(title="Pick your 2 bans", description=format_duration(time_to_ban), color=B_THEME)
-            view = await BanView.create_showable(self.bot, self.match, self.available_maps)
+            banned_maps = await self.bot.store.get_bans(self.match_id)
+            view = await BanView.create_showable(self.bot, self.match, self.available_maps, banned_maps)
             add_mention = [f"<@{player.user_id}>" for player in self.players if player.team == Team.B]
             b_message = await b_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.B_BAN, b_message=b_message.id)
@@ -775,14 +776,15 @@ class Match:
             self.players = await self.bot.store.get_players(self.match_id)
             add_mention = (f"<@{player.user_id}>" for player in self.players if player.team == Team.A)
             embed = nextcord.Embed(title="Pick your map", description=format_duration(time_to_pick), color=A_THEME)
-            view = await MapPickView.create_showable(self.bot, self.match, self.available_maps)
+            banned_maps = await self.bot.store.get_bans(self.match_id)
+            view = await MapPickView.create_showable(self.bot, self.match, self.available_maps, banned_maps)
             a_message = await a_channel.send(''.join(add_mention), embed=embed, view=view)
             await self.bot.store.update(MMBotMatches, id=self.match_id,  a_message=a_message.id, phase=Phase.A_PICK)
             await asyncio.sleep(time_to_pick)
             await self.bot.store.update(MMBotMatches, id=self.match_id, phase=Phase.NONE)
 
             map_votes = await self.bot.store.get_map_votes(self.match_id)
-            match_map = get_preferred_map(self.available_maps, map_votes or [])
+            match_map = get_preferred_map(self.available_maps, map_votes or [], banned_maps)
             view = ChosenMapView(str(match_map.map))
             embed = nextcord.Embed(title="You picked", color=A_THEME)
             embed.set_thumbnail(match_map.media)
