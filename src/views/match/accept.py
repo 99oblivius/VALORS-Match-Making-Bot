@@ -38,6 +38,13 @@ class AcceptView(nextcord.ui.View):
         self.lock = asyncio.Lock()
         self.accepted_players = []
     
+    async def edit_presence(self, interaction: nextcord.Interaction, match_id: int):
+        players = await self.bot.store.get_players(match_id)
+        if not ((msg := interaction.message) and msg.embeds): return
+        embed = interaction.message.embeds[0]
+        embed.set_field_at(0, name="Attendance", value=format_mm_attendance(players))
+        await interaction.edit(embed=embed)
+    
     @nextcord.ui.button(
         label="Accept", 
         emoji="✅", 
@@ -64,7 +71,4 @@ class AcceptView(nextcord.ui.View):
                 if self.done_event:
                     self.done_event.set()
             
-            players = await self.bot.store.get_players(match.id)
-            embed = interaction.message.embeds[0]
-            embed.set_field_at(0, name="Attendance", value=format_mm_attendance(players))
-            await interaction.message.edit(embed=embed)
+            await self.bot.debounce(self.edit_presence, interaction, match.id)

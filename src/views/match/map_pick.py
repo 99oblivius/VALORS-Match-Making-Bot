@@ -23,6 +23,7 @@ from typing import List, TYPE_CHECKING, cast
 from collections import Counter
 if TYPE_CHECKING:
     from main import Bot
+    from ...matches.match import Match
 
 from utils.logger import Logger as log
 from utils.models import MMBotMatches, MMBotUserMapPicks, Phase, Team, MMBotMaps
@@ -59,6 +60,11 @@ class MapPickView(nextcord.ui.View):
                 custom_id=f"mm_map_picks:{n}")
             instance.add_item(button)
         return instance
+    
+    async def update_picks_message(self, interaction: nextcord.Interaction, instance: 'Match', match: MMBotMatches):
+        banned_maps = await instance.bot.store.get_bans(match.id)
+        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
+        await interaction.edit(view=view)
 
     async def pick_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
@@ -93,9 +99,8 @@ class MapPickView(nextcord.ui.View):
                 map=picked_map)
             log.info(f"{interaction.user.display_name} voted to pick {picked_map}")
         
-        banned_maps = await instance.bot.store.get_bans(match.id)
-        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
-        await interaction.edit(view=view)
+        await self.bot.debounce(self.update_picks_message, interaction, instance, match)
+
 
 class ChosenMapView(nextcord.ui.View):
     def __init__(self, pick: str):

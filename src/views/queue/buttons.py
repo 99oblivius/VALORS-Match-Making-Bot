@@ -18,14 +18,12 @@
 
 import asyncio
 import json
-from time import time 
 from datetime import datetime, timezone
 from typing import Dict, TYPE_CHECKING
 if TYPE_CHECKING:
     from main import Bot
 
 import nextcord
-from nextcord.ext import commands
 
 from config import GUILD_ID, LFG_PING_DELAY, MATCH_PLAYER_COUNT, VALORS_THEME1, VALORS_THEME1_2
 from matches import make_match
@@ -42,7 +40,7 @@ class QueueButtonsView(nextcord.ui.View):
         self.queue_message_task: Dict[str, asyncio.Task] = {}
 
     @classmethod
-    def create_dummy_persistent(cls, bot: commands.Bot):
+    def create_dummy_persistent(cls, bot: 'Bot'):
         instance = cls(bot, timeout=None)
         for slot_id in range(15):
             button = nextcord.ui.Button(label="dummy button", custom_id=f"mm_queue_button:ready:{slot_id}")
@@ -106,32 +104,10 @@ class QueueButtonsView(nextcord.ui.View):
         return instance
     
     async def update_queue_message(self, interaction: nextcord.Interaction):
-        channel_id = f"{interaction.channel.id}"
-
-        async def queue_message_edit(delay: float = 0):
-            try:
-                if delay: await asyncio.sleep(delay)
-                queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
-                asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
-                await interaction.edit(embeds=[interaction.message.embeds[0], create_queue_embed(queue_users)])
-                if 1.5 - delay: await asyncio.sleep(1.5 - delay)
-            except asyncio.CancelledError: pass
-            except Exception as e: print(f"Error updating queue message: {repr(e)}")
-            finally:
-                if (
-                    channel_id in self.queue_message_task
-                    and self.queue_message_task[channel_id] == asyncio.current_task()
-                ):
-                    del self.queue_message_task[channel_id]
-
-        if (
-            channel_id in self.queue_message_task
-            and not self.queue_message_task[channel_id].done()
-        ):
-            self.queue_message_task[channel_id].cancel()
-            self.queue_message_task[channel_id] = asyncio.create_task(queue_message_edit(1.5))
-        else:
-            self.queue_message_task[channel_id] = asyncio.create_task(queue_message_edit())
+        queue_users = await self.bot.store.get_queue_users(interaction.channel.id)
+        asyncio.create_task(self.bot.queue_manager.update_presence(len(queue_users)))
+        if not ((msg := interaction.message) and msg.embeds): return
+        await interaction.edit(embeds=[interaction.message.embeds[0], create_queue_embed(queue_users)])
 
     async def ready_callback(self, interaction: nextcord.Interaction):
         lock_id = f'{interaction.channel.id}'
@@ -196,11 +172,11 @@ class QueueButtonsView(nextcord.ui.View):
                 for user in queue_users: self.bot.queue_manager.remove_user(user.user_id)
 
                 match_id = await self.bot.store.unqueue_add_match_users(settings, interaction.channel.id)
-                await self.update_queue_message(interaction)
+                await self.bot.debounce(self.update_queue_message, interaction)
                 loop = asyncio.get_event_loop()
                 make_match(loop, self.bot, interaction.guild.id, match_id)
                 return
-        await self.update_queue_message(interaction)
+        await self.bot.debounce(self.update_queue_message, interaction, _delay=2.)
     
     async def unready_callback(self, interaction: nextcord.Interaction):
         if not await self.bot.store.in_queue(interaction.guild.id, interaction.user.id):
@@ -208,7 +184,7 @@ class QueueButtonsView(nextcord.ui.View):
         self.bot.queue_manager.remove_user(interaction.user.id)
         await self.bot.store.unqueue_user(interaction.channel.id, interaction.user.id)
         log.info(f"{interaction.user.display_name} has left queue")
-        await self.update_queue_message(interaction)
+        await self.bot.debounce(self.update_queue_message, interaction)
     
     async def stats_callback(self, interaction: nextcord.Interaction):
         user = interaction.user

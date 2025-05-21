@@ -21,6 +21,7 @@ from typing import List, TYPE_CHECKING, cast
 from collections import Counter
 if TYPE_CHECKING:
     from main import Bot
+    from ...matches.match import Match
 
 import nextcord
 
@@ -58,6 +59,11 @@ class BanView(nextcord.ui.View):
                 custom_id=f"mm_match_bans:{n}")
             instance.add_item(button)
         return instance
+    
+    async def update_bans_message(self, interaction: nextcord.Interaction, instance: 'Match', match: MMBotMatches):
+        banned_maps = await self.bot.store.get_bans(match.id)
+        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
+        await interaction.edit(view=view)
 
     async def ban_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
@@ -105,9 +111,7 @@ class BanView(nextcord.ui.View):
                 phase=match.phase)
             log.info(f"{interaction.user.name} wants to ban {banned_map}")
         
-        banned_maps = await instance.bot.store.get_bans(match.id)
-        view = await self.create_showable(self.bot, match, instance.available_maps, banned_maps)
-        await interaction.edit(view=view)
+        await self.bot.debounce(self.update_bans_message, interaction, instance, match)
 
 
 class ChosenBansView(nextcord.ui.View):

@@ -20,12 +20,13 @@ from typing import cast, TYPE_CHECKING
 from collections import Counter
 if TYPE_CHECKING:
     from main import Bot
+    from ...matches.match import Match
 
 import nextcord
 from functools import partial
 
 from utils.logger import Logger as log
-from utils.models import MMBotMatches, MMBotUserSidePicks, Phase, Side, Team, MMBotMaps
+from utils.models import MMBotMatches, MMBotUserSidePicks, Phase, Side, Team
 
 
 class SidePickView(nextcord.ui.View):
@@ -63,6 +64,10 @@ class SidePickView(nextcord.ui.View):
             instance.add_item(button)
         return instance
     
+    async def update_side_message(self, interaction: nextcord.Interaction, match: MMBotMatches):
+        view = await self.create_showable(self.bot, match)
+        await interaction.edit(view=view)
+    
     async def side_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         # what phase
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
@@ -92,8 +97,9 @@ class SidePickView(nextcord.ui.View):
                 match_id=match.id, 
                 side=pick)
             log.info(f"{interaction.user.display_name} voted for {pick}")
-        view = await self.create_showable(self.bot, match)
-        await interaction.edit(view=view)
+        
+        await self.bot.debounce(self.update_side_message, interaction, match)
+
 
 class ChosenSideView(nextcord.ui.View):
     def __init__(self, pick: Side):

@@ -31,6 +31,7 @@ from utils.queuemanager import QueueManager
 from utils.pavlov import RCONManager
 from utils.command_ids import CommandCache
 from utils.settings import SettingsCache
+from utils.edit_debounce import DebounceInterMsg
 
 def exit_cleanup(a: list):
     for b in a:
@@ -41,12 +42,13 @@ class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super(Bot, self).__init__(*args, **kwargs)
 
-        self.store: Database              = Database()
-        self.cache: redis.StrictRedis     = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-        self.queue_manager: QueueManager  = QueueManager(self)
-        self.rcon_manager: RCONManager    = RCONManager(self)
-        self.command_cache: CommandCache  = CommandCache(self)
-        self.settings_cache:SettingsCache = SettingsCache(self)
+        self.store: Database                = Database()
+        self.cache: redis.StrictRedis       = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        self.queue_manager: QueueManager    = QueueManager(self)
+        self.rcon_manager: RCONManager      = RCONManager(self)
+        self.command_cache: CommandCache    = CommandCache(self)
+        self.settings_cache: SettingsCache  = SettingsCache(self)
+        self.debounce: DebounceInterMsg     = DebounceInterMsg()
 
         self.match_stages = {}
     

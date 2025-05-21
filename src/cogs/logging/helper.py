@@ -105,7 +105,7 @@ class LogHelper:
             if not guild:
                 await func(self, *args, **kwargs)
                 return
-                
+            
             settings = await self.bot.settings_cache(guild.id)
             if not settings or not cast(int, settings.mm_staff_role):
                 return None
@@ -113,7 +113,7 @@ class LogHelper:
             if not staff_role:
                 await func(self, *args, **kwargs)
                 return
-                
+            
             channel_arg = None
             for arg in args:
                 if isinstance(arg, nextcord.abc.GuildChannel):
@@ -126,7 +126,7 @@ class LogHelper:
             if not channel_arg:
                 await func(self, *args, **kwargs)
                 return
-                
+            
             perms = channel_arg.permissions_for(staff_role)
             
             if perms.view_channel: await func(self, *args, **kwargs)
