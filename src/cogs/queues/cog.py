@@ -197,7 +197,7 @@ class Queues(commands.Cog):
             return await interaction.response.send_message(f"No data found for {user.mention}.", ephemeral=True)
 
         ranks = await self.bot.store.get_ranks(interaction.guild.id)
-        ranks = { interaction.guild.get_role(rank.role_id): rank for rank in ranks }
+        ranks = { (r.name, r.color): rank for rank in ranks if (r := interaction.guild.get_role(rank.role_id)) }
         fig = await create_graph_async(asyncio.get_event_loop(), graph_type, match_stats, ranks)
         
         # Save the plot to a BytesIO object

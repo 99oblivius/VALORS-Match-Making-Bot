@@ -113,7 +113,7 @@ class Advanced(commands.Cog):
         ranks = None
         if graph_type == "mmr_game":
             ranks = await self.bot.store.get_ranks(interaction.guild.id)
-            ranks = { interaction.guild.get_role(rank.role_id): rank for rank in ranks }
+            ranks = { (r.name, r.color): rank for rank in ranks if (r := interaction.guild.get_role(rank.role_id)) }
         
         preferences = None
         if graph_type == "pick_preferences":

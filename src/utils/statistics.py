@@ -18,12 +18,12 @@
 
 from typing import Dict, List, Any, Tuple
 from math import floor
-from datetime import datetime, timezone
+from datetime import datetime
 import pytz
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 import nextcord
-from nextcord import Embed, Guild, User, Member, TextChannel, Interaction
+from nextcord import Embed, Guild, User, Member, TextChannel
 import pandas as pd
 import numpy as np
 from scipy.fft import fft, ifft
@@ -35,23 +35,18 @@ from utils.models import MMBotRanks, MMBotUserMatchStats, BotSettings, MMBotUser
 from utils.utils import get_rank_color, get_rank_role, next_rank_role, replace_wide_chars_with_space, format_duration
 
 async def create_graph_async(loop, graph_type, match_stats, ranks=None, preferences=None, play_periods=None, user_region=None):
-    with ThreadPoolExecutor() as pool:
-        return await loop.run_in_executor(
-            pool,
-            create_graph,
-            graph_type,
-            match_stats,
-            ranks,
-            preferences,
-            play_periods,
-            user_region)
+    with ProcessPoolExecutor() as pool:
+        return await loop.run_in_executor(pool, create_graph, 
+            graph_type, match_stats, ranks, preferences, play_periods, user_region)
 
-def create_graph(graph_type: str, 
-                 match_stats: List[MMBotUserMatchStats], 
-                 ranks: List[Dict[nextcord.Role, MMBotRanks]] | None=None, 
-                 preferences: Dict[str, Dict[str, int]] | None=None,
-                 play_periods: List[Tuple[datetime, datetime]] | None=None,
-                 user_region: str | None=None) -> go.Figure:
+def create_graph(
+    graph_type: str, 
+    match_stats: List[MMBotUserMatchStats], 
+    ranks: Dict[Tuple[str, nextcord.Color], MMBotRanks]         | None=None, 
+    preferences: Dict[str, Dict[str, int]]         | None=None,
+    play_periods: List[Tuple[datetime, datetime]]  | None=None,
+    user_region: str                               | None=None
+) -> go.Figure:
     df = pd.DataFrame([vars(stat) for stat in match_stats])
     df['game_number'] = range(1, len(df) + 1)
     df['cumulative_wins'] = df['win'].cumsum()
@@ -233,7 +228,7 @@ def create_graph(graph_type: str,
         if ranks:
             for role, rank in sorted(ranks.items(), key=lambda x: x[1].mmr_threshold):
                 if y_min - y_padding <= rank.mmr_threshold <= y_max + y_padding:
-                    color = f'rgb({role.color.r},{role.color.g},{role.color.b})'
+                    color = f'rgb({role[1].r},{role[1].g},{role[1].b})'
                     fig.add_shape(
                         type="line",
                         x0=0,
@@ -248,7 +243,7 @@ def create_graph(graph_type: str,
                         y=rank.mmr_threshold,
                         xref="x",
                         yref="y",
-                        text=f"{role.name}",
+                        text=f"{role[0]}",
                         showarrow=False,
                         xanchor="right",
                         yanchor="top",
