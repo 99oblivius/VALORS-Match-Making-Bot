@@ -46,7 +46,7 @@ class MapPickView(nextcord.ui.View):
     
     @classmethod
     async def create_showable(cls, bot: "Bot", match: MMBotMatches, available_maps: List[MMBotMaps], banned_maps: List[str]):
-        instance = cls(bot, banned_maps, timeout=None)
+        instance = cls(bot, timeout=None)
         instance.stop()
         
         picks = await instance.bot.store.get_map_votes(match.id)
