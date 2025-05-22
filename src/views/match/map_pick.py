@@ -67,7 +67,7 @@ class MapPickView(nextcord.ui.View):
         await interaction.edit(view=view)
 
     async def pick_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        # what phase
+        await interaction.response.defer()
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if match.phase != Phase.A_PICK:
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)

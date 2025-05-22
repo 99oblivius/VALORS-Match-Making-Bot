@@ -51,10 +51,10 @@ class AcceptView(nextcord.ui.View):
         style=nextcord.ButtonStyle.green, 
         custom_id="mm_accept_button")
     async def accept_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        await interaction.response.defer()
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
 
         async with self.lock:
+            await interaction.response.defer()
             players = await self.bot.store.get_players(match.id)
             if interaction.user.id not in [p.user_id for p in players]:
                 return await interaction.followup.send("You are not in this match :(", ephemeral=True)

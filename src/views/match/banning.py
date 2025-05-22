@@ -66,7 +66,7 @@ class BanView(nextcord.ui.View):
         await interaction.edit(view=view)
 
     async def ban_callback(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        # what phase
+        await interaction.response.defer()
         match = await self.bot.store.get_match_from_channel(interaction.channel.id)
         if not match.phase in (Phase.A_BAN, Phase.B_BAN):
             return await interaction.response.send_message("This button is no longer in use", ephemeral=True)
