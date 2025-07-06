@@ -30,7 +30,7 @@ class TicketCreationView(nextcord.ui.View):
             name = user.name.replace('.', '')
             username = name[:7] + '…' if len(name) > 8 else name
             channel = await interaction.guild.create_text_channel(
-                name=f"{username}-ticket-#{ticket_id}",
+                name=f"ticket-#{ticket_id}",
                 category=interaction.channel.category,
                 overwrites=interaction.channel.category.overwrites | {
                     interaction.guild.default_role: nextcord.PermissionOverwrite(view_channel=False),
