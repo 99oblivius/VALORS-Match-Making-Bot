@@ -972,6 +972,10 @@ class Match:
                     
                     view = abandon_view if overtime > force_abandon_view_delay else None
                     if elapsed_time % message_post_interval < message_update_interval:
+                        
+                        self.players = await self.bot.store.get_players(self.match_id)
+                        self.compute_user_platform_map()
+                        
                         if current_message:
                             try:
                                 await current_message.delete()
