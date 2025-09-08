@@ -24,7 +24,7 @@ from nextcord.ext import commands
 from pavlov import PavlovRCON
 
 from utils.models import Team
-
+from utils.logger import Logger as log
 
 class RCONManager:
     def safe_rcon(func):
@@ -40,7 +40,9 @@ class RCONManager:
                     try:
                         result = await func(*args, **kwargs)
                         # log.debug(f"[{func.__name__} n={attempts} addr={serveraddr}] {str(result)[:89 if len(str(result)) > 92 else 92]}{'...' if len(str(result)) > 92 else ''}")
-                        if isinstance(result, str): result = None
+                        if isinstance(result, str):
+                            log.warning(f"[{attempts}] rcon returned str instead of dict: {result}")
+                            result = None
                         if result and result.get('Successful', True):
                             async def delay_release():
                                 await asyncio.sleep(0.15)
@@ -172,6 +174,7 @@ class RCONManager:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
             reply = await rcon.send("InspectAll")
+            if isinstance(reply, str): return reply
             for user in reply['InspectList']:
                 await rcon.send(f"Kick {user['UniqueId']}")
                 await asyncio.sleep(0.2)
@@ -182,6 +185,7 @@ class RCONManager:
         if serveraddr in self.servers:
             rcon = self.servers[serveraddr]
             reply = await rcon.send("Banlist")
+            if isinstance(reply, str): return reply
             for user in reply['BanList']:
                 await rcon.send(f"Unban {user}")
                 await asyncio.sleep(0.2)
