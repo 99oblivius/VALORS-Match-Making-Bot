@@ -7,7 +7,7 @@ class PaginationView(nextcord.ui.View):
         self.current_page = current_page
         self.total_pages = total_pages
         self.update_button_states()
-    
+
     async def is_staff(self, interaction: nextcord.Interaction) -> bool:
         settings = await self.bot.settings_cache(interaction.guild.id)
         staff_role = interaction.guild.get_role(settings.mm_staff_role)
@@ -25,20 +25,20 @@ class PaginationView(nextcord.ui.View):
 
     @nextcord.ui.button(label="<<", style=nextcord.ButtonStyle.grey)
     async def first_page(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if not self.is_staff(interaction): return
+        if not await self.is_staff(interaction): return
         await self.callback(interaction, page=1)
 
     @nextcord.ui.button(label="<", style=nextcord.ButtonStyle.grey)
     async def prev_page(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if not self.is_staff(interaction): return
+        if not await self.is_staff(interaction): return
         await self.callback(interaction, page=self.current_page - 1)
 
     @nextcord.ui.button(label=">", style=nextcord.ButtonStyle.grey)
     async def next_page(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if not self.is_staff(interaction): return
+        if not await self.is_staff(interaction): return
         await self.callback(interaction, page=self.current_page + 1)
 
     @nextcord.ui.button(label=">>", style=nextcord.ButtonStyle.grey)
     async def last_page(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if not self.is_staff(interaction): return
+        if not await self.is_staff(interaction): return
         await self.callback(interaction, page=self.total_pages)

@@ -25,10 +25,16 @@ from .match_states import MatchState
 active_matches = {}
 running_matches = {}
 
+def _on_match_done(match_id):
+    def callback(t):
+        running_matches.pop(match_id, None)
+        active_matches.pop(match_id, None)
+    return callback
+
 def make_match(loop, bot, guild_id, match_id):
     match = Match(bot, guild_id, match_id)
     task = loop.create_task(match.run())
-    task.add_done_callback(lambda t: running_matches.pop(match.match_id, None))
+    task.add_done_callback(_on_match_done(match_id))
 
     active_matches[match.match_id] = match
     running_matches[match.match_id] = task
@@ -37,47 +43,50 @@ def load_ongoing_matches(loop, bot, guild_id, matches):
     for match in matches:
         match = Match(bot, guild_id, match.id, match.state)
         task = loop.create_task(match.run())
-        task.add_done_callback(lambda t: running_matches.pop(match.match_id, None))
-        
+        task.add_done_callback(_on_match_done(match.match_id))
+
         active_matches[match.match_id] = match
         running_matches[match.match_id] = task
 
 async def cleanup_match(loop, match_id) -> bool:
     task = running_matches.pop(match_id, None)
     match = active_matches.get(match_id)
-    if not task or not match: return False
-    
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    
+    if not match: return False
+
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
     if match.state > MatchState.MATCH_FIND_SERVER:
         await match.change_state(MatchState.MATCH_CLEANUP)
     else:
         await match.change_state(MatchState.CLEANUP)
 
     task = loop.create_task(match.run())
-    task.add_done_callback(lambda t: running_matches.pop(match.match_id, None))
+    task.add_done_callback(_on_match_done(match_id))
+
     running_matches[match.match_id] = task
     return True
 
 async def go_back_to(loop, match_id, state: MatchState) -> bool:
     task = running_matches.pop(match_id, None)
     match = active_matches.get(match_id)
-    if not task or not match: return False
+    if not match: return False
 
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
     await match.change_state(state)
 
     task = loop.create_task(match.run())
-    task.add_done_callback(lambda t: running_matches.pop(match_id, None))
+    task.add_done_callback(_on_match_done(match_id))
     running_matches[match_id] = task
     return True
 
