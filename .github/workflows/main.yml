@@ -18,7 +18,7 @@ jobs:
 
       - name: Regular Update
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.valorsleague.org/update?type=regular" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api-valors.oblivius.dev/update?type=regular" \
           -H "Authorization: ${{ secrets.UPDATE_API_KEY }}")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
